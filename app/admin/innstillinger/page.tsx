@@ -1,0 +1,51 @@
+import { q } from '@/lib/db';
+import { getSettings } from '@/lib/settings';
+import { fmtDateTime } from '@/lib/format';
+import { Flash, Status } from '@/components/ui';
+import { saveSettingsAction, togglePaymentMethodAction, runJobsNowAction } from '../../actions/admin';
+import { saveCancellationTierAction } from '../../actions/properties';
+
+export const dynamic = 'force-dynamic';
+export const metadata = { title: 'Innstillinger' };
+const FIELDS: [string, string][] = [
+  ['booking_hold_duration_hours', 'Betalingsfrist etter godkjenning (timer)'], ['invoice_due_date_days', 'Fakturafrist (dager)'],
+  ['cancellation_approval_timeout_hours', 'Frist for å behandle kansellering (timer)'], ['invitation_validity_days', 'Invitasjon gyldig (dager)'],
+  ['ical_poll_interval_minutes', 'Hent kanalkalendere hvert (minutt)'], ['ical_failure_alert_threshold', 'Varsle etter antall feilede synker'],
+  ['short_turnaround_hours', 'Kort snutid – varsle renhold (timer)'], ['audit_log_retention_days', 'Revisjonslogg lagres (dager)'],
+  ['notification_log_retention_days', 'Varsellogg lagres (dager)'], ['invoice_bank_account', 'Kontonummer på faktura'], ['company_name', 'Firmanavn'],
+];
+
+export default async function Settings({ searchParams }: { searchParams: Promise<Record<string, string>> }) {
+  const sp = await searchParams;
+  const s = await getSettings();
+  const methods = await q(`SELECT method, enabled FROM payment_method_settings ORDER BY method`);
+  const tiers = await q(`SELECT * FROM cancellation_policy_tiers WHERE active AND property_id IS NULL ORDER BY days_before_checkin_min DESC`);
+  const jobs = await q(`SELECT DISTINCT ON (job) job, status, started_at, detail FROM job_runs ORDER BY job, started_at DESC`);
+  return (
+    <>
+      <div className="page-head"><h1>Innstillinger</h1></div>
+      <Flash sp={sp} />
+      <div className="grid g2" style={{ alignItems: 'start' }}>
+        <form action={saveSettingsAction} className="card">
+          <h3>Plattform</h3>
+          {FIELDS.map(([k, l]) => <div key={k} className="field"><label>{l}</label><input name={k} defaultValue={s[k]} /></div>)}
+          <button className="btn">Lagre</button>
+        </form>
+        <div className="stack">
+          <div className="card"><h3>Betalingsmåter</h3>{methods.map(m => (
+            <form key={m.method} action={togglePaymentMethodAction} className="row between" style={{ padding: '6px 0' }}><span>{{ stripe_card: 'Kort (Stripe)', vipps: 'Vipps', invoice: 'Faktura' }[m.method as string]}</span>
+              <span className="row"><span className={`badge ${m.enabled ? 'b-ok' : ''}`}>{m.enabled ? 'På' : 'Av'}</span><input type="hidden" name="method" value={m.method} /><button className="btn ghost small">{m.enabled ? 'Slå av' : 'Slå på'}</button></span></form>))}</div>
+          <div className="card"><h3>Kanselleringsvilkår</h3>
+            <ul className="list">{tiers.map(t => <li key={t.id} className="row between"><span>{t.days_before_checkin_min}{t.days_before_checkin_max != null ? `–${t.days_before_checkin_max}` : '+'} dager før: <strong>{Number(t.refund_percentage)} %</strong> refusjon{t.requires_admin_approval ? ' · må godkjennes' : ''}</span>
+              <form action={saveCancellationTierAction}><input type="hidden" name="deactivate" value={t.id} /><button className="btn ghost small">Fjern</button></form></li>)}</ul>
+            <form action={saveCancellationTierAction} className="row" style={{ marginTop: 10 }}><input name="min" type="number" placeholder="fra dag" style={{ width: 80 }} required /><input name="max" type="number" placeholder="til dag" style={{ width: 80 }} /><input name="pct" placeholder="%" style={{ width: 60 }} required />
+              <label className="check" style={{ margin: 0 }}><input type="checkbox" name="approval" /> godkjenning</label><button className="btn small">Legg til</button></form></div>
+          <div className="card"><h3>Bakgrunnsjobber</h3>
+            <ul className="list">{jobs.map(j => <li key={j.job} className="row between"><span>{j.job}<br /><small className="muted">{fmtDateTime(j.started_at)}</small></span><Status s={j.status} /></li>)}</ul>
+            {jobs.length === 0 && <p className="muted">Ingen kjøringer ennå. Sett opp cron mot /api/cron (se README).</p>}
+            <form action={runJobsNowAction}><button className="btn ghost small">Kjør alle nå</button></form></div>
+        </div>
+      </div>
+    </>
+  );
+}

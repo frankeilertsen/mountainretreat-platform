@@ -1,0 +1,470 @@
+import { PoolClient } from 'pg';
+import { Db, getPool, isPgError, one, PG_UNIQUE_VIOLATION, q, tx } from '../db';
+import { DomainError, forbidden } from '../errors';
+import { audit, Actor, SYSTEM } from '../audit';
+import { appUrl, enqueue, notifyAdmins } from '../notify';
+import { getNum } from '../settings';
+import { humanCode } from '../crypto';
+import { fmtDate, nightsBetween, nok, todayOslo } from '../format';
+import { isAdmin, can, UserLike } from '../auth/rbac';
+import { quoteFor } from './pricing';
+import { insertBlock, isRangeFree, removeBlocksFor } from './availability';
+import { qualifyReferralForBooking, redeemForBooking, rewardBalance, reverseRedemptions } from './rewards';
+import { cardProvider, kidMod10, providerById } from './payments';
+import { reconcileCleaningTasks, upsertBookingPreparation } from './cleaning';
+
+export type BookingRequestInput = {
+  propertyId: string; startDate: string; endDate: string; adults: number; children: number; infants: number;
+  addOns: { id: string; quantity: number }[]; specialRequests?: string; useRewards?: boolean; idempotencyKey?: string;
+};
+
+type BookingRow = {
+  id: string; reference: string; property_id: string; member_id: string; start_date: string; end_date: string; status: string;
+  adults: number; children: number; infants: number; price_total_ore: number; stay_price_ore: number; reward_discount_ore: number;
+  payment_method: string | null; price_breakdown: any;
+};
+
+const BOOKING_COLS = `id, reference, property_id, member_id, to_char(start_date,'YYYY-MM-DD') AS start_date, to_char(end_date,'YYYY-MM-DD') AS end_date,
+  status, adults, children, infants, price_total_ore, stay_price_ore, reward_discount_ore, payment_method, price_breakdown`;
+
+async function lockBooking(c: PoolClient, id: string): Promise<BookingRow> {
+  const b = await one<BookingRow>(`SELECT ${BOOKING_COLS} FROM bookings WHERE id=$1 FOR UPDATE`, [id], c);
+  if (!b) throw new DomainError('not_found', 'Fant ikke bookingen.', 404);
+  return b;
+}
+async function memberOf(c: Db, id: string) {
+  return (await one<{ id: string; email: string; name: string }>('SELECT id, email, name FROM users WHERE id=$1', [id], c))!;
+}
+async function propertyName(c: Db, id: string) {
+  return (await one<{ name: string }>('SELECT name FROM properties WHERE id=$1', [id], c))!.name;
+}
+
+// ---------------------------------------------------------------- request
+export async function requestBooking(member: UserLike & { email: string; name: string }, input: BookingRequestInput, actor: Actor) {
+  if (!can(member, 'request_booking')) throw forbidden();
+  const guests = input.adults + input.children; // infants don't count toward occupancy
+  if (input.adults < 1) throw new DomainError('bad_guests', 'Minst én voksen må være med.');
+  if (input.startDate < todayOslo()) throw new DomainError('past', 'Innreise kan ikke være tilbake i tid.');
+  const quote = await quoteFor(input.propertyId, member.id, input.startDate, input.endDate, guests, input.addOns);
+  // Friendly early check; authoritative check happens at approval via the exclusion constraint
+  if (!(await isRangeFree(input.propertyId, input.startDate, input.endDate))) {
+    throw new DomainError('unavailable', 'Datoene er ikke ledige.');
+  }
+  const estimatedReward = input.useRewards ? Math.min((await rewardBalance(member.id)).available, quote.subtotal_ore) : 0;
+  try {
+    return await tx(async c => {
+      const b = await one<{ id: string; reference: string }>(
+        `INSERT INTO bookings (reference, property_id, member_id, start_date, end_date, adults, children, infants,
+           stay_price_ore, cleaning_fee_ore, add_ons_price_ore, reward_discount_ore, price_total_ore, price_breakdown, special_requests, request_idempotency_key)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,0,$12,$13,$14,$15) RETURNING id, reference`,
+        ['MR-' + humanCode(6), input.propertyId, member.id, input.startDate, input.endDate, input.adults, input.children, input.infants,
+         quote.stay_ore, quote.cleaning_fee_ore, quote.add_ons_ore, quote.subtotal_ore,
+         JSON.stringify({ quote, use_rewards: !!input.useRewards, estimated_reward_ore: estimatedReward }),
+         input.specialRequests?.trim().slice(0, 2000) || null, input.idempotencyKey ?? null], c);
+      for (const a of quote.add_ons) {
+        await c.query(`INSERT INTO booking_add_ons (booking_id, add_on_item_id, quantity, unit_price_at_selection_ore, total_price_ore) VALUES ($1,$2,$3,$4,$5)`,
+          [b!.id, a.id, a.quantity, a.unit_price_ore, a.total_ore]);
+      }
+      await upsertBookingPreparation(c, b!.id, input.propertyId, { adults: input.adults, children: input.children, infants: input.infants });
+      await audit(c, actor, 'booking.requested', 'booking', b!.id, undefined, { ...input, total: quote.subtotal_ore });
+      const prop = await propertyName(c, input.propertyId);
+      await notifyAdmins({ type: 'booking_requested', dedupeKey: `booking_requested:${b!.id}`, subject: `Ny bookingforespørsel ${b!.reference}`,
+        body: `${member.name} ønsker ${prop} ${fmtDate(input.startDate)} – ${fmtDate(input.endDate)} (${guests} gjester${input.infants ? ` + ${input.infants} spedbarn` : ''}).\nEstimert pris: ${nok(quote.subtotal_ore)}\n\nBehandle: ${appUrl('/admin/bookinger/' + b!.id)}` }, c);
+      await enqueue({ userId: member.id, to: member.email, type: 'booking_request_received', dedupeKey: `booking_request_received:${b!.id}`,
+        subject: `Vi har mottatt forespørselen din (${b!.reference})`,
+        body: `Hei ${member.name}!\n\nTakk for forespørselen om ${prop} ${fmtDate(input.startDate)} – ${fmtDate(input.endDate)}. Du får beskjed så snart den er behandlet.` }, c);
+      return b!;
+    });
+  } catch (e) {
+    if (isPgError(e, PG_UNIQUE_VIOLATION) && input.idempotencyKey) {
+      // Double-submit: return the booking created by the first click
+      const existing = await one<{ id: string; reference: string }>('SELECT id, reference FROM bookings WHERE member_id=$1 AND request_idempotency_key=$2', [member.id, input.idempotencyKey]);
+      if (existing) return existing;
+    }
+    throw e;
+  }
+}
+
+// ---------------------------------------------------------------- approve / reject
+export async function approveBooking(bookingId: string, actor: Actor): Promise<{ status: string }> {
+  return tx(async c => {
+    const b = await lockBooking(c, bookingId);
+    if (b.status !== 'pending_review') throw new DomainError('not_pending', 'Bookingen er allerede behandlet.');
+    const guests = b.adults + b.children;
+    // Re-price server-side with current rules and LOCK the price from here on
+    const addOns = await q<{ add_on_item_id: string; quantity: number }>('SELECT add_on_item_id, quantity FROM booking_add_ons WHERE booking_id=$1', [b.id], c);
+    const quote = await quoteFor(b.property_id, b.member_id, b.start_date, b.end_date, guests, addOns.map(a => ({ id: a.add_on_item_id, quantity: a.quantity })), c);
+    // Authoritative double-booking guard
+    await insertBlock(c, { propertyId: b.property_id, start: b.start_date, end: b.end_date, type: 'platform_booking', referenceId: b.id, userId: actor.id });
+    const useRewards = !!b.price_breakdown?.use_rewards;
+    const reward = useRewards ? await redeemForBooking(c, b.member_id, b.id, quote.subtotal_ore) : 0;
+    const total = quote.subtotal_ore - reward;
+    const holdHours = await getNum('booking_hold_duration_hours', 48, c);
+    const newStatus = total === 0 ? 'confirmed' : 'awaiting_payment';
+    await c.query(
+      `UPDATE bookings SET status=$2, stay_price_ore=$3, cleaning_fee_ore=$4, add_ons_price_ore=$5, reward_discount_ore=$6, price_total_ore=$7,
+         price_breakdown = price_breakdown || $8::jsonb, price_locked_at=now(), approved_at=now(), admin_reviewer_id=$9,
+         confirmed_at = CASE WHEN $2='confirmed' THEN now() ELSE NULL END, updated_at=now() WHERE id=$1`,
+      [b.id, newStatus, quote.stay_ore, quote.cleaning_fee_ore, quote.add_ons_ore, reward, total, JSON.stringify({ quote, reward_applied_ore: reward }), actor.id]);
+    if (newStatus === 'awaiting_payment') {
+      await c.query(`INSERT INTO booking_holds (booking_id, hold_duration_hours_at_creation, expires_at) VALUES ($1,$2, now() + make_interval(hours => $2))`, [b.id, holdHours]);
+    } else {
+      await reconcileCleaningTasks(c, b.property_id);
+    }
+    await audit(c, actor, 'booking.approved', 'booking', b.id, { status: b.status, total: b.price_total_ore }, { status: newStatus, total, reward });
+    const m = await memberOf(c, b.member_id);
+    const prop = await propertyName(c, b.property_id);
+    await enqueue({ userId: m.id, to: m.email, type: 'booking_approved', dedupeKey: `booking_approved:${b.id}`,
+      subject: newStatus === 'confirmed' ? `Bookingen er bekreftet (${b.reference})` : `Bookingen er godkjent – betal innen ${holdHours} timer (${b.reference})`,
+      body: newStatus === 'confirmed'
+        ? `Hei ${m.name}!\n\n${prop} ${fmtDate(b.start_date)} – ${fmtDate(b.end_date)} er bekreftet. Hele beløpet ble dekket av bonusen din.`
+        : `Hei ${m.name}!\n\nForespørselen om ${prop} ${fmtDate(b.start_date)} – ${fmtDate(b.end_date)} er godkjent. Datoene holdes av for deg i ${holdHours} timer.\n\nÅ betale: ${nok(total)}${reward ? ` (etter ${nok(reward)} bonus)` : ''}\nBetal her: ${appUrl('/medlem/bookinger/' + b.id)}` }, c);
+    return { status: newStatus };
+  });
+}
+
+export async function rejectBooking(bookingId: string, reason: string, actor: Actor) {
+  if (!reason.trim()) throw new DomainError('reason_required', 'Oppgi en begrunnelse.');
+  await tx(async c => {
+    const b = await lockBooking(c, bookingId);
+    if (b.status !== 'pending_review') throw new DomainError('not_pending', 'Bookingen er allerede behandlet.');
+    await c.query(`UPDATE bookings SET status='rejected', rejection_reason=$2, admin_reviewer_id=$3, updated_at=now() WHERE id=$1`, [b.id, reason.trim(), actor.id]);
+    await audit(c, actor, 'booking.rejected', 'booking', b.id, { status: b.status }, { status: 'rejected', reason });
+    const m = await memberOf(c, b.member_id);
+    await enqueue({ userId: m.id, to: m.email, type: 'booking_rejected', dedupeKey: `booking_rejected:${b.id}`, subject: `Forespørselen kunne dessverre ikke godkjennes (${b.reference})`,
+      body: `Hei ${m.name}.\n\nForespørselen for ${fmtDate(b.start_date)} – ${fmtDate(b.end_date)} ble ikke godkjent.\nBegrunnelse: ${reason.trim()}` }, c);
+  });
+}
+
+// ---------------------------------------------------------------- payment
+export async function startPayment(bookingId: string, user: UserLike & { email: string }, method: 'stripe_card' | 'vipps' | 'invoice') {
+  const b = await one<BookingRow & { hold_expires: string | null; method_enabled: boolean | null }>(
+    `SELECT b.*, to_char(b.start_date,'YYYY-MM-DD') AS start_date, to_char(b.end_date,'YYYY-MM-DD') AS end_date,
+            h.expires_at AS hold_expires, (SELECT enabled FROM payment_method_settings WHERE method=$2) AS method_enabled
+     FROM bookings b LEFT JOIN booking_holds h ON h.booking_id=b.id AND h.released_at IS NULL WHERE b.id=$1`, [bookingId, method]);
+  if (!b) throw new DomainError('not_found', 'Fant ikke bookingen.', 404);
+  if (b.member_id !== user.id && !isAdmin(user)) throw forbidden();
+  if (b.status !== 'awaiting_payment') throw new DomainError('not_payable', 'Bookingen venter ikke på betaling.');
+  if (!b.hold_expires || new Date(b.hold_expires) < new Date()) throw new DomainError('hold_expired', 'Fristen for betaling er utløpt.');
+  if (!b.method_enabled) throw new DomainError('method_disabled', 'Denne betalingsmåten er ikke tilgjengelig.');
+  if (b.price_total_ore <= 0) throw new DomainError('nothing_to_pay', 'Ingenting å betale.');
+
+  if (method === 'invoice') return createInvoice(b, user);
+  const provider = method === 'vipps' ? providerById('vipps')! : cardProvider();
+  if (!provider.configured()) throw new DomainError('provider_unconfigured', 'Betalingsløsningen er ikke satt opp ennå.');
+  // Reuse an open checkout instead of creating duplicates on double clicks
+  const open = await one<{ checkout_url: string }>(
+    `SELECT checkout_url FROM payments WHERE booking_id=$1 AND status='pending' AND method=$2 AND provider=$3 AND created_at > now() - interval '50 minutes' AND checkout_url IS NOT NULL ORDER BY created_at DESC LIMIT 1`,
+    [b.id, method, provider.id]);
+  if (open) return { checkoutUrl: open.checkout_url };
+  const idem = `pay_${b.id}_${Date.now()}`;
+  const pay = await one<{ id: string }>(
+    `INSERT INTO payments (booking_id, method, provider, amount_ore, idempotency_key) VALUES ($1,$2,$3,$4,$5) RETURNING id`,
+    [b.id, method, provider.id, b.price_total_ore, idem]);
+  try {
+    const res = await provider.createCheckout({ paymentId: pay!.id, bookingRef: b.reference, amountOre: b.price_total_ore,
+      description: `Opphold ${b.reference} (${fmtDate(b.start_date)} – ${fmtDate(b.end_date)})`, customerEmail: user.email, idempotencyKey: idem });
+    await getPool().query(`UPDATE payments SET provider_reference=$2, checkout_url=$3, updated_at=now() WHERE id=$1`, [pay!.id, res.providerReference, res.checkoutUrl]);
+    await audit(null, { id: user.id, type: 'member' }, 'payment.started', 'payment', pay!.id, undefined, { provider: provider.id, amount: b.price_total_ore });
+    return { checkoutUrl: res.checkoutUrl };
+  } catch (e) {
+    await getPool().query(`UPDATE payments SET status='failed', updated_at=now() WHERE id=$1`, [pay!.id]);
+    throw new DomainError('provider_error', 'Kunne ikke starte betalingen. Prøv igjen om litt.');
+  }
+}
+
+async function createInvoice(b: BookingRow, user: UserLike) {
+  return tx(async c => {
+    const existing = await one<{ id: string }>(`SELECT p.id FROM payments p WHERE booking_id=$1 AND method='invoice' AND status='pending'`, [b.id], c);
+    if (existing) return { invoice: true as const };
+    const days = await getNum('invoice_due_date_days', 14, c);
+    const pay = await one<{ id: string }>(`INSERT INTO payments (booking_id, method, provider, amount_ore, idempotency_key) VALUES ($1,'invoice','invoice',$2,$3) RETURNING id`,
+      [b.id, b.price_total_ore, `inv_${b.id}`], c);
+    const seq = await one<{ n: string }>(`SELECT (count(*) + 10001)::text AS n FROM invoices`, [], c);
+    const kid = kidMod10(seq!.n.padStart(8, '0'));
+    await c.query(`INSERT INTO invoices (payment_id, invoice_number, kid_number, amount_ore, due_date) VALUES ($1,$2,$3,$4, current_date + $5::int)`,
+      [pay!.id, `F-${seq!.n}`, kid, b.price_total_ore, days]);
+    // Invoice holds last until the due date (spec §13)
+    await c.query(`UPDATE booking_holds SET expires_at = GREATEST(expires_at, now() + make_interval(days => $2)) WHERE booking_id=$1 AND released_at IS NULL`, [b.id, days]);
+    await c.query(`UPDATE bookings SET payment_method='invoice' WHERE id=$1`, [b.id]);
+    await audit(c, { id: user.id, type: 'member' }, 'payment.invoice_created', 'payment', pay!.id, undefined, { kid, amount: b.price_total_ore });
+    const m = await memberOf(c, b.member_id);
+    await enqueue({ userId: m.id, to: m.email, type: 'invoice', dedupeKey: `invoice:${pay!.id}`, subject: `Faktura for ${b.reference}`,
+      body: `Hei ${m.name}!\n\nBeløp: ${nok(b.price_total_ore)}\nKID: ${kid}\nKontonummer: se medlemssiden\nForfall: om ${days} dager\n\nBookingen bekreftes når betalingen er registrert.` }, c);
+    return { invoice: true as const };
+  });
+}
+
+/**
+ * Idempotent success handler for every provider. Safe to call any number of times for the same payment.
+ * Re-checks availability before confirming; a late payment for an expired/cancelled booking is refunded automatically.
+ */
+export async function handlePaymentSucceeded(paymentId: string, actor: Actor = SYSTEM): Promise<'confirmed' | 'already' | 'refunded'> {
+  const refundIds: string[] = [];
+  const result = await tx(async c => {
+    const p = await one<{ id: string; booking_id: string; status: string; amount_ore: number }>('SELECT id, booking_id, status, amount_ore FROM payments WHERE id=$1 FOR UPDATE', [paymentId], c);
+    if (!p) throw new DomainError('not_found', 'Ukjent betaling.', 404);
+    if (p.status !== 'pending') return 'already' as const;
+    const b = await lockBooking(c, p.booking_id);
+    await c.query(`UPDATE payments SET status='succeeded', updated_at=now() WHERE id=$1`, [p.id]);
+    await audit(c, actor, 'payment.succeeded', 'payment', p.id, { status: 'pending' }, { status: 'succeeded' });
+    const block = await one(`SELECT 1 FROM availability_blocks WHERE block_type='platform_booking' AND reference_id=$1`, [b.id], c);
+    if (b.status !== 'awaiting_payment' || !block) {
+      const r = await one<{ id: string }>(`INSERT INTO refunds (payment_id, amount_ore, reason, status) VALUES ($1,$2,'conflict_auto_refund','pending') RETURNING id`, [p.id, p.amount_ore], c);
+      refundIds.push(r!.id);
+      await audit(c, actor, 'payment.late_auto_refund', 'payment', p.id, undefined, { booking_status: b.status });
+      await notifyAdmins({ type: 'payment_conflict', subject: `Betaling mottatt for ${b.reference} som ikke lenger var aktiv`, body: `Beløpet refunderes automatisk. Status: ${b.status}.` }, c);
+      return 'refunded' as const;
+    }
+    await c.query(`UPDATE bookings SET status='confirmed', confirmed_at=now(), payment_method=(SELECT method FROM payments WHERE id=$2), updated_at=now() WHERE id=$1`, [b.id, p.id]);
+    await c.query(`UPDATE booking_holds SET released_at=now() WHERE booking_id=$1 AND released_at IS NULL`, [b.id]);
+    await c.query(`UPDATE payments SET status='cancelled', updated_at=now() WHERE booking_id=$1 AND status='pending' AND id<>$2`, [b.id, p.id]);
+    await c.query(`UPDATE invoices SET status='cancelled' WHERE payment_id IN (SELECT id FROM payments WHERE booking_id=$1 AND status='cancelled') AND status IN ('sent','overdue')`, [b.id]);
+    await audit(c, actor, 'booking.confirmed', 'booking', b.id, { status: b.status }, { status: 'confirmed' });
+    await reconcileCleaningTasks(c, b.property_id);
+    const m = await memberOf(c, b.member_id);
+    const prop = await propertyName(c, b.property_id);
+    await enqueue({ userId: m.id, to: m.email, type: 'booking_confirmed', dedupeKey: `booking_confirmed:${b.id}`, subject: `Bekreftet: ${prop} ${fmtDate(b.start_date)} (${b.reference})`,
+      body: `Hei ${m.name}!\n\nBetalingen er mottatt og oppholdet er bekreftet.\n${prop}: ${fmtDate(b.start_date, true)} – ${fmtDate(b.end_date, true)}\nBetalt: ${nok(p.amount_ore)}\n\nGod tur!` }, c);
+    await notifyAdmins({ type: 'booking_confirmed', dedupeKey: `booking_confirmed_admin:${b.id}`, subject: `Booking bekreftet ${b.reference}`, body: `${m.name}, ${prop} ${fmtDate(b.start_date)} – ${fmtDate(b.end_date)}. Betalt ${nok(p.amount_ore)}.` }, c);
+    return 'confirmed' as const;
+  });
+  if (refundIds.length) await processRefunds(refundIds);
+  return result;
+}
+
+export async function handlePaymentFailed(paymentId: string) {
+  await tx(async c => {
+    const p = await one<{ status: string }>('SELECT status FROM payments WHERE id=$1 FOR UPDATE', [paymentId], c);
+    if (!p || p.status !== 'pending') return;
+    await c.query(`UPDATE payments SET status='failed', updated_at=now() WHERE id=$1`, [paymentId]);
+    await audit(c, SYSTEM, 'payment.failed', 'payment', paymentId);
+  });
+}
+
+export async function markInvoicePaid(paymentId: string, actor: Actor) {
+  await one(`UPDATE invoices SET status='paid', marked_paid_by_user_id=$2, marked_paid_at=now() WHERE payment_id=$1 AND status IN ('sent','overdue') RETURNING id`, [paymentId, actor.id]);
+  await audit(null, actor, 'invoice.marked_paid', 'payment', paymentId);
+  return handlePaymentSucceeded(paymentId, actor);
+}
+
+// ---------------------------------------------------------------- refunds
+/** Executes pending refunds against the provider (outside DB transactions). Also retried by the jobs runner. */
+export async function processRefunds(ids?: string[]) {
+  const rows = await q<{ id: string; amount_ore: number; provider: string; provider_reference: string | null; payment_id: string; booking_id: string }>(
+    `SELECT r.id, r.amount_ore, p.provider, p.provider_reference, p.id AS payment_id, p.booking_id
+     FROM refunds r JOIN payments p ON p.id = r.payment_id
+     WHERE r.status='pending' ${ids ? 'AND r.id = ANY($1)' : ''} ORDER BY r.created_at LIMIT 25`, ids ? [ids] : []);
+  for (const r of rows) {
+    let status: 'succeeded' | 'failed' | 'pending' = 'failed', ref: string | null = null, err: string | null = null;
+    try {
+      if (r.provider === 'invoice') { status = 'pending'; err = 'Manuell tilbakebetaling via bank – marker som utført når overført.'; }
+      else {
+        const prov = providerById(r.provider);
+        if (!prov || !r.provider_reference) throw new Error('Mangler leverandørreferanse');
+        const res = await prov.refund(r.provider_reference, r.amount_ore, `refund_${r.id}`);
+        status = res.status; ref = res.providerReference; err = res.error ?? null;
+      }
+    } catch (e) { status = 'failed'; err = (e as Error).message; }
+    await tx(async c => {
+      await c.query(`UPDATE refunds SET status=$2, provider_reference=COALESCE($3, provider_reference), error=$4 WHERE id=$1`, [r.id, status, ref, err]);
+      if (status === 'succeeded') {
+        await c.query(`UPDATE payments SET refunded_amount_ore = refunded_amount_ore + $2,
+                         status = CASE WHEN refunded_amount_ore + $2 >= amount_ore THEN 'refunded' ELSE 'partially_refunded' END, updated_at=now() WHERE id=$1`, [r.payment_id, r.amount_ore]);
+        await audit(c, SYSTEM, 'refund.succeeded', 'refund', r.id, undefined, { amount: r.amount_ore });
+        const b = await one<{ member_id: string; reference: string }>('SELECT member_id, reference FROM bookings WHERE id=$1', [r.booking_id], c);
+        const m = await memberOf(c, b!.member_id);
+        await enqueue({ userId: m.id, to: m.email, type: 'refund_done', dedupeKey: `refund_done:${r.id}`, subject: `Refusjon ${nok(r.amount_ore)} (${b!.reference})`, body: `Hei ${m.name}! Vi har refundert ${nok(r.amount_ore)}. Det kan ta noen dager før beløpet vises på kontoen.` }, c);
+      } else if (status === 'failed') {
+        await audit(c, SYSTEM, 'refund.failed', 'refund', r.id, undefined, { error: err });
+        await notifyAdmins({ type: 'refund_failed', dedupeKey: `refund_failed:${r.id}`, subject: 'Refusjon feilet', body: `Refusjon ${r.id} på ${nok(r.amount_ore)} feilet: ${err}. Må håndteres manuelt.` }, c);
+      }
+    });
+  }
+}
+
+export async function markManualRefundDone(refundId: string, actor: Actor) {
+  await tx(async c => {
+    const r = await one<{ payment_id: string; amount_ore: number; status: string }>('SELECT payment_id, amount_ore, status FROM refunds WHERE id=$1 FOR UPDATE', [refundId], c);
+    if (!r || r.status === 'succeeded') throw new DomainError('bad_state', 'Refusjonen er allerede fullført.');
+    await c.query(`UPDATE refunds SET status='succeeded', error=NULL, initiated_by_user_id=COALESCE(initiated_by_user_id,$2) WHERE id=$1`, [refundId, actor.id]);
+    await c.query(`UPDATE payments SET refunded_amount_ore = refunded_amount_ore + $2, status = CASE WHEN refunded_amount_ore + $2 >= amount_ore THEN 'refunded' ELSE 'partially_refunded' END WHERE id=$1`, [r.payment_id, r.amount_ore]);
+    await audit(c, actor, 'refund.marked_done_manually', 'refund', refundId);
+  });
+}
+
+// ---------------------------------------------------------------- cancellation
+async function tierFor(c: Db, propertyId: string, startDate: string) {
+  const days = nightsBetween(todayOslo(), startDate);
+  const tiers = await q<{ id: string; refund_percentage: string; requires_admin_approval: boolean; days_before_checkin_min: number; days_before_checkin_max: number | null; property_id: string | null }>(
+    `SELECT id, refund_percentage, requires_admin_approval, days_before_checkin_min, days_before_checkin_max, property_id
+     FROM cancellation_policy_tiers WHERE active AND (property_id=$1 OR property_id IS NULL)
+       AND days_before_checkin_min <= $2 AND (days_before_checkin_max IS NULL OR days_before_checkin_max >= $2)
+     ORDER BY property_id NULLS LAST LIMIT 1`, [propertyId, Math.max(0, days)], c);
+  const t = tiers[0];
+  return t ? { id: t.id, pct: Number(t.refund_percentage), needsApproval: t.requires_admin_approval, days } : { id: null, pct: 0, needsApproval: true, days };
+}
+
+export async function cancellationPreview(bookingId: string, user: UserLike) {
+  const b = await one<BookingRow>(`SELECT ${BOOKING_COLS} FROM bookings WHERE id=$1`, [bookingId]);
+  if (!b) throw new DomainError('not_found', 'Fant ikke bookingen.');
+  if (b.member_id !== user.id && !isAdmin(user)) throw forbidden();
+  const paid = await one<{ amount: number }>(`SELECT COALESCE(SUM(amount_ore - refunded_amount_ore),0)::int AS amount FROM payments WHERE booking_id=$1 AND status IN ('succeeded','partially_refunded')`, [b.id]);
+  const t = await tierFor(getPool(), b.property_id, b.start_date);
+  return { ...t, paidOre: paid?.amount ?? 0, refundOre: Math.round((paid?.amount ?? 0) * t.pct / 100) };
+}
+
+/** Core cancellation: block removed, hold released, rewards restored, refund queued, cleaning reconciled. */
+async function doCancel(c: PoolClient, b: BookingRow, reason: string, refundPct: number, refundReason: string, tierId: string | null, actor: Actor): Promise<string[]> {
+  await c.query(`UPDATE bookings SET status='cancelled', cancelled_reason=$2, cancelled_at=now(), updated_at=now() WHERE id=$1`, [b.id, reason]);
+  await removeBlocksFor(c, 'platform_booking', b.id);
+  await c.query(`UPDATE booking_holds SET released_at=now() WHERE booking_id=$1 AND released_at IS NULL`, [b.id]);
+  await c.query(`UPDATE payments SET status='cancelled', updated_at=now() WHERE booking_id=$1 AND status='pending'`, [b.id]);
+  await c.query(`UPDATE invoices SET status='cancelled' WHERE payment_id IN (SELECT id FROM payments WHERE booking_id=$1) AND status IN ('sent','overdue')`, [b.id]);
+  await reverseRedemptions(c, b.id);
+  const refundIds: string[] = [];
+  if (refundPct > 0) {
+    const pays = await q<{ id: string; remaining: number }>(`SELECT id, (amount_ore - refunded_amount_ore) AS remaining FROM payments WHERE booking_id=$1 AND status IN ('succeeded','partially_refunded')`, [b.id], c);
+    for (const p of pays) {
+      const amt = Math.round(p.remaining * refundPct / 100);
+      if (amt > 0) {
+        const r = await one<{ id: string }>(`INSERT INTO refunds (payment_id, amount_ore, reason, policy_tier_id, initiated_by_user_id) VALUES ($1,$2,$3,$4,$5) RETURNING id`,
+          [p.id, amt, refundReason, tierId, actor.id], c);
+        refundIds.push(r!.id);
+      }
+    }
+  }
+  await reconcileCleaningTasks(c, b.property_id);
+  await audit(c, actor, 'booking.cancelled', 'booking', b.id, { status: b.status }, { status: 'cancelled', reason, refundPct });
+  const m = await memberOf(c, b.member_id);
+  await enqueue({ userId: m.id, to: m.email, type: 'booking_cancelled', dedupeKey: `booking_cancelled:${b.id}`, subject: `Bookingen er kansellert (${b.reference})`,
+    body: `Hei ${m.name}.\n\nBookingen ${fmtDate(b.start_date)} – ${fmtDate(b.end_date)} er kansellert.${refundPct > 0 ? ` Du får refundert ${refundPct} % av innbetalt beløp.` : ''}` }, c);
+  return refundIds;
+}
+
+export async function requestCancellation(bookingId: string, user: UserLike, actor: Actor): Promise<'cancelled' | 'requested'> {
+  let refundIds: string[] = [];
+  const out = await tx(async c => {
+    const b = await lockBooking(c, bookingId);
+    if (b.member_id !== user.id && !isAdmin(user)) throw forbidden();
+    if (['pending_review', 'awaiting_payment'].includes(b.status)) {
+      refundIds = await doCancel(c, b, 'member_request', 0, 'cancellation_tier', null, actor);
+      return 'cancelled' as const;
+    }
+    if (b.status !== 'confirmed') throw new DomainError('not_cancellable', 'Bookingen kan ikke kanselleres.');
+    const t = await tierFor(c, b.property_id, b.start_date);
+    if (t.needsApproval) {
+      await c.query(`UPDATE bookings SET status='cancellation_requested', cancellation_requested_at=now(), updated_at=now() WHERE id=$1`, [b.id]);
+      await audit(c, actor, 'booking.cancellation_requested', 'booking', b.id);
+      await notifyAdmins({ type: 'cancellation_requested', dedupeKey: `cancellation_requested:${b.id}`, subject: `Kanselleringsforespørsel ${b.reference}`, body: `Må behandles innen fristen, ellers godkjennes den automatisk med full refusjon.\n${appUrl('/admin/bookinger/' + b.id)}` }, c);
+      return 'requested' as const;
+    }
+    refundIds = await doCancel(c, b, 'member_request', t.pct, 'cancellation_tier', t.id, actor);
+    return 'cancelled' as const;
+  });
+  if (refundIds.length) await processRefunds(refundIds);
+  return out;
+}
+
+export async function decideCancellation(bookingId: string, approve: boolean, actor: Actor) {
+  let refundIds: string[] = [];
+  await tx(async c => {
+    const b = await lockBooking(c, bookingId);
+    if (b.status !== 'cancellation_requested') throw new DomainError('bad_state', 'Ingen ventende kansellering.');
+    if (!approve) {
+      await c.query(`UPDATE bookings SET status='confirmed', updated_at=now() WHERE id=$1`, [b.id]);
+      await audit(c, actor, 'booking.cancellation_denied', 'booking', b.id);
+      const m = await memberOf(c, b.member_id);
+      await enqueue({ userId: m.id, to: m.email, type: 'cancellation_denied', subject: `Kanselleringen ble ikke godkjent (${b.reference})`, body: `Hei ${m.name}. Bookingen din står fortsatt som bekreftet.` }, c);
+      return;
+    }
+    const t = await tierFor(c, b.property_id, b.start_date);
+    refundIds = await doCancel(c, b, 'member_request', t.pct, 'cancellation_tier', t.id, actor);
+  });
+  if (refundIds.length) await processRefunds(refundIds);
+}
+
+export async function adminCancel(bookingId: string, actor: Actor, reason: 'admin_action' | 'membership_revoked' = 'admin_action', c?: PoolClient) {
+  const run = async (cl: PoolClient) => {
+    const b = await lockBooking(cl, bookingId);
+    if (!['pending_review', 'awaiting_payment', 'confirmed', 'cancellation_requested'].includes(b.status)) throw new DomainError('bad_state', 'Bookingen kan ikke kanselleres.');
+    return doCancel(cl, b, reason, 100, reason === 'membership_revoked' ? 'membership_revoked' : 'admin_cancellation', null, actor);
+  };
+  const ids = c ? await run(c) : await tx(run);
+  if (!c && ids.length) await processRefunds(ids);
+  return ids;
+}
+
+export async function cancelAllForMember(c: PoolClient, memberId: string, actor: Actor) {
+  const rows = await q<{ id: string }>(`SELECT id FROM bookings WHERE member_id=$1 AND status IN ('pending_review','awaiting_payment','confirmed','cancellation_requested')`, [memberId], c);
+  for (const r of rows) await adminCancel(r.id, actor, 'membership_revoked', c);
+}
+
+// ---------------------------------------------------------------- background jobs
+export async function expireHolds(): Promise<number> {
+  const due = await q<{ booking_id: string }>(
+    `SELECT h.booking_id FROM booking_holds h WHERE h.released_at IS NULL AND h.expires_at < now()
+       AND NOT EXISTS (SELECT 1 FROM payments p WHERE p.booking_id=h.booking_id AND p.status='pending' AND p.method<>'invoice' AND p.created_at > now() - interval '30 minutes')`);
+  for (const d of due) {
+    await tx(async c => {
+      const b = await lockBooking(c, d.booking_id);
+      if (b.status !== 'awaiting_payment') return;
+      await c.query(`UPDATE bookings SET status='expired', cancelled_reason='payment_expired', updated_at=now() WHERE id=$1`, [b.id]);
+      await removeBlocksFor(c, 'platform_booking', b.id);
+      await c.query(`UPDATE booking_holds SET released_at=now() WHERE booking_id=$1`, [b.id]);
+      await c.query(`UPDATE payments SET status='cancelled' WHERE booking_id=$1 AND status='pending'`, [b.id]);
+      await c.query(`UPDATE invoices SET status='overdue' WHERE payment_id IN (SELECT id FROM payments WHERE booking_id=$1) AND status='sent'`, [b.id]);
+      await reverseRedemptions(c, b.id);
+      await audit(c, SYSTEM, 'booking.hold_expired', 'booking', b.id);
+      const m = await memberOf(c, b.member_id);
+      await enqueue({ userId: m.id, to: m.email, type: 'hold_expired', dedupeKey: `hold_expired:${b.id}`, subject: `Betalingsfristen gikk ut (${b.reference})`, body: `Hei ${m.name}. Datoene er frigitt. Du kan sende en ny forespørsel hvis de fortsatt er ledige.` }, c);
+    });
+  }
+  return due.length;
+}
+
+export async function sendHoldReminders(): Promise<number> {
+  const rows = await q<{ booking_id: string; reference: string; email: string; name: string; member_id: string; hours_left: number }>(
+    `SELECT b.id AS booking_id, b.reference, u.email, u.name, u.id AS member_id, EXTRACT(EPOCH FROM (h.expires_at - now()))/3600 AS hours_left
+     FROM booking_holds h JOIN bookings b ON b.id=h.booking_id JOIN users u ON u.id=b.member_id
+     WHERE h.released_at IS NULL AND b.status='awaiting_payment' AND h.expires_at > now() AND h.expires_at < now() + interval '24 hours'`);
+  for (const r of rows) {
+    const bucket = r.hours_left <= 4 ? '4h' : '24h';
+    await enqueue({ userId: r.member_id, to: r.email, type: 'payment_reminder', dedupeKey: `payment_reminder:${r.booking_id}:${bucket}`,
+      subject: `Påminnelse: betal innen ${Math.max(1, Math.floor(r.hours_left))} timer (${r.reference})`,
+      body: `Hei ${r.name}! Husk å betale for å beholde datoene: ${appUrl('/medlem/bookinger/' + r.booking_id)}` });
+  }
+  return rows.length;
+}
+
+export async function autoResolveCancellations(): Promise<number> {
+  const hours = await getNum('cancellation_approval_timeout_hours', 48);
+  const rows = await q<{ id: string }>(`SELECT id FROM bookings WHERE status='cancellation_requested' AND cancellation_requested_at < now() - make_interval(hours => $1)`, [hours]);
+  for (const r of rows) {
+    let ids: string[] = [];
+    await tx(async c => {
+      const b = await lockBooking(c, r.id);
+      if (b.status !== 'cancellation_requested') return;
+      // Resolved in the member's favour: full refund (spec §9)
+      ids = await doCancel(c, b, 'timeout_auto_approval', 100, 'timeout_auto_approval', null, SYSTEM);
+      await notifyAdmins({ type: 'cancellation_auto_approved', subject: `Kansellering ${b.reference} ble automatisk godkjent`, body: 'Ingen behandlet forespørselen innen fristen. Full refusjon er gitt.' }, c);
+    });
+    if (ids.length) await processRefunds(ids);
+  }
+  return rows.length;
+}
+
+/** Marks stays completed after checkout and fires referral qualification (idempotent). */
+export async function completeStays(): Promise<number> {
+  const rows = await q<{ id: string }>(`SELECT id FROM bookings WHERE status='confirmed' AND end_date <= $1::date`, [todayOslo()]);
+  for (const r of rows) {
+    await tx(async c => {
+      const b = await lockBooking(c, r.id);
+      if (b.status !== 'confirmed') return;
+      await c.query(`UPDATE bookings SET status='completed', completed_at=now(), updated_at=now() WHERE id=$1`, [b.id]);
+      await audit(c, SYSTEM, 'booking.completed', 'booking', b.id);
+      await qualifyReferralForBooking(c, b.id);
+    });
+  }
+  return rows.length;
+}

@@ -1,0 +1,15 @@
+import { Db, getPool, one } from './db';
+import { DomainError } from './errors';
+
+/** Fixed-window counter in Postgres (works across instances; swap for Redis at larger scale). */
+export async function rateLimit(key: string, limit: number, windowSeconds: number, db: Db = getPool()): Promise<void> {
+  const row = await one<{ count: number }>(
+    `INSERT INTO rate_limits (key, window_start, count) VALUES ($1, now(), 1)
+     ON CONFLICT (key) DO UPDATE SET
+       count = CASE WHEN rate_limits.window_start < now() - make_interval(secs => $2) THEN 1 ELSE rate_limits.count + 1 END,
+       window_start = CASE WHEN rate_limits.window_start < now() - make_interval(secs => $2) THEN now() ELSE rate_limits.window_start END
+     RETURNING count`, [key, windowSeconds], db);
+  if (row && row.count > limit) {
+    throw new DomainError('rate_limited', 'For mange forsøk. Vent litt og prøv igjen.', 429);
+  }
+}

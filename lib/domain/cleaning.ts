@@ -1,0 +1,316 @@
+import { PoolClient } from 'pg';
+import fs from 'fs/promises';
+import path from 'path';
+import crypto from 'crypto';
+import { Db, getPool, one, q, tx } from '../db';
+import { DomainError, forbidden } from '../errors';
+import { audit, Actor } from '../audit';
+import { appUrl, enqueue, notifyAdmins } from '../notify';
+import { addDays, fmtDate, todayOslo } from '../format';
+import { allocateBeds, Allocation, BedInput, roomSupplies } from './beds';
+import { isAdmin, UserLike } from '../auth/rbac';
+
+// ------------------------------------------------------------------ stay preparation
+export async function upsertBookingPreparation(c: PoolClient, bookingId: string, propertyId: string, g: { adults: number; children: number; infants: number }) {
+  await c.query(
+    `INSERT INTO stay_preparations (property_id, booking_id, adults, children, infants) VALUES ($1,$2,$3,$4,$5)
+     ON CONFLICT (booking_id) DO UPDATE SET adults=EXCLUDED.adults, children=EXCLUDED.children, infants=EXCLUDED.infants, updated_at=now()`,
+    [propertyId, bookingId, g.adults, g.children, g.infants]);
+}
+
+async function ensureExternalPreparation(c: PoolClient, eventId: string, propertyId: string): Promise<string> {
+  const row = await one<{ id: string }>(
+    `INSERT INTO stay_preparations (property_id, external_event_id) VALUES ($1,$2)
+     ON CONFLICT (external_event_id) DO UPDATE SET updated_at = stay_preparations.updated_at RETURNING id`, [propertyId, eventId], c);
+  return row!.id;
+}
+
+// ------------------------------------------------------------------ task generation
+type Stay = { key: string; source: 'platform_booking' | 'external_event'; refId: string; start: string; end: string; guests: number | null;
+  channel: string; prepId: string; exempt: boolean };
+
+/**
+ * Idempotent reconciliation of cleaning tasks for one property from every channel.
+ * Called after any booking confirmation/cancellation and after every calendar sync.
+ */
+export async function reconcileCleaningTasks(c: PoolClient, propertyId: string): Promise<{ created: number; updated: number; cancelled: number }> {
+  // Serialize reconciliation per property
+  await c.query('SELECT pg_advisory_xact_lock(hashtext($1))', ['cleaning:' + propertyId]);
+  const horizonStart = addDays(todayOslo(), -7);
+  const prop = await one<{ check_in_time: string; name: string }>('SELECT check_in_time, name FROM properties WHERE id=$1', [propertyId], c);
+
+  const bookingStays = await q<{ id: string; start: string; end: string; guests: number; prep_id: string; exempt: boolean }>(
+    `SELECT b.id, to_char(b.start_date,'YYYY-MM-DD') AS start, to_char(b.end_date,'YYYY-MM-DD') AS "end", b.adults + b.children AS guests, sp.id AS prep_id,
+            EXISTS (SELECT 1 FROM member_cleaning_exemptions e WHERE e.user_id=b.member_id AND e.active AND (e.property_id IS NULL OR e.property_id=b.property_id)) AS exempt
+     FROM bookings b JOIN stay_preparations sp ON sp.booking_id=b.id
+     WHERE b.property_id=$1 AND b.status IN ('confirmed','completed','cancellation_requested') AND b.end_date >= $2`, [propertyId, horizonStart], c);
+  const extStays = await q<{ id: string; start: string; end: string; channel: string }>(
+    `SELECT e.id, to_char(e.start_date,'YYYY-MM-DD') AS start, to_char(e.end_date,'YYYY-MM-DD') AS "end", cc.display_name AS channel
+     FROM external_calendar_events e JOIN channel_connections cc ON cc.id=e.connection_id
+     WHERE e.property_id=$1 AND e.sync_state IN ('active','conflict') AND e.block_kind <> 'owner_block' AND e.end_date >= $2`, [propertyId, horizonStart], c);
+
+  const stays: Stay[] = [];
+  for (const b of bookingStays) stays.push({ key: 'b:' + b.id, source: 'platform_booking', refId: b.id, start: b.start, end: b.end, guests: b.guests, channel: 'mountainretreat.no', prepId: b.prep_id, exempt: b.exempt });
+  for (const e of extStays) stays.push({ key: 'e:' + e.id, source: 'external_event', refId: e.id, start: e.start, end: e.end, guests: null, channel: e.channel, prepId: await ensureExternalPreparation(c, e.id, propertyId), exempt: false });
+  stays.sort((a, b) => a.start.localeCompare(b.start));
+
+  type Desired = { task_type: 'turnover' | 'preparation'; stay: Stay; date: string; nextCheckin: string | null; nextPrep: string | null };
+  const desired: Desired[] = [];
+  stays.forEach((s, i) => {
+    const next = stays.slice(i + 1).find(n => n.start >= s.end);
+    desired.push({ task_type: 'turnover', stay: s, date: s.end, nextCheckin: next?.start ?? null, nextPrep: next?.prepId ?? null });
+    const prev = stays.slice(0, i).reverse().find(p => p.end <= s.start);
+    if (!prev || prev.end < addDays(s.start, -3)) {
+      desired.push({ task_type: 'preparation', stay: s, date: s.start, nextCheckin: s.start, nextPrep: s.prepId });
+    }
+  });
+
+  const existing = await q<{ id: string; task_type: string; booking_id: string | null; external_event_id: string | null; checkout_date: string;
+    next_checkin_date: string | null; next_preparation_id: string | null; status: string; assigned_to_user_id: string | null; source_type: string }>(
+    `SELECT id, task_type, booking_id, external_event_id, to_char(checkout_date,'YYYY-MM-DD') AS checkout_date, to_char(next_checkin_date,'YYYY-MM-DD') AS next_checkin_date,
+            next_preparation_id, status, assigned_to_user_id, source_type
+     FROM cleaning_tasks WHERE property_id=$1 AND status NOT IN ('cancelled') AND checkout_date >= $2`, [propertyId, horizonStart], c);
+  const keyOf = (t: { task_type: string; booking_id: string | null; external_event_id: string | null }) =>
+    (t.booking_id ? 'b:' + t.booking_id : 'e:' + t.external_event_id) + ':' + t.task_type;
+  const existingByKey = new Map(existing.filter(t => t.source_type !== 'manual').map(t => [keyOf(t), t]));
+  const helpers = await q<{ helper_user_id: string }>(`SELECT helper_user_id FROM helper_property_assignments WHERE property_id=$1 AND active`, [propertyId], c);
+  const autoAssignee = helpers.length === 1 ? helpers[0].helper_user_id : null;
+
+  let created = 0, updated = 0, cancelled = 0;
+  const seen = new Set<string>();
+  for (const d of desired) {
+    const key = d.stay.key + ':' + d.task_type;
+    seen.add(key);
+    const ex = existingByKey.get(key);
+    const deadlineSql = `CASE WHEN $3::date IS NULL THEN NULL ELSE ($3::date + $4::time) AT TIME ZONE 'Europe/Oslo' END`;
+    if (!ex) {
+      if (d.date < todayOslo()) continue; // don't create tasks in the past
+      const status = d.stay.exempt && d.task_type === 'turnover' ? 'not_needed' : autoAssignee ? 'assigned' : 'open';
+      const t = await one<{ id: string }>(
+        `INSERT INTO cleaning_tasks (property_id, task_type, source_type, booking_id, external_event_id, channel_name, checkout_date, next_checkin_date,
+           deadline_at, next_preparation_id, checkout_guests, status, not_needed_reason, assigned_to_user_id)
+         VALUES ($1,$5,$6,$7,$8,$9,$2,$3, ${deadlineSql}, $10,$11,$12,$13,$14) RETURNING id`,
+        [propertyId, d.date, d.nextCheckin, prop!.check_in_time, d.task_type, d.stay.source,
+         d.stay.source === 'platform_booking' ? d.stay.refId : null, d.stay.source === 'external_event' ? d.stay.refId : null,
+         d.stay.channel, d.nextPrep, d.task_type === 'turnover' ? d.stay.guests : null, status,
+         status === 'not_needed' ? 'Gjesten vasker selv' : null, status === 'assigned' ? autoAssignee : null], c);
+      created++;
+      if (status === 'assigned') await notifyHelper(c, autoAssignee!, `Ny renholdsjobb: ${prop!.name} ${fmtDate(d.date, true)}`, t!.id);
+    } else {
+      const changed = ex.checkout_date !== d.date || ex.next_checkin_date !== d.nextCheckin || ex.next_preparation_id !== d.nextPrep;
+      if (changed && ex.status !== 'done') {
+        await c.query(`UPDATE cleaning_tasks SET checkout_date=$2, next_checkin_date=$3, deadline_at=${deadlineSql}, next_preparation_id=$5, updated_at=now() WHERE id=$1`,
+          [ex.id, d.date, d.nextCheckin, prop!.check_in_time, d.nextPrep]);
+        updated++;
+        if (ex.assigned_to_user_id && ex.checkout_date !== d.date) await notifyHelper(c, ex.assigned_to_user_id, `Renholdsjobb flyttet: ${prop!.name} nå ${fmtDate(d.date, true)}`, ex.id);
+      }
+    }
+  }
+  for (const [key, ex] of existingByKey) {
+    if (seen.has(key) || ex.status === 'done') continue;
+    await c.query(`UPDATE cleaning_tasks SET status='cancelled', updated_at=now() WHERE id=$1`, [ex.id]);
+    cancelled++;
+    if (ex.assigned_to_user_id) await notifyHelper(c, ex.assigned_to_user_id, `Renholdsjobb avlyst: ${prop!.name} ${fmtDate(ex.checkout_date, true)}`, ex.id);
+  }
+  return { created, updated, cancelled };
+}
+
+async function notifyHelper(c: Db, helperId: string, subject: string, taskId: string) {
+  const h = await one<{ email: string; name: string }>('SELECT email, name FROM users WHERE id=$1', [helperId], c);
+  if (!h) return;
+  await enqueue({ userId: helperId, to: h.email, type: 'cleaning_task', subject,
+    body: `Hei ${h.name}!\n\n${subject}\nSe detaljer: ${appUrl('/renhold/oppgaver/' + taskId)}` }, c);
+}
+
+// ------------------------------------------------------------------ access
+export async function helperCanSeeTask(user: UserLike & { cleaning_scope?: string }, taskId: string, db: Db = getPool()) {
+  if (isAdmin(user)) return true;
+  if (user.system_role !== 'helper') return false;
+  const t = await one<{ property_id: string; assigned_to_user_id: string | null }>('SELECT property_id, assigned_to_user_id FROM cleaning_tasks WHERE id=$1', [taskId], db);
+  if (!t) return false;
+  if (t.assigned_to_user_id === user.id) return true;
+  if (user.cleaning_scope === 'all') return true;
+  return false;
+}
+
+/** Tasks visible to a helper: assigned to them (or everything on their properties if granted broader access). No prices/names. */
+export async function tasksForHelper(user: UserLike & { cleaning_scope?: string }, from: string, to: string, db: Db = getPool()) {
+  const scopeAll = isAdmin(user) || user.cleaning_scope === 'all';
+  return q(
+    `SELECT t.id, t.task_type, t.status, t.channel_name, to_char(t.checkout_date,'YYYY-MM-DD') AS date, to_char(t.next_checkin_date,'YYYY-MM-DD') AS next_checkin,
+            t.deadline_at, t.checkout_guests, t.notes, t.assigned_to_user_id, p.name AS property_name, p.address, p.id AS property_id,
+            to_char(p.check_out_time,'HH24:MI') AS check_out_time, to_char(p.check_in_time,'HH24:MI') AS check_in_time,
+            sp.adults AS next_adults, sp.children AS next_children, sp.infants AS next_infants, sp.comment_for_cleaner, to_char(sp.expected_arrival_time,'HH24:MI') AS expected_arrival,
+            hu.name AS assignee_name,
+            (t.next_checkin_date IS NOT NULL AND t.next_checkin_date = t.checkout_date) AS same_day
+     FROM cleaning_tasks t JOIN properties p ON p.id=t.property_id
+     LEFT JOIN stay_preparations sp ON sp.id = t.next_preparation_id
+     LEFT JOIN users hu ON hu.id = t.assigned_to_user_id
+     WHERE t.checkout_date BETWEEN $1 AND $2 AND t.status <> 'cancelled'
+       AND ($3::boolean OR t.assigned_to_user_id = $4)
+     ORDER BY t.checkout_date, p.name`, [from, to, scopeAll, user.id], db);
+}
+
+// ------------------------------------------------------------------ room-by-room overview
+export async function roomPlanForPreparation(prepId: string | null, propertyId: string, db: Db = getPool()) {
+  const rooms = await q<{ id: string; name: string; floor: string | null; description: string | null; photo_id: string | null; max_capacity: number; bedding_instructions: string | null; sort_order: number }>(
+    `SELECT r.id, r.name, r.floor, r.description, (SELECT ph.id FROM photos ph WHERE ph.entity_type='room' AND ph.entity_id=r.id ORDER BY ph.created_at DESC LIMIT 1) AS photo_id, r.max_capacity, r.bedding_instructions, r.sort_order FROM rooms r WHERE r.property_id=$1 AND r.active ORDER BY r.sort_order, r.name`, [propertyId], db);
+  const beds = await q<BedInput & { label: string; width_cm: number | null; length_cm: number | null }>(
+    `SELECT id, room_id, label, bed_type, sleeps, allocation_priority, children_only, width_cm, length_cm FROM beds WHERE property_id=$1 AND active ORDER BY allocation_priority`, [propertyId], db);
+  const prep = prepId ? await one<{ id: string; adults: number; children: number; infants: number; plan_source: string; comment_for_cleaner: string | null }>(
+    'SELECT id, adults, children, infants, plan_source, comment_for_cleaner FROM stay_preparations WHERE id=$1', [prepId], db) : null;
+  const guests = prep ? { adults: prep.adults, children: prep.children, infants: prep.infants } : null;
+  let allocations: Allocation[] = [];
+  let warnings: string[] = [];
+  let source: 'none' | 'auto' | 'admin_override' = 'none';
+  if (prep && prep.plan_source === 'admin_override') {
+    allocations = await q<Allocation>('SELECT bed_id, persons, guest_type FROM stay_sleeping_plan WHERE stay_preparation_id=$1', [prep.id], db);
+    source = 'admin_override';
+  } else if (guests && guests.adults + guests.children + guests.infants > 0) {
+    const r = allocateBeds(rooms, beds, guests);
+    allocations = r.allocations; warnings = r.warnings; source = 'auto';
+  }
+  const byBed = new Map(allocations.map(a => [a.bed_id, a]));
+  const roomViews = rooms.map(r => {
+    const rb = beds.filter(b => b.room_id === r.id);
+    const guestsInRoom = rb.reduce((s, b) => s + (byBed.get(b.id)?.persons ?? 0), 0);
+    return {
+      ...r,
+      guestsInRoom,
+      beds: rb.map(b => ({ ...b, allocation: byBed.get(b.id) ?? null })),
+      supplies: roomSupplies(rb, byBed),
+    };
+  });
+  return { prep, guests, source, warnings, rooms: roomViews };
+}
+
+// ------------------------------------------------------------------ helper actions
+async function lockTaskFor(c: PoolClient, taskId: string, user: UserLike & { cleaning_scope?: string }) {
+  if (!(await helperCanSeeTask(user, taskId, c))) throw forbidden();
+  const t = await one<{ id: string; status: string; property_id: string; checkout_date: string }>('SELECT id, status, property_id, to_char(checkout_date,\'YYYY-MM-DD\') AS checkout_date FROM cleaning_tasks WHERE id=$1 FOR UPDATE', [taskId], c);
+  if (!t) throw new DomainError('not_found', 'Fant ikke oppgaven.');
+  return t;
+}
+
+export async function startTask(taskId: string, user: UserLike, actor: Actor) {
+  await tx(async c => {
+    const t = await lockTaskFor(c, taskId, user);
+    if (!['open', 'assigned'].includes(t.status)) throw new DomainError('bad_state', 'Oppgaven kan ikke startes.');
+    await c.query(`UPDATE cleaning_tasks SET status='in_progress', started_at=now(), assigned_to_user_id=COALESCE(assigned_to_user_id,$2), updated_at=now() WHERE id=$1`, [taskId, user.id]);
+    await audit(c, actor, 'cleaning.started', 'cleaning_task', taskId);
+  });
+}
+
+export async function completeTask(taskId: string, user: UserLike & { name?: string }, notes: string, actor: Actor) {
+  await tx(async c => {
+    const t = await lockTaskFor(c, taskId, user);
+    if (!['open', 'assigned', 'in_progress'].includes(t.status)) throw new DomainError('bad_state', 'Oppgaven er allerede avsluttet.');
+    await c.query(`UPDATE cleaning_tasks SET status='done', completed_at=now(), completed_by_user_id=$2, completion_notes=$3, started_at=COALESCE(started_at, now()), updated_at=now() WHERE id=$1`,
+      [taskId, user.id, notes.trim() || null]);
+    await audit(c, actor, 'cleaning.completed', 'cleaning_task', taskId, { status: t.status }, { status: 'done', notes });
+    const p = await one<{ name: string }>('SELECT name FROM properties WHERE id=$1', [t.property_id], c);
+    await notifyAdmins({ type: 'cleaning_completed', dedupeKey: `cleaning_completed:${taskId}`, subject: `Renhold ferdig: ${p!.name} ${fmtDate(t.checkout_date)}`,
+      body: `${user.name ?? 'Renholder'} har markert renholdet som ferdig.${notes.trim() ? `\nNotat: ${notes.trim()}` : ''}` }, c);
+  });
+}
+
+export async function setRoomDone(taskId: string, roomId: string, done: boolean, user: UserLike, actor: Actor) {
+  await tx(async c => {
+    await lockTaskFor(c, taskId, user);
+    await c.query(
+      `INSERT INTO room_preparation_status (cleaning_task_id, room_id, completed_at, completed_by_user_id) VALUES ($1,$2, CASE WHEN $3 THEN now() END, CASE WHEN $3 THEN $4::uuid END)
+       ON CONFLICT (cleaning_task_id, room_id) DO UPDATE SET completed_at = EXCLUDED.completed_at, completed_by_user_id = EXCLUDED.completed_by_user_id`,
+      [taskId, roomId, done, user.id]);
+    await c.query(`UPDATE cleaning_tasks SET status = CASE WHEN status IN ('open','assigned') THEN 'in_progress' ELSE status END, started_at = COALESCE(started_at, now()) WHERE id=$1`, [taskId]);
+    await audit(c, actor, done ? 'cleaning.room_done' : 'cleaning.room_undone', 'cleaning_task', taskId, undefined, { roomId });
+  });
+}
+
+export async function reportIssue(taskId: string, kind: 'damage' | 'missing_item' | 'issue' | 'comment', description: string, user: UserLike & { name?: string }, actor: Actor) {
+  if (!description.trim()) throw new DomainError('empty', 'Skriv en beskrivelse.');
+  return tx(async c => {
+    const t = await lockTaskFor(c, taskId, user);
+    const r = await one<{ id: string }>(`INSERT INTO cleaning_reports (cleaning_task_id, property_id, kind, description, created_by_user_id) VALUES ($1,$2,$3,$4,$5) RETURNING id`,
+      [taskId, t.property_id, kind, description.trim().slice(0, 4000), user.id], c);
+    await audit(c, actor, 'cleaning.report_' + kind, 'cleaning_report', r!.id);
+    if (kind !== 'comment') {
+      const p = await one<{ name: string }>('SELECT name FROM properties WHERE id=$1', [t.property_id], c);
+      const label = { damage: 'Skade', missing_item: 'Mangler', issue: 'Avvik', comment: 'Kommentar' }[kind];
+      await notifyAdmins({ type: 'cleaning_report', subject: `${label} rapportert: ${p!.name}`, body: `${user.name ?? 'Renholder'} rapporterte:\n${description.trim()}\n\n${appUrl('/admin/renhold')}` }, c);
+    }
+    return r!.id;
+  });
+}
+
+// ------------------------------------------------------------------ photo upload (validated by magic bytes, stored outside web root)
+const MAGIC: [string, number[]][] = [['image/jpeg', [0xff, 0xd8, 0xff]], ['image/png', [0x89, 0x50, 0x4e, 0x47]], ['image/webp', [0x52, 0x49, 0x46, 0x46]]];
+export function sniffImage(buf: Buffer): string | null {
+  for (const [mime, sig] of MAGIC) if (sig.every((b, i) => buf[i] === b)) {
+    if (mime === 'image/webp' && buf.subarray(8, 12).toString() !== 'WEBP') continue;
+    return mime;
+  }
+  return null;
+}
+
+export async function savePhoto(entityType: 'cleaning_task' | 'cleaning_report' | 'room' | 'property', entityId: string, file: File, user: UserLike, actor: Actor) {
+  if (file.size <= 0 || file.size > 10 * 1024 * 1024) throw new DomainError('bad_file', 'Bildet må være under 10 MB.');
+  const buf = Buffer.from(await file.arrayBuffer());
+  const mime = sniffImage(buf);
+  if (!mime) throw new DomainError('bad_file', 'Kun JPEG, PNG eller WebP er tillatt.');
+  const key = `${entityType}/${crypto.randomUUID()}.${mime.split('/')[1]}`;
+  const dir = process.env.STORAGE_DIR || './storage';
+  await fs.mkdir(path.join(dir, entityType), { recursive: true });
+  await fs.writeFile(path.join(dir, key), buf, { mode: 0o640 });
+  const row = await one<{ id: string }>(`INSERT INTO photos (entity_type, entity_id, storage_key, mime_type, size_bytes, uploaded_by_user_id) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`,
+    [entityType, entityId, key, mime, buf.length, user.id]);
+  await audit(null, actor, 'photo.uploaded', entityType, entityId, undefined, { photo: row!.id });
+  return row!.id;
+}
+
+// ------------------------------------------------------------------ admin
+export async function assignTask(taskId: string, helperId: string | null, actor: Actor) {
+  await tx(async c => {
+    const t = await one<{ status: string; property_id: string; checkout_date: string }>(`SELECT status, property_id, to_char(checkout_date,'YYYY-MM-DD') AS checkout_date FROM cleaning_tasks WHERE id=$1 FOR UPDATE`, [taskId], c);
+    if (!t) throw new DomainError('not_found', 'Fant ikke oppgaven.');
+    if (helperId) {
+      const h = await one(`SELECT 1 FROM users WHERE id=$1 AND system_role='helper' AND status='active'`, [helperId], c);
+      if (!h) throw new DomainError('bad_helper', 'Ugyldig renholder.');
+    }
+    await c.query(`UPDATE cleaning_tasks SET assigned_to_user_id=$2, status = CASE WHEN status IN ('open','assigned') THEN (CASE WHEN $2::uuid IS NULL THEN 'open' ELSE 'assigned' END) ELSE status END, updated_at=now() WHERE id=$1`, [taskId, helperId]);
+    await audit(c, actor, 'cleaning.assigned', 'cleaning_task', taskId, undefined, { helperId });
+    const p = await one<{ name: string }>('SELECT name FROM properties WHERE id=$1', [t.property_id], c);
+    if (helperId) await notifyHelper(c, helperId, `Ny renholdsjobb: ${p!.name} ${fmtDate(t.checkout_date, true)}`, taskId);
+  });
+}
+
+export async function overrideSleepingPlan(prepId: string, plan: { bed_id: string; persons: number; guest_type: string }[] | null, actor: Actor) {
+  await tx(async c => {
+    const prep = await one<{ property_id: string }>('SELECT property_id FROM stay_preparations WHERE id=$1 FOR UPDATE', [prepId], c);
+    if (!prep) throw new DomainError('not_found', 'Fant ikke oppholdet.');
+    await c.query('DELETE FROM stay_sleeping_plan WHERE stay_preparation_id=$1', [prepId]);
+    if (plan === null) {
+      await c.query(`UPDATE stay_preparations SET plan_source='auto', updated_by_user_id=$2, updated_at=now() WHERE id=$1`, [prepId, actor.id]);
+    } else {
+      for (const p of plan.filter(p => p.persons > 0)) {
+        const bed = await one<{ sleeps: number }>('SELECT sleeps FROM beds WHERE id=$1 AND property_id=$2', [p.bed_id, prep.property_id], c);
+        if (!bed) throw new DomainError('bad_bed', 'Ugyldig seng.');
+        if (p.persons > bed.sleeps) throw new DomainError('over_capacity', 'For mange personer i én seng.');
+        await c.query('INSERT INTO stay_sleeping_plan (stay_preparation_id, bed_id, persons, guest_type) VALUES ($1,$2,$3,$4)', [prepId, p.bed_id, p.persons, p.guest_type]);
+      }
+      await c.query(`UPDATE stay_preparations SET plan_source='admin_override', updated_by_user_id=$2, updated_at=now() WHERE id=$1`, [prepId, actor.id]);
+    }
+    await audit(c, actor, 'stay.sleeping_plan_override', 'stay_preparation', prepId, undefined, { plan });
+  });
+}
+
+export async function updatePreparation(prepId: string, data: { adults: number; children: number; infants: number; comment: string; arrival: string | null }, actor: Actor) {
+  await tx(async c => {
+    const before = await one('SELECT adults, children, infants, comment_for_cleaner FROM stay_preparations WHERE id=$1 FOR UPDATE', [prepId], c);
+    if (!before) throw new DomainError('not_found', 'Fant ikke oppholdet.');
+    await c.query(`UPDATE stay_preparations SET adults=$2, children=$3, infants=$4, comment_for_cleaner=$5, expected_arrival_time=$6, updated_by_user_id=$7, updated_at=now() WHERE id=$1`,
+      [prepId, data.adults, data.children, data.infants, data.comment.trim() || null, data.arrival || null, actor.id]);
+    await audit(c, actor, 'stay.preparation_updated', 'stay_preparation', prepId, before, data);
+    const assigned = await q<{ id: string; assigned_to_user_id: string }>(`SELECT id, assigned_to_user_id FROM cleaning_tasks WHERE next_preparation_id=$1 AND assigned_to_user_id IS NOT NULL AND status IN ('assigned','in_progress')`, [prepId], c);
+    for (const t of assigned) await notifyHelper(c, t.assigned_to_user_id, 'Endret info om neste ankomst', t.id);
+  });
+}
