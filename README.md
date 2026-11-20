@@ -30,6 +30,8 @@ Privat, invitasjonsbasert bookingplattform med medlemsportal, administrasjon, re
 | **Sikkerhet/GDPR** | All autorisasjon server-side (én tilgangsmatrise, `lib/auth/rbac.ts`), append-only revisjonslogg håndhevet med trigger, ingen harde slettinger av forretningsdata, bildeopplasting validert på filsignatur og servert kun til autoriserte, sikkerhetsheadere, dataeksport (JSON) og anonymisering, oppbevaringsjobb. |
 
 ### Design
+Logoen (mountainretreat.no) brukes i en lys versjon med gull sol for den mørke bakgrunnen: stor på forsiden, i sidemenyen i admin- og medlemsportalen, på innlogging, i renholdsportalen (kun illustrasjonen) og som app-ikon. E-poster bruker en mørk versjon. Filene ligger i `public/brand/` (logo-light, logo-dark, mark-light) og `app/icon.png`.
+
 Mørk, eksklusiv profil: sort/antrasitt bakgrunn, gull/beige detaljer, Cormorant Garamond (titler) + Inter (tekst), selvhostet via `@fontsource` (ingen eksterne kall). Admin- og medlemsportalen har fast venstre sidemeny med aktiv markering; renholdsportalen har bunnmeny tilpasset mobil. Dashboards bruker informasjonskort, serverrendrede SVG-grafer (belegg per måned fordelt på egne/eksterne bookinger, beleggsringer per bolig, innbetalt per måned) og rene tabeller. Alle farger ligger som CSS-variabler øverst i `app/globals.css`.
 
 ## 2. Databasestruktur
