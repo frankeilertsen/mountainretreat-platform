@@ -7,6 +7,7 @@ import { approveBooking, handlePaymentSucceeded, requestBooking } from '../lib/d
 import { qualifyReferralForBooking } from '../lib/domain/rewards';
 import { reconcileCleaningTasks, upsertBookingPreparation } from '../lib/domain/cleaning';
 import { applySnapshot } from '../lib/channels/sync';
+import { setMaxGuests, syncMaxGuests } from '../lib/domain/capacity';
 
 /**
  * Test data for every role and workflow. Log in via /login → "Utviklerinnlogging" (DEV_LOGIN=1),
@@ -83,6 +84,10 @@ export async function seed() {
   await bed(apt, a2, 'Køye nedre', 'bunk_lower', 1, 20);
   await bed(apt, a2, 'Køye øvre', 'bunk_upper', 1, 30, undefined, undefined, true);
   await bed(apt, a3, 'Sovesofa', 'sofa_bed', 2, 90);
+
+  // Max persons from the sleeping places: the cabin has 9 places (incl. extra mattress) but is limited manually to 8; the apartment follows its beds
+  await setMaxGuests(db, cabin, 'manual', 8);
+  await syncMaxGuests(db, apt);
 
   // ---------------- Season pricing
   for (const [pid, low, high, hol] of [[cabin, 180000, 250000, 320000], [apt, 120000, 160000, 200000]] as const) {

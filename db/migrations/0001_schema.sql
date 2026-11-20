@@ -118,7 +118,9 @@ CREATE TABLE properties (
   description       TEXT,
   amenities         TEXT[] NOT NULL DEFAULT '{}',
   house_rules       TEXT,
-  max_guests        INTEGER NOT NULL DEFAULT 2 CHECK (max_guests >= 1),
+  max_guests        INTEGER NOT NULL DEFAULT 2 CHECK (max_guests >= 1),   -- effective max persons (kept in sync, see max_guests_mode)
+  -- 'auto': max persons = sleeping places from rooms/beds; 'manual': admin-set value, never above the sleeping places
+  max_guests_mode   TEXT NOT NULL DEFAULT 'auto' CHECK (max_guests_mode IN ('auto','manual')),
   check_in_time     TIME NOT NULL DEFAULT '15:00',
   check_out_time    TIME NOT NULL DEFAULT '11:00',
   cleaning_fee_ore  INTEGER NOT NULL DEFAULT 0 CHECK (cleaning_fee_ore >= 0),

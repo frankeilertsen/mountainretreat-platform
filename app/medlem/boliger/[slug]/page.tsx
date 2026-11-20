@@ -10,6 +10,7 @@ import { DomainError } from '@/lib/errors';
 import { Flash, PropertyMedia } from '@/components/ui';
 import { MonthCalendar } from '@/components/MonthCalendar';
 import { SavingsBreakdown } from '@/components/Savings';
+import { BED_LABELS } from '@/lib/domain/beds';
 import { requestBookingAction } from '../../../actions/member';
 import crypto from 'crypto';
 
@@ -28,6 +29,8 @@ export default async function PropertyPage({ params, searchParams }: { params: P
   const seasons = await q(`SELECT name, price_per_night_ore, min_nights, color FROM season_categories WHERE property_id=$1 AND active ORDER BY price_per_night_ore`, [p.id]);
   const addOns = await q(`SELECT id, name, description, price_type, unit_price_ore, mandatory FROM add_on_items WHERE (property_id=$1 OR property_id IS NULL) AND active ORDER BY mandatory DESC, name`, [p.id]);
   const bal = await rewardBalance(u.id);
+  const sleeping = await q<{ room: string; beds: string }>(`SELECT r.name AS room, string_agg(b.bed_type || '|' || COALESCE(b.width_cm::text,''), ',' ORDER BY b.allocation_priority) AS beds
+    FROM rooms r JOIN beds b ON b.room_id=r.id AND b.active WHERE r.property_id=$1 AND r.active GROUP BY r.id, r.name, r.sort_order ORDER BY r.sort_order`, [p.id]);
   const disc = await memberDiscount(u.id);
   const airbnbFee = Number((await one<{ value: string }>(`SELECT value FROM platform_settings WHERE key='airbnb_guest_fee_pct'`))?.value ?? 15);
   const rateStats = p.pricing_mode === 'airbnb' ? await one<{ min: number; avg: number }>(`SELECT min(price_ore)::int AS min, avg(price_ore)::int AS avg FROM external_nightly_rates WHERE property_id=$1 AND date BETWEEN current_date AND current_date + 90`, [p.id]) : null;
@@ -55,7 +58,7 @@ export default async function PropertyPage({ params, searchParams }: { params: P
             <p>{p.description}</p>
             <div className="row" style={{ gap: 6 }}>{(p.amenities as string[]).map(a => <span key={a} className="badge">{a}</span>)}</div>
           </div>
-          <dl className="dl"><dt>Gjester</dt><dd>Opptil {p.max_guests}</dd><dt>Innsjekk</dt><dd>fra kl. {p.cin}</dd><dt>Utsjekk</dt><dd>innen kl. {p.cout}</dd><dt>Sluttrengjøring</dt><dd>{nok(p.cleaning_fee_ore)}</dd><dt>Inkludert</dt><dd>Prisen gjelder for {p.included_guests} personer</dd>{p.extra_guest_fee_ore > 0 && <><dt>Ekstra person</dt><dd>{nok(p.extra_guest_fee_ore)} per person {p.extra_guest_fee_basis === 'per_night' ? 'per natt' : 'per opphold'}{p.extra_guest_fee_includes ? <><br /><small className="muted">{p.extra_guest_fee_includes}</small></> : null}</dd></>}</dl>
+          <dl className="dl"><dt>Gjester</dt><dd>Opptil {p.max_guests} personer</dd>{sleeping.length > 0 && <><dt>Soverom</dt><dd>{sleeping.map(s => <div key={s.room}>{s.room}: <span className="muted">{s.beds.split(',').map(x => { const [t, w] = x.split('|'); return `${BED_LABELS[t] ?? t}${w ? ` ${w} cm` : ''}`; }).join(', ')}</span></div>)}</dd></>}<dt>Innsjekk</dt><dd>fra kl. {p.cin}</dd><dt>Utsjekk</dt><dd>innen kl. {p.cout}</dd><dt>Sluttrengjøring</dt><dd>{nok(p.cleaning_fee_ore)}</dd><dt>Inkludert</dt><dd>Prisen gjelder for {p.included_guests} personer</dd>{p.extra_guest_fee_ore > 0 && <><dt>Ekstra person</dt><dd>{nok(p.extra_guest_fee_ore)} per person {p.extra_guest_fee_basis === 'per_night' ? 'per natt' : 'per opphold'}{p.extra_guest_fee_includes ? <><br /><small className="muted">{p.extra_guest_fee_includes}</small></> : null}</dd></>}</dl>
           {p.house_rules && <p className="muted"><strong>Husregler:</strong> {p.house_rules}</p>}
           <div className="card flat">
             <h3>Priser</h3>

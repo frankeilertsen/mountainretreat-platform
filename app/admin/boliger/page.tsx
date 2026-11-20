@@ -11,7 +11,7 @@ export default async function Properties({ searchParams }: { searchParams: Promi
   const sp = await searchParams;
   const props = await q(`SELECT p.id, p.name, p.address, p.active, p.max_guests, p.cleaning_fee_ore,
       (SELECT count(*) FROM rooms r WHERE r.property_id=p.id AND r.active)::int AS rooms,
-      (SELECT COALESCE(sum(sleeps),0) FROM beds b WHERE b.property_id=p.id AND b.active AND b.bed_type<>'cot')::int AS places,
+      (SELECT COALESCE(sum(LEAST(r.max_capacity, (SELECT COALESCE(sum(b.sleeps),0) FROM beds b WHERE b.room_id=r.id AND b.active AND b.bed_type<>'cot'))),0) FROM rooms r WHERE r.property_id=p.id AND r.active)::int AS places,
       (SELECT count(*) FROM channel_connections c WHERE c.property_id=p.id AND c.active)::int AS channels,
       (SELECT ph.id FROM photos ph WHERE ph.entity_type='property' AND ph.entity_id=p.id ORDER BY ph.created_at LIMIT 1) AS photo_id
     FROM properties p ORDER BY p.active DESC, p.name`);
@@ -32,7 +32,7 @@ export default async function Properties({ searchParams }: { searchParams: Promi
           <form action={createPropertyAction}>
             <div className="field"><label>Navn</label><input name="name" required /></div>
             <div className="field"><label>Adresse</label><input name="address" /></div>
-            <div className="field"><label>Maks gjester</label><input name="max_guests" type="number" min={1} defaultValue={4} /></div>
+            <div className="field"><label>Maks personer (justeres når rom og senger er lagt inn)</label><input name="max_guests" type="number" min={1} defaultValue={4} /></div>
             <button className="btn">Opprett</button>
           </form>
         </div>

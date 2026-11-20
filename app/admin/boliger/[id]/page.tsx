@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import { one, q } from '@/lib/db';
 import { addDays, fmtDate, nok, todayOslo } from '@/lib/format';
 import { BED_LABELS } from '@/lib/domain/beds';
+import { sleepingPlaces, BED_SIZES } from '@/lib/domain/capacity';
 import { Flash } from '@/components/ui';
 import * as A from '../../../actions/properties';
 
@@ -32,6 +33,7 @@ export default async function PropertyAdmin({ params, searchParams }: { params: 
 }
 
 async function Details({ p }: { p: any }) {
+  const cap = await sleepingPlaces(p.id);
   const photos = await q(`SELECT id FROM photos WHERE entity_type='property' AND entity_id=$1 ORDER BY created_at`, [p.id]);
   return (
     <div className="grid g2" style={{ alignItems: 'start' }}>
@@ -44,10 +46,16 @@ async function Details({ p }: { p: any }) {
         <div className="field"><label>Fasiliteter (kommaseparert)</label><input name="amenities" defaultValue={(p.amenities ?? []).join(', ')} /></div>
         <div className="field"><label>Husregler</label><textarea name="house_rules" defaultValue={p.house_rules ?? ''} /></div>
         <div className="fields">
-          <div><label>Maks gjester</label><input type="number" name="max_guests" min={1} defaultValue={p.max_guests} /></div>
           <div><label>Innsjekk fra</label><input type="time" name="check_in_time" defaultValue={p.cin} /></div>
           <div><label>Utsjekk innen</label><input type="time" name="check_out_time" defaultValue={p.cout} /></div>
           <div><label>Sluttrengjøring (kr)</label><input name="cleaning_fee" defaultValue={p.cleaning_fee_ore / 100} /></div>
+        </div>
+        <h4 style={{ marginTop: 20 }}>Maks personer</h4>
+        <p className="muted" style={{ fontSize: '.85rem', margin: '0 0 10px' }}>Boligen har <strong style={{ color: 'var(--gold-2)' }}>{cap.total} sengeplasser</strong> fra {cap.rooms.length} rom (se fanen Rom og senger). Spedbarn i barneseng telles ikke.</p>
+        <div className="fields">
+          <div><label>Beregning</label><select name="max_guests_mode" defaultValue={p.max_guests_mode}><option value="auto">Lik antall sengeplasser</option><option value="manual">Sett manuelt (maks {cap.total || '–'})</option></select></div>
+          <div><label>Maks personer (ved manuelt)</label><input type="number" name="max_guests" min={1} max={cap.total || undefined} defaultValue={p.max_guests} /></div>
+          <div><label>Gjeldende maks</label><input value={`${p.max_guests} personer`} disabled /></div>
         </div>
         <h4 style={{ marginTop: 20 }}>Gjester inkludert i prisen</h4>
         <div className="fields">
@@ -75,17 +83,24 @@ async function Details({ p }: { p: any }) {
 }
 
 async function Rooms({ pid }: { pid: string }) {
+  const cap = await sleepingPlaces(pid);
+  const prop = await one<{ max_guests: number; max_guests_mode: string }>('SELECT max_guests, max_guests_mode FROM properties WHERE id=$1', [pid]);
   const rooms = await q(`SELECT r.*, (SELECT ph.id FROM photos ph WHERE ph.entity_type='room' AND ph.entity_id=r.id ORDER BY ph.created_at DESC LIMIT 1) AS photo_id FROM rooms r WHERE property_id=$1 AND active ORDER BY sort_order, name`, [pid]);
   const beds = await q(`SELECT * FROM beds WHERE property_id=$1 AND active ORDER BY allocation_priority`, [pid]);
-  const places = beds.filter(b => b.bed_type !== 'cot').reduce((s, b) => s + b.sleeps, 0);
   return (
     <>
-      <p className="muted">Romoppsettet brukes til å beregne hvilke senger som skal redes for hver booking. Lavere prioritet fylles først – sett sovesofa og ekstramadrass høyt så de bare brukes ved behov. {places} soveplasser totalt.</p>
+      <div className="grid g3" style={{ marginBottom: 20 }}>
+        <div className="card kpi-card"><span className="kpi-label">Sengeplasser</span><div className="kpi" style={{ color: 'var(--gold-2)' }}>{cap.total}</div><small>{cap.rooms.length} rom · {beds.filter(b => b.bed_type !== 'cot').length} senger</small></div>
+        <div className="card kpi-card"><span className="kpi-label">Maks personer</span><div className="kpi">{prop?.max_guests}</div><small>{prop?.max_guests_mode === 'auto' ? 'Følger sengeplassene automatisk' : 'Satt manuelt'} · endres under Detaljer</small></div>
+        <div className="card kpi-card"><span className="kpi-label">Barnesenger</span><div className="kpi">{beds.filter(b => b.bed_type === 'cot').length}</div><small>For spedbarn (teller ikke som person)</small></div>
+      </div>
+      <p className="muted">Definer hvert rom med senger, type og størrelse. Sengeplassene bestemmer maks antall personer, og brukes til å beregne hvilke senger som skal redes for hver booking. Lavere prioritet fylles først – sett sovesofa og ekstramadrass høyt så de bare brukes ved behov.</p>
       {rooms.map(r => (
         <div key={r.id} className="card" style={{ marginBottom: 16 }}>
           <div className="grid g2">
             <form action={A.saveRoomAction}>
               <input type="hidden" name="id" value={r.id} /><input type="hidden" name="propertyId" value={pid} />
+              {(() => { const c = cap.rooms.find(x => x.id === r.id); return c ? <p style={{ margin: '0 0 10px', fontSize: '.88rem' }}><span className="badge b-warn">{c.places} sengeplasser</span>{c.limitedByRoom && <small className="muted"> · sengene har {c.bed_places} plasser, men rommet er begrenset til {r.max_capacity}</small>}</p> : null; })()}
               <div className="fields"><div><label>Rom</label><input name="name" defaultValue={r.name} /></div><div><label>Etasje</label><input name="floor" defaultValue={r.floor ?? ''} /></div>
                 <div><label>Maks personer</label><input type="number" name="max_capacity" defaultValue={r.max_capacity} min={0} /></div><div><label>Rekkefølge</label><input type="number" name="sort_order" defaultValue={r.sort_order} /></div></div>
               <div className="field" style={{ marginTop: 10 }}><label>Beskrivelse</label><input name="description" defaultValue={r.description ?? ''} /></div>
@@ -98,7 +113,7 @@ async function Rooms({ pid }: { pid: string }) {
                 <input type="file" name="photo" accept="image/*" required style={{ flex: 1 }} /><button className="btn ghost small">Last opp</button></form>
             </div>
           </div>
-          <table style={{ marginTop: 14 }}><thead><tr><th>Seng</th><th>Type</th><th>Plasser</th><th>Prioritet</th><th>Mål (cm)</th><th>Kun barn</th><th></th></tr></thead><tbody>
+          <table style={{ marginTop: 14 }}><thead><tr><th>Seng</th><th>Type</th><th>Plasser</th><th>Prioritet</th><th>Størrelse (cm)</th><th>Kun barn</th><th></th></tr></thead><tbody>
             {beds.filter(b => b.room_id === r.id).map(b => (
               <tr key={b.id}><td colSpan={7} style={{ padding: 0 }}>
                 <form action={A.saveBedAction} className="row" style={{ padding: 8, gap: 8, flexWrap: 'nowrap' }}>
@@ -107,7 +122,7 @@ async function Rooms({ pid }: { pid: string }) {
                   <select name="bed_type" defaultValue={b.bed_type} style={{ width: 160 }}>{Object.entries(BED_LABELS).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>
                   <input type="number" name="sleeps" defaultValue={b.sleeps} min={1} max={4} style={{ width: 64 }} />
                   <input type="number" name="allocation_priority" defaultValue={b.allocation_priority} style={{ width: 70 }} />
-                  <input type="number" name="width_cm" defaultValue={b.width_cm ?? ''} placeholder="b" style={{ width: 64 }} /><input type="number" name="length_cm" defaultValue={b.length_cm ?? ''} placeholder="l" style={{ width: 64 }} />
+                  <select name="size" defaultValue={b.width_cm ? `${b.width_cm}x${b.length_cm}` : ''} style={{ width: 150 }}><option value="">Størrelse</option>{BED_SIZES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}{b.width_cm && !BED_SIZES.some(([v]) => v === `${b.width_cm}x${b.length_cm}`) && <option value={`${b.width_cm}x${b.length_cm}`}>{b.width_cm} × {b.length_cm}</option>}</select>
                   <input type="checkbox" name="children_only" defaultChecked={b.children_only} />
                   <button className="btn ghost small">Lagre</button>
                   <button className="btn ghost small" formAction={A.deactivateBedAction}>Fjern</button>
@@ -118,7 +133,7 @@ async function Rooms({ pid }: { pid: string }) {
                 <input name="label" placeholder="Ny seng" style={{ width: 140 }} />
                 <select name="bed_type" style={{ width: 160 }}>{Object.entries(BED_LABELS).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>
                 <input type="number" name="sleeps" placeholder="plasser" min={1} max={4} style={{ width: 64 }} /><input type="number" name="allocation_priority" placeholder="prio" style={{ width: 70 }} />
-                <input type="number" name="width_cm" placeholder="b" style={{ width: 64 }} /><input type="number" name="length_cm" placeholder="l" style={{ width: 64 }} /><input type="checkbox" name="children_only" />
+                <select name="size" style={{ width: 150 }}><option value="">Størrelse</option>{BED_SIZES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select><input type="checkbox" name="children_only" />
                 <button className="btn small">Legg til</button>
               </form></td></tr>
           </tbody></table>
