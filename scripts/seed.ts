@@ -101,8 +101,8 @@ export async function seed() {
     await db.query(`INSERT INTO length_of_stay_discounts (property_id, min_nights, discount_percentage) VALUES ($1,7,10),($1,14,15)`, [pid]);
   }
   await db.query(`INSERT INTO add_on_items (property_id, name, description, price_type, unit_price_ore) VALUES
-    (NULL,'Sengetøy og håndklær','Ferdig oppredde senger og håndklær per gjest.','per_guest',15000),
-    ($1,'Ved (sekk)','40 liter bjørkeved.','per_unit',12000),
+    (NULL,'Ekstra sett sengetøy og håndklær','Dyne, pute, laken og håndklær (liten, medium og stor).','per_unit',25000),
+    ($1,'Ved (sekk)','40 liter bjørkeved.','per_unit',12500),
     ($1,'Tidlig innsjekk kl. 12','Etter avtale.','flat',30000)`, [cabin]);
 
   // ---------------- Channels (iCal). Import URLs are placeholders – replace with the real feed links.

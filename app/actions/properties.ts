@@ -33,9 +33,10 @@ export async function updatePropertyAction(f: FormData) {
     const before = await one('SELECT name, max_guests, cleaning_fee_ore, check_in_time, check_out_time, active FROM properties WHERE id=$1', [id]);
     const amenities = str(f, 'amenities').split(',').map(s => s.trim()).filter(Boolean);
     await getPool().query(`UPDATE properties SET name=$2, address=$3, short_description=$4, description=$5, amenities=$6, house_rules=$7, max_guests=$8,
-        check_in_time=$9, check_out_time=$10, cleaning_fee_ore=$11, active=$12, updated_at=now() WHERE id=$1`,
+        check_in_time=$9, check_out_time=$10, cleaning_fee_ore=$11, active=$12, included_guests=$13, extra_guest_fee_ore=$14, extra_guest_fee_basis=$15, extra_guest_fee_includes=$16, updated_at=now() WHERE id=$1`,
       [id, str(f, 'name'), str(f, 'address') || null, str(f, 'short_description') || null, str(f, 'description') || null, amenities, str(f, 'house_rules') || null,
-       Math.max(1, int(f, 'max_guests', 1)), str(f, 'check_in_time') || '15:00', str(f, 'check_out_time') || '11:00', kr(f, 'cleaning_fee') ?? 0, !!f.get('active')]);
+       Math.max(1, int(f, 'max_guests', 1)), str(f, 'check_in_time') || '15:00', str(f, 'check_out_time') || '11:00', kr(f, 'cleaning_fee') ?? 0, !!f.get('active'), Math.max(1, int(f, 'included_guests', 4)), kr(f, 'extra_guest_fee') ?? 0,
+       str(f, 'extra_guest_fee_basis') === 'per_night' ? 'per_night' : 'per_stay', str(f, 'extra_guest_fee_includes') || null]);
     await audit(null, actor, 'property.updated', 'property', id, before, Object.fromEntries(f.entries()));
     return 'Lagret.';
   });
@@ -146,6 +147,10 @@ export async function saveAddOnAction(f: FormData) {
   const { actor } = await admin(); const pid = str(f, 'propertyId');
   await run(back(pid, 'priser'), async () => {
     if (str(f, 'deactivate')) { await getPool().query(`UPDATE add_on_items SET active=false WHERE id=$1`, [str(f, 'deactivate')]); }
+    else if (str(f, 'id')) {
+      await getPool().query(`UPDATE add_on_items SET name=$2, description=$3, price_type=$4, unit_price_ore=$5, mandatory=$6 WHERE id=$1`,
+        [str(f, 'id'), str(f, 'name'), str(f, 'description') || null, str(f, 'price_type'), kr(f, 'price') ?? 0, !!f.get('mandatory')]);
+    }
     else await getPool().query(`INSERT INTO add_on_items (property_id, name, description, price_type, unit_price_ore, mandatory) VALUES ($1,$2,$3,$4,$5,$6)`,
       [f.get('global') ? null : pid, str(f, 'name'), str(f, 'description') || null, str(f, 'price_type'), kr(f, 'price') ?? 0, !!f.get('mandatory')]);
     await audit(null, actor, 'pricing.add_on_changed', 'property', pid, undefined, Object.fromEntries(f.entries()));

@@ -16,6 +16,8 @@ export type PricingInput = {
   startDate: string; endDate: string; guests: number; maxGuests: number;
   categories: SeasonCategory[]; periods: PricingPeriod[]; losDiscounts: LosDiscount[];
   cleaningFeeOre: number; cleaningExempt?: boolean;
+  /** Guests covered by the nightly price; extra guests pay extraGuestFeeOre per person (per stay or per night). */
+  includedGuests?: number; extraGuestFeeOre?: number; extraGuestBasis?: 'per_stay' | 'per_night';
   /** Member's total discount % on the stay price (standard/override + loyalty). */
   memberDiscountPct?: number;
   /** Split of memberDiscountPct, for showing the member what each benefit is worth. */
@@ -34,6 +36,7 @@ export type Quote = {
   nights: number; nightLines: NightLine[]; stay_ore: number; cleaning_fee_ore: number;
   add_ons: { id: string; name: string; quantity: number; unit_price_ore: number; total_ore: number }[];
   add_ons_ore: number; subtotal_ore: number;
+  extra_guests: number; extra_guest_fee_ore: number; extra_guest_unit_ore: number; extra_guest_basis: 'per_stay' | 'per_night'; included_guests: number;
   member_discount_pct: number; member_discount_ore: number;
   base_discount_ore: number; loyalty_discount_ore: number;
   pricing_mode: 'airbnb' | 'manual';
@@ -123,20 +126,25 @@ export function computeQuote(input: PricingInput): Quote {
     });
   const add_ons_ore = add_ons.reduce((s, a) => s + a.total_ore, 0);
   const cleaning_fee_ore = input.cleaningExempt ? 0 : input.cleaningFeeOre;
+  const included = Math.max(1, input.includedGuests ?? input.maxGuests);
+  const extra_guests = Math.max(0, input.guests - included);
+  const basis = input.extraGuestBasis ?? 'per_stay';
+  const extra_guest_fee_ore = extra_guests * (input.extraGuestFeeOre ?? 0) * (basis === 'per_night' ? nights : 1);
   const member_discount_ore = Math.round(undiscounted) - stay_ore;
   const split = input.memberDiscountSplit;
   const base_discount_ore = split && memberPct > 0 ? Math.round(member_discount_ore * split.basePct / memberPct) : member_discount_ore;
   const feePct = num(input.airbnbGuestFeePct ?? 0);
-  const comparisonBase = Math.round(undiscounted) + input.cleaningFeeOre;
+  const comparisonBase = Math.round(undiscounted) + input.cleaningFeeOre + extra_guest_fee_ore;
   const airbnb_comparison_ore = Math.round(comparisonBase * (1 + feePct / 100));
-  return { nights, nightLines, stay_ore, cleaning_fee_ore, add_ons, add_ons_ore, subtotal_ore: stay_ore + cleaning_fee_ore + add_ons_ore,
+  return { nights, nightLines, stay_ore, cleaning_fee_ore, add_ons, add_ons_ore, subtotal_ore: stay_ore + cleaning_fee_ore + add_ons_ore + extra_guest_fee_ore,
+    extra_guests, extra_guest_fee_ore, extra_guest_unit_ore: input.extraGuestFeeOre ?? 0, extra_guest_basis: basis, included_guests: included,
     member_discount_pct: memberPct, member_discount_ore, base_discount_ore, loyalty_discount_ore: member_discount_ore - base_discount_ore,
     pricing_mode: mode, airbnb_comparison_ore, airbnb_fee_pct: feePct, airbnb_fee_saved_ore: airbnb_comparison_ore - comparisonBase };
 }
 
 export async function loadPricingContext(propertyId: string, db: Db = getPool()) {
-  const property = await one<{ id: string; max_guests: number; cleaning_fee_ore: number; active: boolean; name: string; pricing_mode: 'airbnb' | 'manual'; default_min_nights: number }>(
-    'SELECT id, name, max_guests, cleaning_fee_ore, active, pricing_mode, default_min_nights FROM properties WHERE id = $1', [propertyId], db);
+  const property = await one<{ id: string; max_guests: number; cleaning_fee_ore: number; active: boolean; name: string; pricing_mode: 'airbnb' | 'manual'; default_min_nights: number; included_guests: number; extra_guest_fee_ore: number; extra_guest_fee_basis: 'per_stay' | 'per_night' }>(
+    'SELECT id, name, max_guests, cleaning_fee_ore, active, pricing_mode, default_min_nights, included_guests, extra_guest_fee_ore, extra_guest_fee_basis FROM properties WHERE id = $1', [propertyId], db);
   if (!property || !property.active) throw new DomainError('not_found', 'Boligen finnes ikke.');
   // Sequential on purpose: db may be a single transaction client
   const categories = await 
@@ -168,6 +176,7 @@ export async function quoteFor(propertyId: string, memberId: string, startDate: 
     cleaningFeeOre: ctx.property.cleaning_fee_ore, cleaningExempt: await isCleaningExempt(memberId, propertyId, db),
     addOns: ctx.addOns, selectedAddOns, memberDiscountPct: discount.totalPct,
     memberDiscountSplit: { basePct: discount.basePct, loyaltyPct: discount.loyaltyPct },
+    includedGuests: ctx.property.included_guests, extraGuestFeeOre: ctx.property.extra_guest_fee_ore, extraGuestBasis: ctx.property.extra_guest_fee_basis,
     pricingMode: ctx.property.pricing_mode, externalRates: ctx.rates, defaultMinNights: ctx.property.default_min_nights, airbnbGuestFeePct: ctx.airbnbFee,
   });
   return { ...quote, member_discount: discount };

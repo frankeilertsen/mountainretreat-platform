@@ -53,13 +53,14 @@ export async function updateMyPreparationAction(f: FormData) {
   const u = await assertUser('request_booking');
   const id = str(f, 'bookingId');
   await run(`/medlem/bookinger/${id}`, async () => {
-    const b = await one<{ member_id: string; start: string; prep_id: string; max_guests: number; status: string }>(
-      `SELECT b.member_id, to_char(b.start_date,'YYYY-MM-DD') AS start, sp.id AS prep_id, p.max_guests, b.status FROM bookings b JOIN stay_preparations sp ON sp.booking_id=b.id JOIN properties p ON p.id=b.property_id WHERE b.id=$1`, [id]);
+    const b = await one<{ member_id: string; start: string; prep_id: string; max_guests: number; status: string; booked: number }>(
+      `SELECT b.member_id, to_char(b.start_date,'YYYY-MM-DD') AS start, sp.id AS prep_id, p.max_guests, b.status, b.adults + b.children AS booked FROM bookings b JOIN stay_preparations sp ON sp.booking_id=b.id JOIN properties p ON p.id=b.property_id WHERE b.id=$1`, [id]);
     if (!b || b.member_id !== u.id) throw forbidden();
     if (nightsBetween(todayOslo(), b.start) < 7) throw new DomainError('cutoff', 'Endringer må gjøres senest 7 dager før ankomst. Kontakt oss.');
     if (!['pending_review', 'awaiting_payment', 'confirmed'].includes(b.status)) throw new DomainError('bad_state', 'Kan ikke endres.');
     const adults = int(f, 'adults', 1), children = int(f, 'children'), infants = int(f, 'infants');
     if (adults < 1 || adults + children > b.max_guests) throw new DomainError('bad_guests', `1–${b.max_guests} gjester.`);
+    if (adults + children > b.booked) throw new DomainError('more_guests', 'Flere gjester enn bestilt kan påvirke prisen. Kontakt oss, så oppdaterer vi bookingen.');
     await updatePreparation(b.prep_id, { adults, children, infants, comment: str(f, 'comment'), arrival: str(f, 'arrival') || null }, actorFor(u));
     await getPool().query('UPDATE bookings SET adults=$2, children=$3, infants=$4 WHERE id=$1', [id, adults, children, infants]);
     return 'Lagret.';

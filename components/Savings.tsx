@@ -9,8 +9,8 @@ export function SavingsBreakdown({ quote, rewardOre = 0, rewardEstimated = false
   const q = quote as Partial<Quote> & Quote;
   const ordinaryStay = q.stay_ore + (q.member_discount_ore ?? 0);
   const fee = q.airbnb_fee_saved_ore ?? 0;
-  const comparison = q.airbnb_comparison_ore ?? ordinaryStay + q.cleaning_fee_ore;
-  const yourStayAndCleaning = q.stay_ore + q.cleaning_fee_ore - rewardOre;
+  const comparison = q.airbnb_comparison_ore ?? ordinaryStay + q.cleaning_fee_ore + (q.extra_guest_fee_ore ?? 0);
+  const yourStayAndCleaning = q.stay_ore + q.cleaning_fee_ore + (q.extra_guest_fee_ore ?? 0) - rewardOre;
   const saved = Math.max(0, comparison - yourStayAndCleaning);
   const savedPct = comparison > 0 ? Math.round(saved / comparison * 100) : 0;
   const base = q.base_discount_ore ?? q.member_discount_ore ?? 0, loyalty = q.loyalty_discount_ore ?? 0;
@@ -24,6 +24,7 @@ export function SavingsBreakdown({ quote, rewardOre = 0, rewardEstimated = false
         <Sub>Samme opphold på Airbnb</Sub>
         <Row l={`${q.nights} netter`} v={nok(ordinaryStay)} />
         <Row l="Sluttrengjøring" v={nok(q.cleaning_fee_ore)} />
+        {q.extra_guest_fee_ore > 0 && <Row l={`Ekstra gjester (${q.extra_guests})`} v={nok(q.extra_guest_fee_ore)} />}
         <Row l={`Airbnbs serviceavgift (${q.airbnb_fee_pct} %)`} v={nok(fee)} />
         <Row strong l="Totalt på Airbnb" v={nok(comparison)} />
         <Sub>Din pris som medlem</Sub>
@@ -32,6 +33,7 @@ export function SavingsBreakdown({ quote, rewardOre = 0, rewardEstimated = false
       {base > 0 && <Row gold l={`Medlemsrabatt${basePct != null ? ` ${basePct} %` : ''}`} v={`−${nok(base)}`} />}
       {loyalty > 0 && <Row gold l={`Lojalitetsrabatt${loyaltyPct != null ? ` ${loyaltyPct} %` : ''}`} v={`−${nok(loyalty)}`} />}
       <Row l="Sluttrengjøring" v={nok(q.cleaning_fee_ore)} />
+      {q.extra_guest_fee_ore > 0 && <Row l={<>Ekstra gjester <small className="muted">({q.extra_guests} × {nok(q.extra_guest_unit_ore)}{q.extra_guest_basis === 'per_night' ? ` × ${q.nights} netter` : ''}, over {q.included_guests} pers.)</small></>} v={nok(q.extra_guest_fee_ore)} />}
       {fee > 0 && <Row gold l="Ingen serviceavgift" v="0 kr" />}
       {!compact && q.add_ons?.map(a => <Row key={a.id} l={`${a.name}${a.quantity > 1 ? ` × ${a.quantity}` : ''}`} v={nok(a.total_ore)} />)}
       {rewardOre > 0 && <Row gold l={`Vervebonus${rewardEstimated ? ' (trekkes ved godkjenning)' : ''}`} v={`−${nok(rewardOre)}`} />}

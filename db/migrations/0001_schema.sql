@@ -126,6 +126,11 @@ CREATE TABLE properties (
   -- 'manual': nightly prices come from the season pricing below
   pricing_mode      TEXT NOT NULL DEFAULT 'airbnb' CHECK (pricing_mode IN ('airbnb','manual')),
   default_min_nights INTEGER NOT NULL DEFAULT 2 CHECK (default_min_nights >= 1),
+  -- The nightly price covers this many guests; each extra guest (infants excluded) pays the extra-guest fee
+  included_guests   INTEGER NOT NULL DEFAULT 4 CHECK (included_guests >= 1),
+  extra_guest_fee_ore INTEGER NOT NULL DEFAULT 35000 CHECK (extra_guest_fee_ore >= 0),
+  extra_guest_fee_basis TEXT NOT NULL DEFAULT 'per_stay' CHECK (extra_guest_fee_basis IN ('per_stay','per_night')),
+  extra_guest_fee_includes TEXT DEFAULT 'Sengetøy og håndklær for ekstra person, samt ekstra leie',
   base_currency     TEXT NOT NULL DEFAULT 'NOK',
   timezone          TEXT NOT NULL DEFAULT 'Europe/Oslo',
   owner_user_id     UUID REFERENCES users(id),
@@ -348,6 +353,7 @@ CREATE TABLE bookings (
   stay_price_ore        INTEGER NOT NULL,
   cleaning_fee_ore      INTEGER NOT NULL DEFAULT 0,
   add_ons_price_ore     INTEGER NOT NULL DEFAULT 0,
+  extra_guest_fee_ore   INTEGER NOT NULL DEFAULT 0,
   reward_discount_ore   INTEGER NOT NULL DEFAULT 0,
   price_total_ore       INTEGER NOT NULL,             -- what the member pays (after reward discount)
   price_breakdown       JSONB NOT NULL DEFAULT '{}',

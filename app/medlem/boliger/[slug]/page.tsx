@@ -19,7 +19,7 @@ export default async function PropertyPage({ params, searchParams }: { params: P
   const { slug } = await params;
   const sp = await searchParams;
   const u = await requireUser('request_booking');
-  const p = await one(`SELECT id, name, address, description, pricing_mode, amenities, house_rules, max_guests, to_char(check_in_time,'HH24:MI') AS cin, to_char(check_out_time,'HH24:MI') AS cout, cleaning_fee_ore,
+  const p = await one(`SELECT id, name, address, description, pricing_mode, included_guests, extra_guest_fee_ore, extra_guest_fee_basis, extra_guest_fee_includes, amenities, house_rules, max_guests, to_char(check_in_time,'HH24:MI') AS cin, to_char(check_out_time,'HH24:MI') AS cout, cleaning_fee_ore,
      (SELECT ph.id FROM photos ph WHERE ph.entity_type='property' AND ph.entity_id=properties.id ORDER BY ph.created_at LIMIT 1) AS photo_id
      FROM properties WHERE slug=$1 AND active`, [slug]);
   if (!p) notFound();
@@ -42,7 +42,7 @@ export default async function PropertyPage({ params, searchParams }: { params: P
       quote = await quoteFor(p.id, u.id, fra, til, adults + children, selected);
     } catch (e) { quoteErr = e instanceof DomainError ? e.message : 'Kunne ikke beregne pris.'; }
   }
-  const PT: Record<string, string> = { flat: 'per opphold', per_night: 'per natt', per_unit: 'per stk', per_guest: 'per gjest' };
+  const PT: Record<string, string> = { flat: 'per opphold', per_night: 'per natt', per_unit: 'per stk/sett', per_guest: 'per gjest' };
 
   return (
     <>
@@ -55,7 +55,7 @@ export default async function PropertyPage({ params, searchParams }: { params: P
             <p>{p.description}</p>
             <div className="row" style={{ gap: 6 }}>{(p.amenities as string[]).map(a => <span key={a} className="badge">{a}</span>)}</div>
           </div>
-          <dl className="dl"><dt>Gjester</dt><dd>Opptil {p.max_guests}</dd><dt>Innsjekk</dt><dd>fra kl. {p.cin}</dd><dt>Utsjekk</dt><dd>innen kl. {p.cout}</dd><dt>Sluttrengjøring</dt><dd>{nok(p.cleaning_fee_ore)}</dd></dl>
+          <dl className="dl"><dt>Gjester</dt><dd>Opptil {p.max_guests}</dd><dt>Innsjekk</dt><dd>fra kl. {p.cin}</dd><dt>Utsjekk</dt><dd>innen kl. {p.cout}</dd><dt>Sluttrengjøring</dt><dd>{nok(p.cleaning_fee_ore)}</dd><dt>Inkludert</dt><dd>Prisen gjelder for {p.included_guests} personer</dd>{p.extra_guest_fee_ore > 0 && <><dt>Ekstra person</dt><dd>{nok(p.extra_guest_fee_ore)} per person {p.extra_guest_fee_basis === 'per_night' ? 'per natt' : 'per opphold'}{p.extra_guest_fee_includes ? <><br /><small className="muted">{p.extra_guest_fee_includes}</small></> : null}</dd></>}</dl>
           {p.house_rules && <p className="muted"><strong>Husregler:</strong> {p.house_rules}</p>}
           <div className="card flat">
             <h3>Priser</h3>
@@ -88,7 +88,7 @@ export default async function PropertyPage({ params, searchParams }: { params: P
             {addOns.length > 0 && <div style={{ marginTop: 14 }}><label>Tillegg</label>
               {addOns.map(a => (
                 <div key={a.id} className="row" style={{ marginBottom: 6 }}>
-                  <label className="check" style={{ margin: 0, flex: 1 }}><input type="checkbox" name={'a_' + a.id} defaultChecked={a.mandatory || !!sp['a_' + a.id]} disabled={a.mandatory} /> {a.name} <small className="muted">{nok(a.unit_price_ore)} {PT[a.price_type]}{a.mandatory ? ' · obligatorisk' : ''}</small></label>
+                  <label className="check" style={{ margin: 0, flex: 1 }}><input type="checkbox" name={'a_' + a.id} defaultChecked={a.mandatory || !!sp['a_' + a.id]} disabled={a.mandatory} /> <span>{a.name} <small className="muted">{nok(a.unit_price_ore)} {PT[a.price_type]}{a.mandatory ? ' · obligatorisk' : ''}</small>{a.description && <><br /><small className="muted">{a.description}</small></>}</span></label>
                   {a.price_type === 'per_unit' && <input type="number" name={'q_' + a.id} min={1} max={20} defaultValue={sp['q_' + a.id] ?? 1} style={{ width: 70 }} />}
                 </div>))}
             </div>}

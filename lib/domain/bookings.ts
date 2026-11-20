@@ -68,12 +68,12 @@ export async function requestBooking(member: UserLike & { email: string; name: s
     return await tx(async c => {
       const b = await one<{ id: string; reference: string }>(
         `INSERT INTO bookings (reference, property_id, member_id, start_date, end_date, adults, children, infants,
-           stay_price_ore, cleaning_fee_ore, add_ons_price_ore, reward_discount_ore, price_total_ore, price_breakdown, special_requests, request_idempotency_key)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,0,$12,$13,$14,$15) RETURNING id, reference`,
+           stay_price_ore, cleaning_fee_ore, add_ons_price_ore, extra_guest_fee_ore, reward_discount_ore, price_total_ore, price_breakdown, special_requests, request_idempotency_key)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$16,0,$12,$13,$14,$15) RETURNING id, reference`,
         ['MR-' + humanCode(6), input.propertyId, member.id, input.startDate, input.endDate, input.adults, input.children, input.infants,
          quote.stay_ore, quote.cleaning_fee_ore, quote.add_ons_ore, quote.subtotal_ore,
          JSON.stringify({ quote, use_rewards: !!input.useRewards, estimated_reward_ore: estimatedReward }),
-         input.specialRequests?.trim().slice(0, 2000) || null, input.idempotencyKey ?? null], c);
+         input.specialRequests?.trim().slice(0, 2000) || null, input.idempotencyKey ?? null, quote.extra_guest_fee_ore], c);
       for (const a of quote.add_ons) {
         await c.query(`INSERT INTO booking_add_ons (booking_id, add_on_item_id, quantity, unit_price_at_selection_ore, total_price_ore) VALUES ($1,$2,$3,$4,$5)`,
           [b!.id, a.id, a.quantity, a.unit_price_ore, a.total_ore]);
@@ -115,10 +115,10 @@ export async function approveBooking(bookingId: string, actor: Actor): Promise<{
     const holdHours = await getNum('booking_hold_duration_hours', 48, c);
     const newStatus = total === 0 ? 'confirmed' : 'awaiting_payment';
     await c.query(
-      `UPDATE bookings SET status=$2, stay_price_ore=$3, cleaning_fee_ore=$4, add_ons_price_ore=$5, reward_discount_ore=$6, price_total_ore=$7,
+      `UPDATE bookings SET status=$2, stay_price_ore=$3, cleaning_fee_ore=$4, add_ons_price_ore=$5, reward_discount_ore=$6, price_total_ore=$7, extra_guest_fee_ore=$10,
          price_breakdown = price_breakdown || $8::jsonb, price_locked_at=now(), approved_at=now(), admin_reviewer_id=$9,
          confirmed_at = CASE WHEN $2='confirmed' THEN now() ELSE NULL END, updated_at=now() WHERE id=$1`,
-      [b.id, newStatus, quote.stay_ore, quote.cleaning_fee_ore, quote.add_ons_ore, reward, total, JSON.stringify({ quote, reward_applied_ore: reward }), actor.id]);
+      [b.id, newStatus, quote.stay_ore, quote.cleaning_fee_ore, quote.add_ons_ore, reward, total, JSON.stringify({ quote, reward_applied_ore: reward }), actor.id, quote.extra_guest_fee_ore]);
     if (newStatus === 'awaiting_payment') {
       await c.query(`INSERT INTO booking_holds (booking_id, hold_duration_hours_at_creation, expires_at) VALUES ($1,$2, now() + make_interval(hours => $2))`, [b.id, holdHours]);
     } else {

@@ -80,3 +80,18 @@ describe('Airbnb-linked pricing', () => {
     expect(() => airbnb({ endDate: '2027-01-11' })).toThrow(/Minimum 2/);
   });
 });
+
+describe('extra guests', () => {
+  it('price covers N guests; each extra guest pays the fee (per stay or per night), not discounted, and counted in the Airbnb comparison', () => {
+    const four = computeQuote(base({ guests: 4, includedGuests: 4, extraGuestFeeOre: 35000 }));
+    expect(four.extra_guest_fee_ore).toBe(0);
+    const six = computeQuote(base({ guests: 6, includedGuests: 4, extraGuestFeeOre: 35000 }));
+    expect(six.extra_guests).toBe(2);
+    expect(six.extra_guest_fee_ore).toBe(70000);
+    expect(six.subtotal_ore - four.subtotal_ore).toBe(70000);
+    const perNight = computeQuote(base({ guests: 5, includedGuests: 4, extraGuestFeeOre: 35000, extraGuestBasis: 'per_night' }));
+    expect(perNight.extra_guest_fee_ore).toBe(35000 * 7);
+    const withFee = computeQuote(base({ guests: 6, includedGuests: 4, extraGuestFeeOre: 35000, airbnbGuestFeePct: 15 }));
+    expect(withFee.airbnb_comparison_ore).toBe(Math.round((7 * 250000 * 0.9 + 120000 + 70000) * 1.15));
+  });
+});

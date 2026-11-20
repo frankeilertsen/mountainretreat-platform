@@ -49,6 +49,13 @@ async function Details({ p }: { p: any }) {
           <div><label>Utsjekk innen</label><input type="time" name="check_out_time" defaultValue={p.cout} /></div>
           <div><label>Sluttrengjøring (kr)</label><input name="cleaning_fee" defaultValue={p.cleaning_fee_ore / 100} /></div>
         </div>
+        <h4 style={{ marginTop: 20 }}>Gjester inkludert i prisen</h4>
+        <div className="fields">
+          <div><label>Personer inkl. i prisen</label><input type="number" name="included_guests" min={1} defaultValue={p.included_guests} /></div>
+          <div><label>Ekstra person (kr)</label><input name="extra_guest_fee" defaultValue={p.extra_guest_fee_ore / 100} /></div>
+          <div><label>Beregnes</label><select name="extra_guest_fee_basis" defaultValue={p.extra_guest_fee_basis}><option value="per_stay">per opphold</option><option value="per_night">per natt</option></select></div>
+        </div>
+        <div className="field" style={{ marginTop: 12 }}><label>Ekstra person inkluderer</label><input name="extra_guest_fee_includes" defaultValue={p.extra_guest_fee_includes ?? ''} /></div>
         <label className="check" style={{ margin: '16px 0' }}><input type="checkbox" name="active" defaultChecked={p.active} /> Aktiv (synlig for medlemmer)</label>
         <button className="btn">Lagre</button>
       </form>
@@ -244,11 +251,23 @@ async function Pricing({ pid, mode, minNights }: { pid: string; mode: string; mi
         </div>
         <div className="card">
           <h3>Tillegg</h3>
-          <ul className="list">{addOns.map(a => <li key={a.id} className="row between"><span>{a.name} · {nok(a.unit_price_ore)} <small>{a.price_type}{a.mandatory ? ' · obligatorisk' : ''}{a.property_id ? '' : ' · alle boliger'}</small></span>
-            <form action={A.saveAddOnAction}><input type="hidden" name="propertyId" value={pid} /><input type="hidden" name="deactivate" value={a.id} /><button className="btn ghost small">Fjern</button></form></li>)}</ul>
+          {addOns.map(a => (
+            <form key={a.id} action={A.saveAddOnAction} style={{ borderBottom: '1px solid var(--line)', padding: '12px 0' }}>
+              <input type="hidden" name="propertyId" value={pid} /><input type="hidden" name="id" value={a.id} />
+              <div className="fields">
+                <div><label>Navn{a.property_id ? '' : ' (alle boliger)'}</label><input name="name" defaultValue={a.name} /></div>
+                <div><label>Pris (kr)</label><input name="price" defaultValue={a.unit_price_ore / 100} /></div>
+                <div><label>Pristype</label><select name="price_type" defaultValue={a.price_type}><option value="flat">Per opphold</option><option value="per_night">Per natt</option><option value="per_guest">Per gjest</option><option value="per_unit">Per stk/sett</option></select></div>
+              </div>
+              <div className="field" style={{ marginTop: 8 }}><label>Innhold / beskrivelse</label><input name="description" defaultValue={a.description ?? ''} /></div>
+              <div className="row"><label className="check" style={{ margin: 0 }}><input type="checkbox" name="mandatory" defaultChecked={a.mandatory} /> Obligatorisk</label>
+                <button className="btn ghost small">Lagre</button><button className="btn ghost small" name="deactivate" value={a.id}>Fjern</button></div>
+            </form>))}
           <form action={A.saveAddOnAction} style={{ marginTop: 10 }}><input type="hidden" name="propertyId" value={pid} />
+            <h4>Nytt tillegg</h4>
             <div className="fields"><div><label>Navn</label><input name="name" required /></div><div><label>Pris (kr)</label><input name="price" required /></div>
-              <div><label>Pristype</label><select name="price_type"><option value="flat">Per opphold</option><option value="per_night">Per natt</option><option value="per_guest">Per gjest</option><option value="per_unit">Per stk</option></select></div></div>
+              <div><label>Pristype</label><select name="price_type"><option value="flat">Per opphold</option><option value="per_night">Per natt</option><option value="per_guest">Per gjest</option><option value="per_unit">Per stk/sett</option></select></div></div>
+            <div className="field" style={{ marginTop: 8 }}><label>Innhold / beskrivelse</label><input name="description" /></div>
             <div className="row" style={{ margin: '10px 0' }}><label className="check" style={{ margin: 0 }}><input type="checkbox" name="mandatory" /> Obligatorisk</label><label className="check" style={{ margin: 0 }}><input type="checkbox" name="global" /> Gjelder alle boliger</label></div>
             <button className="btn small">Legg til</button></form>
         </div>
