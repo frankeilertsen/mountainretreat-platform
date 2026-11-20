@@ -4,6 +4,7 @@ import { one, q } from '@/lib/db';
 import { blocksForRange } from '@/lib/domain/availability';
 import { quoteFor, Quote } from '@/lib/domain/pricing';
 import { rewardBalance } from '@/lib/domain/rewards';
+import { memberDiscount } from '@/lib/domain/memberDiscount';
 import { addDays, fmtDate, fmtTime, nok, todayOslo } from '@/lib/format';
 import { DomainError } from '@/lib/errors';
 import { Flash, PropertyMedia } from '@/components/ui';
@@ -23,9 +24,10 @@ export default async function PropertyPage({ params, searchParams }: { params: P
   if (!p) notFound();
   const today = todayOslo();
   const blocks = await blocksForRange(p.id, today, addDays(today, 400));
-  const seasons = await q(`SELECT name, price_per_night_ore, member_discount_percentage::float AS disc, min_nights, color FROM season_categories WHERE property_id=$1 AND active ORDER BY price_per_night_ore`, [p.id]);
+  const seasons = await q(`SELECT name, price_per_night_ore, min_nights, color FROM season_categories WHERE property_id=$1 AND active ORDER BY price_per_night_ore`, [p.id]);
   const addOns = await q(`SELECT id, name, description, price_type, unit_price_ore, mandatory FROM add_on_items WHERE (property_id=$1 OR property_id IS NULL) AND active ORDER BY mandatory DESC, name`, [p.id]);
   const bal = await rewardBalance(u.id);
+  const disc = await memberDiscount(u.id);
 
   const fra = sp.fra, til = sp.til;
   const adults = Math.max(1, parseInt(sp.voksne ?? '2', 10) || 1), children = Math.max(0, parseInt(sp.barn ?? '0', 10) || 0), infants = Math.max(0, parseInt(sp.sped ?? '0', 10) || 0);
@@ -54,8 +56,8 @@ export default async function PropertyPage({ params, searchParams }: { params: P
           {p.house_rules && <p className="muted"><strong>Husregler:</strong> {p.house_rules}</p>}
           <div className="card flat">
             <h3>Priser</h3>
-            {seasons.map(s => <div key={s.name} className="row between"><span><i style={{ display: 'inline-block', width: 10, height: 10, borderRadius: 3, background: s.color ?? '#ccc', marginRight: 8 }} />{s.name} <small>· min. {s.min_nights} netter</small></span><span>{nok(s.price_per_night_ore * (1 - s.disc / 100))} <small>/ natt</small></span></div>)}
-            <small className="muted">Medlemsrabatt er trukket fra. Lengre opphold gir ekstra rabatt.</small>
+            {seasons.map(s => <div key={s.name} className="row between"><span><i style={{ display: 'inline-block', width: 10, height: 10, borderRadius: 3, background: s.color ?? '#ccc', marginRight: 8 }} />{s.name} <small>· min. {s.min_nights} netter</small></span><span><small className="muted" style={{ textDecoration: 'line-through', marginRight: 8 }}>{nok(s.price_per_night_ore)}</small>{nok(s.price_per_night_ore * (1 - disc.totalPct / 100))} <small>/ natt</small></span></div>)}
+            <small className="muted">Din medlemsrabatt på <strong style={{ color: 'var(--gold-2)' }}>{disc.totalPct} %</strong> er trukket fra{disc.atMax ? '' : ` – neste booking gir ${disc.nextTotalPct} %`}. Lengre opphold gir ekstra rabatt.</small>
           </div>
         </div>
 
@@ -86,7 +88,8 @@ export default async function PropertyPage({ params, searchParams }: { params: P
           {quote && (
             <form action={requestBookingAction} style={{ marginTop: 20 }}>
               <div className="price-lines">
-                <div className="row"><span>{quote.nights} netter</span><span>{nok(quote.stay_ore)}</span></div>
+                <div className="row"><span>{quote.nights} netter, ordinær pris</span><span>{nok(quote.stay_ore + quote.member_discount_ore)}</span></div>
+                {quote.member_discount_ore > 0 && <div className="row" style={{ color: 'var(--gold-2)' }}><span>Medlemsrabatt {quote.member_discount_pct} %</span><span>−{nok(quote.member_discount_ore)}</span></div>}
                 {quote.nightLines.some(n => n.los_discount_pct > 0) && <div className="row muted"><span>inkl. langtidsrabatt {quote.nightLines[0].los_discount_pct} %</span><span></span></div>}
                 <div className="row"><span>Sluttrengjøring</span><span>{nok(quote.cleaning_fee_ore)}</span></div>
                 {quote.add_ons.map(a => <div key={a.id} className="row"><span>{a.name}{a.quantity > 1 ? ` × ${a.quantity}` : ''}</span><span>{nok(a.total_ore)}</span></div>)}

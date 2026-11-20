@@ -104,8 +104,8 @@ export default async function AdminBooking({ params, searchParams }: { params: P
             <h3>Pris {b.price_locked_at ? <span className="badge b-sage">Låst {fmtDate(b.price_locked_at)}</span> : <span className="badge b-warn">Estimat</span>}</h3>
             <div className="price-lines">
               {quote?.nightLines?.length > 0 && <details><summary className="muted">{quote.nights} netter – vis per natt</summary>
-                {quote.nightLines.map((n: any) => <div key={n.date} className="row"><small>{fmtDate(n.date)} · {n.category}{n.member_discount_pct ? ` −${n.member_discount_pct}%` : ''}{n.los_discount_pct ? ` −${n.los_discount_pct}%` : ''}</small><small>{nok(n.price_ore)}</small></div>)}</details>}
-              <div className="row"><span>Opphold</span><span>{nok(b.stay_price_ore)}</span></div>
+                {quote.nightLines.map((n: any) => <div key={n.date} className="row"><small>{fmtDate(n.date)} · {n.category}{n.los_discount_pct ? ` −${n.los_discount_pct}%` : ''}</small><small>{nok(n.price_ore)}</small></div>)}</details>}
+              <div className="row"><span>Opphold{quote?.member_discount_pct ? ` (medlemsrabatt ${quote.member_discount_pct} %)` : ''}</span><span>{nok(b.stay_price_ore)}</span></div>
               <div className="row"><span>Sluttrengjøring</span><span>{nok(b.cleaning_fee_ore)}</span></div>
               {addOns.map((a, i) => <div key={i} className="row"><span>{a.name} × {a.quantity}</span><span>{nok(a.total_price_ore)}</span></div>)}
               {b.reward_discount_ore > 0 && <div className="row"><span>Bonus</span><span>−{nok(b.reward_discount_ore)}</span></div>}

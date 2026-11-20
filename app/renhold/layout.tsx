@@ -18,6 +18,7 @@ export default async function CleaningLayout({ children }: { children: React.Rea
         <Link href="/renhold"><span>☀︎</span>I dag</Link>
         <Link href="/renhold/kalender?visning=uke"><span>▦</span>Uke</Link>
         <Link href="/renhold/kalender?visning=maaned"><span>◫</span>Måned</Link>
+        <Link href="/renhold/profil"><span>◎</span>Profil</Link>
       </nav>
     </>
   );

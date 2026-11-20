@@ -1,9 +1,9 @@
 import { requireUser } from '@/lib/auth/current';
 import { can } from '@/lib/auth/rbac';
-import { listInvitationsFor } from '@/lib/domain/invitations';
+import { invitationsWithOutcome, rewardTerms, STAGE_LABEL } from '@/lib/domain/memberOverview';
 import { fmtDate, nok } from '@/lib/format';
 import { getSettings } from '@/lib/settings';
-import { Flash, Status, Empty } from '@/components/ui';
+import { Flash, Empty } from '@/components/ui';
 import { inviteAction, revokeMyInvitationAction, applyLoyaltyAction } from '../../actions/member';
 
 export const dynamic = 'force-dynamic';
@@ -12,16 +12,17 @@ export const metadata = { title: 'Inviter' };
 export default async function Invitations({ searchParams }: { searchParams: Promise<Record<string, string>> }) {
   const sp = await searchParams;
   const u = await requireUser('request_booking');
-  const list = await listInvitationsFor(u.id);
+  const list = await invitationsWithOutcome(u.id);
   const s = await getSettings();
-  const reward = s.referral_reward_type === 'percentage' ? `${s.referral_reward_percentage} % av første opphold (maks ${nok(Number(s.referral_reward_max_ore))})` : nok(Number(s.referral_reward_referrer_ore));
+  const terms = await rewardTerms();
+  const earned = list.reduce((t, i) => t + (i.reward_ore ?? 0), 0);
   const mayInvite = can(u as any, 'invite');
   return (
     <>
       <div className="page-head"><span className="eyebrow">Venner og familie</span><h1>Inviter</h1>
-        <p className="muted" style={{ maxWidth: '60ch' }}>Når noen du inviterer fullfører sitt første opphold, får dere begge {reward} i bonus til neste booking.</p></div>
+        <p className="muted" style={{ maxWidth: '60ch' }}>Når noen du inviterer fullfører sitt første opphold, får du {terms.referrer} og vedkommende {terms.referred} i bonus til neste booking. Kun det første oppholdet gir bonus.</p></div>
       <Flash sp={sp} />
-      <div className="grid g2" style={{ alignItems: 'start' }}>
+      <div className="grid split-1-2" style={{ alignItems: 'start' }}>
         <div className="card">
           {mayInvite ? (
             <form action={inviteAction}>
@@ -39,13 +40,16 @@ export default async function Invitations({ searchParams }: { searchParams: Prom
           )}
         </div>
         <div className="card">
-          <h3>Dine invitasjoner</h3>
+          <div className="row between"><h3 style={{ margin: 0 }}>Dine invitasjoner</h3>{earned > 0 && <span style={{ color: 'var(--gold-2)' }}>Opptjent: {nok(earned)}</span>}</div>
           {list.length === 0 ? <Empty>Du har ikke invitert noen ennå.</Empty> : (
-            <ul className="list">{list.map(i => (
-              <li key={i.id} className="row between">
-                <span>{i.member_name ?? i.invitee_name ?? i.invitee_email}<br /><small>Sendt {fmtDate(i.created_at)}{i.referral_status === 'qualified' ? ' · har hatt første opphold 🎉' : i.status === 'accepted' ? ' · medlem, ikke hatt opphold ennå' : ''}</small></span>
-                <span className="row">{i.status === 'pending' && <form action={revokeMyInvitationAction}><input type="hidden" name="id" value={i.id} /><button className="btn ghost small">Trekk tilbake</button></form>}<Status s={i.referral_status === 'qualified' ? 'qualified' : i.status} /></span>
-              </li>))}</ul>
+            <div className="table-wrap"><table><thead><tr><th>Person</th><th>Sendt</th><th>Status</th><th>Bonus</th><th></th></tr></thead><tbody>
+              {list.map(i => (
+                <tr key={i.id}><td>{i.member_name ?? i.invitee_name ?? i.invitee_email}{i.member_name && <><br /><small className="muted">{i.invitee_email}</small></>}</td>
+                  <td><small>{fmtDate(i.created_at)}</small></td>
+                  <td><span className={`badge ${STAGE_LABEL[i.stage][1]}`}>{STAGE_LABEL[i.stage][0]}</span>{i.completed_stays > 1 && <><br /><small className="muted">{i.completed_stays} opphold (kun første gir bonus)</small></>}</td>
+                  <td>{i.reward_ore ? <span style={{ color: 'var(--gold-2)' }}>+{nok(i.reward_ore)}</span> : i.stage === 'booked' || i.stage === 'member_no_booking' ? <small className="muted">{terms.referrer} ventes</small> : '–'}</td>
+                  <td>{i.status === 'pending' && <form action={revokeMyInvitationAction}><input type="hidden" name="id" value={i.id} /><button className="btn ghost small">Trekk tilbake</button></form>}</td></tr>))}
+            </tbody></table></div>
           )}
         </div>
       </div>

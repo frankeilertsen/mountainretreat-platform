@@ -54,7 +54,7 @@ function renderHtml(subject: string, text: string) {
   return `<div style="font-family:Georgia,serif;max-width:560px;margin:auto;color:#2b2a27">
     <p style="letter-spacing:.3em;font-size:11px;color:#b08f52">MOUNTAIN RETREAT</p>
     <h2 style="font-weight:normal">${escapeHtml(subject)}</h2><p style="font-family:Arial,sans-serif;line-height:1.6">${body}</p>
-    <p style="font-family:Arial,sans-serif;font-size:12px;color:#8a8579">Byrampen Eiendom AS</p></div>`;
+    <p style="font-family:Arial,sans-serif;font-size:12px;color:#8a8579">FKE Property AS</p></div>`;
 }
 
 export function emailSender(): ChannelSender {
@@ -63,19 +63,46 @@ export function emailSender(): ChannelSender {
     : new LogOnlyEmail();
 }
 
-/** Deliver queued notifications. SMS/push are queued but have no sender yet (structure ready). */
+/** SMS via Twilio's REST API (works with any Twilio-compatible provider). Without credentials messages are only logged. */
+class TwilioSms implements ChannelSender {
+  constructor(private sid: string, private token: string, private from: string) {}
+  async send(to: string, _subject: string, text: string) {
+    const res = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${this.sid}/Messages.json`, {
+      method: 'POST',
+      headers: { Authorization: 'Basic ' + Buffer.from(`${this.sid}:${this.token}`).toString('base64'), 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ To: normalizePhone(to), From: this.from, Body: text.slice(0, 600) }),
+    });
+    if (!res.ok) throw new Error(`Twilio ${res.status}: ${await res.text()}`);
+  }
+}
+class LogOnlySms implements ChannelSender {
+  async send(to: string, _s: string, text: string) { console.log(`\n[sms:dev] to=${to}\n${text}\n`); }
+}
+export function normalizePhone(p: string): string {
+  const d = p.replace(/[^\d+]/g, '');
+  if (d.startsWith('+')) return d;
+  if (d.startsWith('00')) return '+' + d.slice(2);
+  return d.length === 8 ? '+47' + d : '+' + d; // Norwegian 8-digit numbers
+}
+export function smsSender(): ChannelSender {
+  const { TWILIO_ACCOUNT_SID: sid, TWILIO_AUTH_TOKEN: tok, TWILIO_FROM: from } = process.env;
+  return sid && tok && from ? new TwilioSms(sid, tok, from) : new LogOnlySms();
+}
+
+/** Deliver queued notifications (e-mail and SMS). Push is structured but has no sender yet. */
 export async function deliverQueued(limit = 50): Promise<{ sent: number; failed: number }> {
   const db = getPool();
   const rows = await q<{ id: string; to_address: string; subject: string; body: string; channel: string }>(
     `UPDATE notifications SET attempts = attempts + 1
      WHERE id IN (SELECT id FROM notifications WHERE status = 'queued' AND attempts < 5 ORDER BY created_at LIMIT $1 FOR UPDATE SKIP LOCKED)
      RETURNING id, to_address, subject, body, channel`, [limit], db);
-  const email = emailSender();
+  const email = emailSender(), sms = smsSender();
   let sent = 0, failed = 0;
   for (const r of rows) {
     try {
-      if (r.channel !== 'email') throw new Error(`No sender configured for channel ${r.channel}`);
-      await email.send(r.to_address, r.subject, r.body);
+      if (r.channel === 'email') await email.send(r.to_address, r.subject, r.body);
+      else if (r.channel === 'sms') await sms.send(r.to_address, r.subject, r.body);
+      else throw new Error(`No sender configured for channel ${r.channel}`);
       await db.query(`UPDATE notifications SET status='sent', sent_at=now(), last_error=NULL WHERE id=$1`, [r.id]);
       sent++;
     } catch (e) {

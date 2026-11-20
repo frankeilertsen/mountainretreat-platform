@@ -74,7 +74,8 @@ export default async function BookingDetail({ params, searchParams }: { params: 
           <div className="card">
             <h3>Pris</h3>
             <div className="price-lines">
-              {quote && <div className="row"><span>{quote.nights} netter</span><span>{nok(b.stay_price_ore)}</span></div>}
+              {quote && <div className="row"><span>{quote.nights} netter, ordinær pris</span><span>{nok(b.stay_price_ore + (quote.member_discount_ore ?? 0))}</span></div>}
+              {quote?.member_discount_ore > 0 && <div className="row" style={{ color: 'var(--gold-2)' }}><span>Medlemsrabatt {quote.member_discount_pct} %</span><span>−{nok(quote.member_discount_ore)}</span></div>}
               <div className="row"><span>Sluttrengjøring</span><span>{nok(b.cleaning_fee_ore)}</span></div>
               {addOns.map((a, i) => <div className="row" key={i}><span>{a.name}{a.quantity > 1 ? ` × ${a.quantity}` : ''}</span><span>{nok(a.total_price_ore)}</span></div>)}
               {b.reward_discount_ore > 0 && <div className="row"><span>Bonus brukt</span><span>−{nok(b.reward_discount_ore)}</span></div>}

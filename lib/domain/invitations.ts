@@ -45,8 +45,8 @@ export async function createInvitation(inviter: UserLike & { email: string; name
 }
 
 export async function getInvitationByToken(token: string) {
-  return one<{ id: string; invitee_email: string; invitee_name: string | null; status: string; expires_at: string; inviter_name: string }>(
-    `SELECT i.id, i.invitee_email, i.invitee_name, i.status, i.expires_at, u.name AS inviter_name
+  return one<{ id: string; invitee_email: string; invitee_name: string | null; status: string; expires_at: string; inviter_name: string; role: string; property_name: string | null }>(
+    `SELECT i.id, i.invitee_email, i.invitee_name, i.status, i.expires_at, u.name AS inviter_name, i.role, (SELECT name FROM properties WHERE id=i.property_id) AS property_name
      FROM invitations i JOIN users u ON u.id = i.inviter_user_id WHERE i.token_hash = $1`, [hashToken(token)]);
 }
 
@@ -57,8 +57,8 @@ export async function acceptInvitation(token: string, input: { name: string; pho
   const name = input.name.trim();
   if (name.length < 2) throw new DomainError('bad_name', 'Skriv inn fullt navn.');
   return tx(async c => {
-    const inv = await one<{ id: string; invitee_email: string; inviter_user_id: string; status: string; expires_at: string }>(
-      `SELECT id, invitee_email, inviter_user_id, status, expires_at FROM invitations WHERE token_hash = $1 FOR UPDATE`,
+    const inv = await one<{ id: string; invitee_email: string; inviter_user_id: string; status: string; expires_at: string; role: string; property_id: string | null }>(
+      `SELECT id, invitee_email, inviter_user_id, status, expires_at, role, property_id FROM invitations WHERE token_hash = $1 FOR UPDATE`,
       [hashToken(token)], c);
     if (!inv) throw new DomainError('invalid_invite', 'Invitasjonen finnes ikke.');
     if (inv.status === 'accepted') throw new DomainError('used_invite', 'Denne invitasjonen er allerede brukt.');
@@ -71,6 +71,7 @@ export async function acceptInvitation(token: string, input: { name: string; pho
       'SELECT id, system_role, status, loyalty_status, invite_tier FROM users WHERE id = $1', [inv.inviter_user_id], c);
     if (!inviter || inviter.status !== 'active') throw new DomainError('inviter_inactive', 'Invitasjonen er ikke lenger gyldig.');
     const adminInvited = inviter.system_role === 'admin' || inviter.system_role === 'super_admin';
+    if (inv.role === 'helper') return acceptHelper(c, inv, inviter.id, name, input.phone ?? '', ip, ua);
 
     let user: { id: string; system_role: string } | null;
     try {
@@ -160,4 +161,52 @@ export async function listInvitationsFor(userId: string, db: Db = getPool()) {
               r.status AS referral_status
             FROM invitations i LEFT JOIN users u ON u.id = i.accepted_user_id LEFT JOIN referrals r ON r.invitation_id = i.id
             WHERE i.inviter_user_id = $1 ORDER BY i.created_at DESC`, [userId], db);
+}
+
+// ------------------------------------------------------------------ cleaning staff
+/** Admin invites a cleaner. The cleaner registers herself with name, phone and e-mail via the link. */
+export async function createHelperInvitation(admin: UserLike & { email: string; name: string }, input: { email: string; name?: string; propertyId?: string | null }, actor: Actor) {
+  if (!isAdmin(admin)) throw forbidden();
+  const email = input.email.trim().toLowerCase();
+  if (!EMAIL_RE.test(email)) throw new DomainError('bad_email', 'Ugyldig e-postadresse.');
+  const token = randomToken();
+  const days = await getNum('invitation_validity_days', 10);
+  return tx(async c => {
+    if (await one('SELECT id FROM users WHERE lower(email) = $1', [email], c)) throw new DomainError('exists', 'E-postadressen er allerede i bruk.');
+    await c.query(`UPDATE invitations SET status='expired' WHERE lower(invitee_email)=$1 AND status='pending' AND expires_at < now()`, [email]);
+    let inv: { id: string } | null;
+    try {
+      inv = await one<{ id: string }>(`INSERT INTO invitations (inviter_user_id, invitee_email, invitee_name, role, property_id, token_hash, expires_at)
+        VALUES ($1,$2,$3,'helper',$4,$5, now() + make_interval(days => $6)) RETURNING id`, [admin.id, email, input.name?.trim() || null, input.propertyId || null, hashToken(token), days], c);
+    } catch (e) {
+      if (isPgError(e, PG_UNIQUE_VIOLATION)) throw new DomainError('pending_exists', 'Denne personen har allerede en aktiv invitasjon.');
+      throw e;
+    }
+    const link = appUrl('/invitasjon/' + token);
+    await enqueue({ to: email, type: 'helper_invitation', subject: 'Du er invitert som renholder – Mountain Retreat',
+      body: `Hei${input.name ? ' ' + input.name : ''}!\n\n${admin.name} har gitt deg tilgang til renholdsportalen for Mountain Retreat (FKE Property AS). Der ser du alle vasker, tider og hvilke senger som skal redes, og du får varsel om nye bookinger og påminnelse samme dag.\n\nRegistrer deg med navn og mobilnummer her (gyldig i ${days} dager):\n${link}` }, c);
+    await audit(c, actor, 'invitation.helper_sent', 'invitation', inv!.id, undefined, { email });
+    return { invitationId: inv!.id, link };
+  });
+}
+
+async function acceptHelper(c: PoolClient, inv: { id: string; invitee_email: string; property_id: string | null }, inviterId: string, name: string, phone: string,
+  ip: string | null, ua: string | null): Promise<{ userId: string; sessionToken: string }> {
+  const cleanPhone = phone.replace(/[^\d+]/g, '');
+  if (cleanPhone.replace(/\D/g, '').length < 8) throw new DomainError('phone', 'Mobilnummer er påkrevd for renholdere (brukes til varsler).');
+  let user: { id: string } | null;
+  try {
+    user = await one(`INSERT INTO users (email, name, phone, system_role, status, invited_by_user_id, referral_code) VALUES ($1,$2,$3,'helper','active',$4,$5) RETURNING id`,
+      [inv.invitee_email, name, cleanPhone, inviterId, humanCode(8)], c);
+  } catch (e) {
+    if (isPgError(e, PG_UNIQUE_VIOLATION)) throw new DomainError('duplicate', 'Det finnes allerede en konto for denne e-postadressen.');
+    throw e;
+  }
+  await c.query(`UPDATE invitations SET status='accepted', accepted_at=now(), accepted_user_id=$2 WHERE id=$1`, [inv.id, user!.id]);
+  if (inv.property_id) {
+    await c.query(`INSERT INTO helper_property_assignments (helper_user_id, property_id, assigned_by_user_id) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING`, [user!.id, inv.property_id, inviterId]);
+  }
+  await audit(c, { id: user!.id, type: 'helper', ip }, 'user.helper_registered', 'user', user!.id, undefined, { invitation_id: inv.id });
+  await notifyAdmins({ type: 'helper_registered', subject: `Ny renholder registrert: ${name}`, body: `${name} (${inv.invitee_email}, ${cleanPhone}) har registrert seg i renholdsportalen.` }, c);
+  return { userId: user!.id, sessionToken: await createSession(user!.id, 'helper', { aal: 1, ip, ua }, c) };
 }

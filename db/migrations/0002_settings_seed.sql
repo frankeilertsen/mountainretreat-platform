@@ -18,7 +18,11 @@ INSERT INTO platform_settings (key, value) VALUES
   ('notification_log_retention_days', '365'),
   ('short_turnaround_hours', '6'),
   ('invoice_bank_account', '0000.00.00000'),
-  ('company_name', 'Byrampen Eiendom AS')
+  ('company_name', 'FKE Property AS'),
+  ('member_base_discount_pct', '5'),        -- standard member discount on the stay price
+  ('member_loyalty_step_pct', '1'),         -- extra % per booking made
+  ('member_loyalty_max_pct', '10'),         -- cap for the extra loyalty discount
+  ('cleaning_same_day_reminder_hour', '7')  -- local hour for the same-day cleaning reminder
 ON CONFLICT (key) DO NOTHING;
 
 INSERT INTO payment_method_settings (method, enabled) VALUES

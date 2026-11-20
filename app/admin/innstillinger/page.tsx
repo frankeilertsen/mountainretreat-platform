@@ -11,7 +11,7 @@ const FIELDS: [string, string][] = [
   ['booking_hold_duration_hours', 'Betalingsfrist etter godkjenning (timer)'], ['invoice_due_date_days', 'Fakturafrist (dager)'],
   ['cancellation_approval_timeout_hours', 'Frist for å behandle kansellering (timer)'], ['invitation_validity_days', 'Invitasjon gyldig (dager)'],
   ['ical_poll_interval_minutes', 'Hent kanalkalendere hvert (minutt)'], ['ical_failure_alert_threshold', 'Varsle etter antall feilede synker'],
-  ['short_turnaround_hours', 'Kort snutid – varsle renhold (timer)'], ['audit_log_retention_days', 'Revisjonslogg lagres (dager)'],
+  ['short_turnaround_hours', 'Kort snutid – varsle renhold (timer)'], ['cleaning_same_day_reminder_hour', 'Påminnelse til renholder samme dag (klokkeslett, time)'], ['audit_log_retention_days', 'Revisjonslogg lagres (dager)'],
   ['notification_log_retention_days', 'Varsellogg lagres (dager)'], ['invoice_bank_account', 'Kontonummer på faktura'], ['company_name', 'Firmanavn'],
 ];
 

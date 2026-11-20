@@ -62,7 +62,7 @@ const d8 = (iso: string) => iso.replace(/-/g, '');
 /** Builds the export feed: every block except those that came from the requesting channel (no echo). */
 export function buildIcal(propertyName: string, blocks: { id: string; start: string; end: string }[]): string {
   const now = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d+Z$/, 'Z');
-  const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Byrampen Eiendom AS//Mountain Retreat//NO', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH',
+  const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//FKE Property AS//Mountain Retreat//NO', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH',
     `X-WR-CALNAME:${esc(propertyName)}`];
   for (const b of blocks) {
     lines.push('BEGIN:VEVENT', `UID:${b.id}@mountainretreat.no`, `DTSTAMP:${now}`, `DTSTART;VALUE=DATE:${d8(b.start)}`, `DTEND;VALUE=DATE:${d8(b.end)}`,

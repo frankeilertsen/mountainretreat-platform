@@ -95,14 +95,21 @@ export async function reconcileCleaningTasks(c: PoolClient, propertyId: string):
          d.stay.channel, d.nextPrep, d.task_type === 'turnover' ? d.stay.guests : null, status,
          status === 'not_needed' ? 'Gjesten vasker selv' : null, status === 'assigned' ? autoAssignee : null], c);
       created++;
-      if (status === 'assigned') await notifyHelper(c, autoAssignee!, `Ny renholdsjobb: ${prop!.name} ${fmtDate(d.date, true)}`, t!.id);
+      if (status !== 'not_needed') {
+        const kind = d.task_type === 'turnover' ? `vask ${fmtDate(d.date, true)}` : `klargjøring ${fmtDate(d.date, true)}`;
+        const guests = d.stay.guests ? ` (${d.stay.guests} gjester)` : '';
+        for (const h of helpers.map(x => x.helper_user_id)) {
+          await notifyHelper(c, h, `Ny booking (${d.stay.channel}): ${prop!.name} – ${kind}${h === autoAssignee ? ' – tildelt deg' : ''}`, t!.id,
+            { dedupe: `cleaning_new:${t!.id}`, smsText: `Ny booking på ${prop!.name}: ${kind}${guests}${d.nextCheckin && d.nextCheckin === d.date ? ', nye gjester samme dag' : ''}.` });
+        }
+      }
     } else {
       const changed = ex.checkout_date !== d.date || ex.next_checkin_date !== d.nextCheckin || ex.next_preparation_id !== d.nextPrep;
       if (changed && ex.status !== 'done') {
         await c.query(`UPDATE cleaning_tasks SET checkout_date=$2, next_checkin_date=$3, deadline_at=${deadlineSql}, next_preparation_id=$5, updated_at=now() WHERE id=$1`,
           [ex.id, d.date, d.nextCheckin, prop!.check_in_time, d.nextPrep]);
         updated++;
-        if (ex.assigned_to_user_id && ex.checkout_date !== d.date) await notifyHelper(c, ex.assigned_to_user_id, `Renholdsjobb flyttet: ${prop!.name} nå ${fmtDate(d.date, true)}`, ex.id);
+        if (ex.assigned_to_user_id && ex.checkout_date !== d.date) await notifyHelper(c, ex.assigned_to_user_id, `Vask flyttet: ${prop!.name} nå ${fmtDate(d.date, true)}`, ex.id, { smsText: `Endring: vasken på ${prop!.name} er flyttet fra ${fmtDate(ex.checkout_date)} til ${fmtDate(d.date, true)}.` });
       }
     }
   }
@@ -110,16 +117,49 @@ export async function reconcileCleaningTasks(c: PoolClient, propertyId: string):
     if (seen.has(key) || ex.status === 'done') continue;
     await c.query(`UPDATE cleaning_tasks SET status='cancelled', updated_at=now() WHERE id=$1`, [ex.id]);
     cancelled++;
-    if (ex.assigned_to_user_id) await notifyHelper(c, ex.assigned_to_user_id, `Renholdsjobb avlyst: ${prop!.name} ${fmtDate(ex.checkout_date, true)}`, ex.id);
+    if (ex.assigned_to_user_id) await notifyHelper(c, ex.assigned_to_user_id, `Vask avlyst: ${prop!.name} ${fmtDate(ex.checkout_date, true)}`, ex.id, { smsText: `Avlyst: vasken på ${prop!.name} ${fmtDate(ex.checkout_date, true)} trengs ikke lenger (booking kansellert).` });
   }
   return { created, updated, cancelled };
 }
 
-async function notifyHelper(c: Db, helperId: string, subject: string, taskId: string) {
-  const h = await one<{ email: string; name: string }>('SELECT email, name FROM users WHERE id=$1', [helperId], c);
-  if (!h) return;
-  await enqueue({ userId: helperId, to: h.email, type: 'cleaning_task', subject,
-    body: `Hei ${h.name}!\n\n${subject}\nSe detaljer: ${appUrl('/renhold/oppgaver/' + taskId)}` }, c);
+/** E-mail + SMS (per the cleaner's own preferences) to one cleaner. */
+export async function notifyHelper(c: Db, helperId: string, subject: string, taskId: string, opts: { dedupe?: string; smsText?: string } = {}) {
+  const h = await one<{ email: string; name: string; phone: string | null; notify_email: boolean; notify_sms: boolean; status: string }>(
+    'SELECT email, name, phone, notify_email, notify_sms, status FROM users WHERE id=$1', [helperId], c);
+  if (!h || h.status !== 'active') return;
+  const link = appUrl('/renhold/oppgaver/' + taskId);
+  if (h.notify_email) await enqueue({ userId: helperId, to: h.email, type: 'cleaning_task', subject, dedupeKey: opts.dedupe ? `${opts.dedupe}:email:${helperId}` : undefined,
+    body: `Hei ${h.name}!\n\n${subject}\nSe tider, gjester og sengeoppsett: ${link}` }, c);
+  if (h.notify_sms && h.phone) await enqueue({ userId: helperId, to: h.phone, channel: 'sms', type: 'cleaning_task', subject, dedupeKey: opts.dedupe ? `${opts.dedupe}:sms:${helperId}` : undefined,
+    body: `${opts.smsText ?? subject} ${link}` }, c);
+}
+
+/** Every active cleaner assigned to the property (used for "new booking" alerts and unassigned reminders). */
+async function propertyHelpers(c: Db, propertyId: string) {
+  return (await q<{ id: string }>(`SELECT h.helper_user_id AS id FROM helper_property_assignments h JOIN users u ON u.id=h.helper_user_id
+    WHERE h.property_id=$1 AND h.active AND u.status='active'`, [propertyId], c)).map(r => r.id);
+}
+
+/** Same-day reminder: runs every minute, sends once per task from the configured hour (Oslo time). */
+export async function sameDayCleaningReminders(hour: number): Promise<number> {
+  const nowHour = Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Oslo', hour: '2-digit', hour12: false }).format(new Date()));
+  if (nowHour < hour) return 0;
+  const today = todayOslo();
+  const tasks = await q<{ id: string; property_id: string; property: string; assigned_to_user_id: string | null; task_type: string; cout: string; cin: string; same_day: boolean; guests: number | null }>(
+    `SELECT t.id, t.property_id, p.name AS property, t.assigned_to_user_id, t.task_type, to_char(p.check_out_time,'HH24:MI') AS cout, to_char(p.check_in_time,'HH24:MI') AS cin,
+            (t.next_checkin_date = t.checkout_date) AS same_day, sp.adults + sp.children AS guests
+     FROM cleaning_tasks t JOIN properties p ON p.id=t.property_id LEFT JOIN stay_preparations sp ON sp.id=t.next_preparation_id
+     WHERE t.checkout_date=$1 AND t.status IN ('open','assigned')`, [today]);
+  for (const t of tasks) {
+    const who = t.assigned_to_user_id ? [t.assigned_to_user_id] : await propertyHelpers(getPool(), t.property_id);
+    const what = t.task_type === 'turnover' ? `utsjekk kl. ${t.cout}` : 'klargjøring';
+    const next = t.same_day ? ` Nye gjester kl. ${t.cin}${t.guests ? ` (${t.guests} pers.)` : ''} – må være ferdig før det.` : '';
+    for (const h of who) {
+      await notifyHelper(getPool(), h, `I dag: vask ${t.property}, ${what}${t.assigned_to_user_id ? '' : ' (ikke tildelt ennå)'}`, t.id,
+        { dedupe: `cleaning_today:${t.id}:${today}`, smsText: `Påminnelse: vask i dag på ${t.property}, ${what}.${next}` });
+    }
+  }
+  return tasks.length;
 }
 
 // ------------------------------------------------------------------ access

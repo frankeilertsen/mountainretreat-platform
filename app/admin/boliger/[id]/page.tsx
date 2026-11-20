@@ -127,7 +127,7 @@ async function Rooms({ pid }: { pid: string }) {
 }
 
 async function Pricing({ pid }: { pid: string }) {
-  const cats = await q(`SELECT id, kind, name, price_per_night_ore, member_discount_percentage::float AS disc, min_nights, max_nights, color FROM season_categories WHERE property_id=$1 ORDER BY price_per_night_ore`, [pid]);
+  const cats = await q(`SELECT id, kind, name, price_per_night_ore, min_nights, max_nights, color FROM season_categories WHERE property_id=$1 ORDER BY price_per_night_ore`, [pid]);
   const periods = await q(`SELECT pp.*, to_char(start_date,'YYYY-MM-DD') AS s, to_char(end_date,'YYYY-MM-DD') AS e, sc.name AS cat, sc.color FROM pricing_periods pp JOIN season_categories sc ON sc.id=pp.season_category_id WHERE pp.property_id=$1 AND pp.active ORDER BY start_date`, [pid]);
   const los = await q(`SELECT l.id, l.min_nights, l.discount_percentage::float AS pct, sc.name AS cat FROM length_of_stay_discounts l LEFT JOIN season_categories sc ON sc.id=l.season_category_id WHERE l.property_id=$1 AND l.active ORDER BY min_nights`, [pid]);
   const addOns = await q(`SELECT * FROM add_on_items WHERE (property_id=$1 OR property_id IS NULL) AND active ORDER BY name`, [pid]);
@@ -150,14 +150,13 @@ async function Pricing({ pid }: { pid: string }) {
         {unpriced > 0 && <p style={{ color: 'var(--danger)', marginTop: 8 }}>{unpriced} dager har ingen periode og kan ikke bookes (rødt).</p>}
       </div>
       <div className="card">
-        <h3>Sesonggrupper</h3><p className="muted" style={{ fontSize: '.88rem' }}>Standardverdier per gruppe. Perioder under knytter datoer til en gruppe og kan overstyre enkeltverdier.</p>
+        <h3>Sesonggrupper</h3><p className="muted" style={{ fontSize: '.88rem' }}>Ordinær pris per natt (før medlemsrabatt). Medlemsrabatten styres under Medlemsfordeler. Perioder under knytter datoer til en gruppe og kan overstyre enkeltverdier.</p>
         {cats.map(c => (
           <form key={c.id} action={A.saveCategoryAction} className="row" style={{ marginBottom: 8, flexWrap: 'nowrap', gap: 8 }}>
             <input type="hidden" name="id" value={c.id} /><input type="hidden" name="propertyId" value={pid} />
             <input type="color" name="color" defaultValue={c.color ?? '#cccccc'} style={{ width: 44, padding: 2 }} />
             <input name="name" defaultValue={c.name} style={{ width: 140 }} />
             <label style={{ margin: 0 }}>kr/natt</label><input name="price" defaultValue={c.price_per_night_ore / 100} style={{ width: 100 }} />
-            <label style={{ margin: 0 }}>rabatt %</label><input name="discount" defaultValue={c.disc} style={{ width: 70 }} />
             <label style={{ margin: 0 }}>min</label><input type="number" name="min_nights" defaultValue={c.min_nights} style={{ width: 64 }} />
             <label style={{ margin: 0 }}>maks</label><input type="number" name="max_nights" defaultValue={c.max_nights ?? ''} style={{ width: 64 }} />
             <button className="btn ghost small">Lagre</button>
@@ -168,7 +167,7 @@ async function Pricing({ pid }: { pid: string }) {
         <div className="table-wrap"><table><thead><tr><th>Navn</th><th>Datoer (siste natt)</th><th>Gruppe</th><th>Overstyring</th><th>Regel</th><th>Prio</th><th></th></tr></thead><tbody>
           {periods.map(p => (
             <tr key={p.id}><td>{p.name}</td><td>{fmtDate(p.s)} – {fmtDate(p.e)}</td><td><i style={{ display: 'inline-block', width: 10, height: 10, background: p.color, borderRadius: 2 }} /> {p.cat}</td>
-              <td><small>{p.price_per_night_ore != null ? nok(p.price_per_night_ore) + '/natt ' : ''}{p.min_nights ? `min ${p.min_nights} ` : ''}{p.member_discount_percentage != null ? `rabatt ${p.member_discount_percentage}%` : ''}</small></td>
+              <td><small>{p.price_per_night_ore != null ? nok(p.price_per_night_ore) + '/natt ' : ''}{p.min_nights ? `min ${p.min_nights} ` : ''}</small></td>
               <td><small>{p.booking_mode === 'whole_period' ? 'Hel periode' : p.booking_mode === 'fixed_changeover_day' ? `Byttedag ${WD[p.changeover_weekday]}` : 'Fleksibel'}</small></td><td>{p.priority}</td>
               <td><form action={A.deletePeriodAction}><input type="hidden" name="id" value={p.id} /><input type="hidden" name="propertyId" value={pid} /><button className="btn ghost small">Fjern</button></form></td></tr>))}
         </tbody></table></div>
@@ -180,7 +179,6 @@ async function Pricing({ pid }: { pid: string }) {
             <div><label>Siste natt</label><input type="date" name="end_date" required /></div>
             <div><label>Gruppe</label><select name="season_category_id">{cats.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
             <div><label>Pris/natt (valgfri)</label><input name="price" placeholder="arv" /></div>
-            <div><label>Rabatt % (valgfri)</label><input name="discount" placeholder="arv" /></div>
             <div><label>Min netter</label><input type="number" name="min_nights" placeholder="arv" /></div>
             <div><label>Maks netter</label><input type="number" name="max_nights" placeholder="arv" /></div>
             <div><label>Regel</label><select name="booking_mode"><option value="flexible">Fleksibel</option><option value="whole_period">Hel periode</option><option value="fixed_changeover_day">Fast byttedag</option></select></div>

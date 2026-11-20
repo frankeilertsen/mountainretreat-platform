@@ -6,7 +6,7 @@ import { Flash, Status } from '@/components/ui';
 import { revokeRewardAction, saveSettingsAction } from '../../actions/admin';
 
 export const dynamic = 'force-dynamic';
-export const metadata = { title: 'Verving og bonus' };
+export const metadata = { title: 'Medlemsfordeler' };
 
 export default async function RewardsAdmin({ searchParams }: { searchParams: Promise<Record<string, string>> }) {
   const sp = await searchParams;
@@ -17,7 +17,7 @@ export default async function RewardsAdmin({ searchParams }: { searchParams: Pro
   const credits = await q(`SELECT rc.id, rc.amount_ore, rc.remaining_amount_ore, rc.status, rc.source, rc.role_in_referral, rc.granted_at, rc.expires_at, rc.note, u.name, u.id AS uid FROM reward_credits rc JOIN users u ON u.id=rc.user_id ORDER BY rc.granted_at DESC LIMIT 100`);
   return (
     <>
-      <div className="page-head"><h1>Verving og bonus</h1></div>
+      <div className="page-head"><span className="eyebrow">Rabatt · lojalitet · verving</span><h1>Medlemsfordeler</h1></div>
       <Flash sp={sp} />
       <div className="grid g4" style={{ marginBottom: 20 }}>
         <div className="card kpi-card"><span className="kpi-label">Utdelt totalt</span><div className="kpi">{nok(Number(totals.granted))}</div></div>
@@ -27,7 +27,18 @@ export default async function RewardsAdmin({ searchParams }: { searchParams: Pro
       </div>
       <div className="grid g2" style={{ alignItems: 'start' }}>
         <form action={saveSettingsAction} className="card">
-          <h3>Bonusregler</h3><input type="hidden" name="back" value="/admin/bonus" />
+          <h3>Medlemsrabatt</h3><input type="hidden" name="back" value="/admin/bonus" />
+          <p className="muted" style={{ fontSize: '.88rem' }}>Gjelder overnattingsprisen for alle medlemmer. Kan overstyres per medlem på medlemssiden. Lojalitetsrabatten legges oppå: +steg % per booking (bekreftet/fullført), opp til maks.</p>
+          <div className="fields">
+            <div><label>Standardrabatt %</label><input name="member_base_discount_pct" defaultValue={s.member_base_discount_pct} /></div>
+            <div><label>Økning per booking %</label><input name="member_loyalty_step_pct" defaultValue={s.member_loyalty_step_pct} /></div>
+            <div><label>Maks lojalitet %</label><input name="member_loyalty_max_pct" defaultValue={s.member_loyalty_max_pct} /></div>
+          </div>
+          <small className="muted">Eksempel: {s.member_base_discount_pct} % ved første booking, {Number(s.member_base_discount_pct) + Number(s.member_loyalty_max_pct)} % etter {Math.round(Number(s.member_loyalty_max_pct) / Math.max(Number(s.member_loyalty_step_pct), 0.0001))} bookinger.</small><br />
+          <button className="btn" style={{ marginTop: 12 }}>Lagre rabatt</button>
+        </form>
+        <form action={saveSettingsAction} className="card">
+          <h3>Vervebonus</h3><input type="hidden" name="back" value="/admin/bonus" />
           <p className="muted" style={{ fontSize: '.88rem' }}>Begge parter får bonus når det inviterte medlemmet fullfører sitt første opphold. Endringer gjelder for nye bonuser.</p>
           <div className="field"><label>Type</label><select name="referral_reward_type" defaultValue={s.referral_reward_type}><option value="fixed">Fast beløp</option><option value="percentage">Prosent av første opphold</option></select></div>
           <div className="fields">

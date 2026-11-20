@@ -25,7 +25,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           { href: '/admin/kanaler', label: 'Kanaler og synk', badge: c?.sync, danger: true },
           { group: 'Medlemmer' },
           { href: '/admin/medlemmer', label: 'Medlemmer og ansatte', badge: c?.loyalty },
-          { href: '/admin/bonus', label: 'Verving og bonus' },
+          { href: '/admin/bonus', label: 'Medlemsfordeler' },
           { group: 'Økonomi' },
           { href: '/admin/betalinger', label: 'Betalinger', badge: c?.refunds, danger: true },
           { href: '/admin/rapporter', label: 'Rapporter' },

@@ -1,4 +1,4 @@
--- Byrampen Eiendom AS / mountainretreat.no — Friends & Family platform
+-- FKE Property AS / mountainretreat.no — Friends & Family platform
 -- Full schema. Money is stored as integer øre (1/100 NOK). Statuses are TEXT + CHECK.
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 CREATE EXTENSION IF NOT EXISTS btree_gist;
@@ -26,6 +26,9 @@ CREATE TABLE users (
   failed_totp_attempts  INTEGER NOT NULL DEFAULT 0,
   locked_until          TIMESTAMPTZ,
   marketing_consent     BOOLEAN NOT NULL DEFAULT false,
+  member_discount_override_pct NUMERIC(5,2) CHECK (member_discount_override_pct BETWEEN 0 AND 100), -- NULL = platform standard
+  notify_email          BOOLEAN NOT NULL DEFAULT true,
+  notify_sms            BOOLEAN NOT NULL DEFAULT true,
   last_login_at         TIMESTAMPTZ,
   created_at            TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at            TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -69,6 +72,8 @@ CREATE TABLE invitations (
   inviter_user_id    UUID NOT NULL REFERENCES users(id),
   invitee_email      TEXT NOT NULL,
   invitee_name       TEXT,
+  role               TEXT NOT NULL DEFAULT 'member' CHECK (role IN ('member','helper')),
+  property_id        UUID,                             -- helper invitations: property to assign on signup
   token_hash         TEXT NOT NULL UNIQUE,
   status             TEXT NOT NULL DEFAULT 'pending'
                        CHECK (status IN ('pending','accepted','expired','revoked')),
@@ -133,7 +138,6 @@ CREATE TABLE season_categories (
   name                        TEXT NOT NULL,
   color                       TEXT,
   price_per_night_ore         INTEGER NOT NULL CHECK (price_per_night_ore >= 0),
-  member_discount_percentage  NUMERIC(5,2) NOT NULL DEFAULT 0 CHECK (member_discount_percentage BETWEEN 0 AND 100),
   min_nights                  INTEGER NOT NULL DEFAULT 1 CHECK (min_nights >= 1),
   max_nights                  INTEGER CHECK (max_nights IS NULL OR max_nights >= min_nights),
   active                      BOOLEAN NOT NULL DEFAULT true,
@@ -151,7 +155,6 @@ CREATE TABLE pricing_periods (
   start_date                  DATE NOT NULL,
   end_date                    DATE NOT NULL,                 -- inclusive (last night)
   price_per_night_ore         INTEGER CHECK (price_per_night_ore >= 0),
-  member_discount_percentage  NUMERIC(5,2) CHECK (member_discount_percentage BETWEEN 0 AND 100),
   min_nights                  INTEGER CHECK (min_nights IS NULL OR min_nights >= 1),
   max_nights                  INTEGER CHECK (max_nights IS NULL OR max_nights >= 1),
   booking_mode                TEXT NOT NULL DEFAULT 'flexible'

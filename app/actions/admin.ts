@@ -5,7 +5,7 @@ import { actorFor, audit } from '@/lib/audit';
 import { getPool, one, q, tx } from '@/lib/db';
 import { DomainError, forbidden } from '@/lib/errors';
 import { approveBooking, rejectBooking, adminCancel, decideCancellation, markInvoicePaid, processRefunds, markManualRefundDone, cancelAllForMember } from '@/lib/domain/bookings';
-import { createInvitation, revokeInvitation, decideLoyalty, setMemberStatus } from '@/lib/domain/invitations';
+import { createInvitation, createHelperInvitation, revokeInvitation, decideLoyalty, setMemberStatus } from '@/lib/domain/invitations';
 import { createManualBlock, deleteManualBlock } from '@/lib/domain/availability';
 import { adjustRewards, revokeCredit } from '@/lib/domain/rewards';
 import { assignTask, overrideSleepingPlan, updatePreparation, savePhoto, reconcileCleaningTasks } from '@/lib/domain/cleaning';
@@ -179,6 +179,26 @@ export async function helperScopeAction(f: FormData) {
   });
 }
 
+export async function inviteHelperAction(f: FormData) {
+  const { u, actor } = await admin();
+  await run('/admin/medlemmer', async () => {
+    const r = await createHelperInvitation(u, { email: str(f, 'email'), name: str(f, 'name'), propertyId: str(f, 'propertyId') || null }, actor);
+    return `Invitasjon sendt til renholder. Hun registrerer seg selv med navn og mobil. Lenke: ${r.link}`;
+  });
+}
+export async function memberDiscountAction(f: FormData) {
+  const { actor } = await admin(); const id = str(f, 'id');
+  await run(`/admin/medlemmer/${id}`, async () => {
+    const raw = str(f, 'pct').replace(',', '.');
+    const v = raw === '' || f.get('reset') ? null : Number(raw);
+    if (v !== null && !(v >= 0 && v <= 100)) throw new DomainError('bad', 'Rabatt må være mellom 0 og 100 %.');
+    const before = await one('SELECT member_discount_override_pct FROM users WHERE id=$1', [id]);
+    await getPool().query('UPDATE users SET member_discount_override_pct=$2, updated_at=now() WHERE id=$1', [id, v]);
+    await audit(null, actor, 'user.discount_override', 'user', id, before, { member_discount_override_pct: v });
+    return v === null ? 'Medlemmet følger nå standardrabatten.' : `Personlig grunnrabatt satt til ${v} %.`;
+  });
+}
+
 // ------------------------------------------------ rewards
 export async function adjustRewardAction(f: FormData) {
   const { actor } = await admin();
@@ -195,7 +215,7 @@ export async function revokeRewardAction(f: FormData) {
 // ------------------------------------------------ settings
 const SETTING_KEYS = ['booking_hold_duration_hours', 'invoice_due_date_days', 'cancellation_approval_timeout_hours', 'ical_poll_interval_minutes', 'ical_failure_alert_threshold',
   'invitation_validity_days', 'referral_reward_type', 'referral_reward_referrer_ore', 'referral_reward_referred_ore', 'referral_reward_percentage', 'referral_reward_max_ore',
-  'referral_reward_vesting_days', 'referral_reward_validity_days', 'referral_min_qualifying_amount_ore', 'audit_log_retention_days', 'notification_log_retention_days', 'short_turnaround_hours', 'invoice_bank_account', 'company_name'];
+  'referral_reward_vesting_days', 'referral_reward_validity_days', 'referral_min_qualifying_amount_ore', 'audit_log_retention_days', 'notification_log_retention_days', 'short_turnaround_hours', 'invoice_bank_account', 'company_name', 'member_base_discount_pct', 'member_loyalty_step_pct', 'member_loyalty_max_pct', 'cleaning_same_day_reminder_hour'];
 export async function saveSettingsAction(f: FormData) {
   const { actor } = await admin();
   await run(str(f, 'back') || '/admin/innstillinger', async () => {

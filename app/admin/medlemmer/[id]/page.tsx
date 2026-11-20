@@ -3,6 +3,8 @@ import { notFound } from 'next/navigation';
 import { one, q } from '@/lib/db';
 import { fmtDate, fmtDateTime, nok } from '@/lib/format';
 import { rewardBalance } from '@/lib/domain/rewards';
+import { memberDiscount } from '@/lib/domain/memberDiscount';
+import { invitationsWithOutcome, STAGE_LABEL } from '@/lib/domain/memberOverview';
 import { Flash, Status } from '@/components/ui';
 import * as A from '../../../actions/admin';
 
@@ -23,6 +25,8 @@ export default async function MemberDetail({ params, searchParams }: { params: P
     q(`SELECT id, name FROM properties WHERE active ORDER BY name`),
   ]);
   const back = `/admin/medlemmer/${id}`;
+  const disc = u.system_role === 'member' ? await memberDiscount(id) : null;
+  const outcomes = u.system_role === 'member' ? await invitationsWithOutcome(id) : [];
   return (
     <>
       <Link href="/admin/medlemmer" className="muted">← Medlemmer</Link>
@@ -41,7 +45,8 @@ export default async function MemberDetail({ params, searchParams }: { params: P
           {u.system_role === 'member' && (
             <div className="card"><h3>Bookinger</h3><ul className="list">{bookings.map(b => <li key={b.id} className="row between"><Link href={`/admin/bookinger/${b.id}`}>{b.property} · {fmtDate(b.start)}</Link><span>{nok(b.price_total_ore)} <Status s={b.status} /></span></li>)}</ul>{bookings.length === 0 && <p className="muted">Ingen.</p>}</div>
           )}
-          {invited.length > 0 && <div className="card"><h3>Har invitert</h3><ul className="list">{invited.map(i => <li key={i.id} className="row between"><Link href={`/admin/medlemmer/${i.id}`}>{i.name}</Link><Status s={i.status === 'qualified' ? 'qualified' : 'pending'} /></li>)}</ul></div>}
+          {outcomes.length > 0 && <div className="card"><h3>Invitasjoner sendt</h3><table><tbody>{outcomes.map(i => (
+            <tr key={i.id}><td>{i.member_name ?? i.invitee_name ?? i.invitee_email}</td><td><span className={`badge ${STAGE_LABEL[i.stage][1]}`}>{STAGE_LABEL[i.stage][0]}</span></td><td>{i.reward_ore ? <span style={{ color: 'var(--gold-2)' }}>+{nok(i.reward_ore)}</span> : ''}</td></tr>))}</tbody></table></div>}
           {u.system_role === 'helper' && (
             <div className="card"><h3>Renholdstilgang</h3>
               <ul className="list">{assignments.map(a => <li key={a.id} className="row between">{a.name}<form action={A.helperAssignmentAction}><input type="hidden" name="id" value={id} /><input type="hidden" name="propertyId" value={a.id} /><input type="hidden" name="remove" value="1" /><button className="btn ghost small">Fjern</button></form></li>)}</ul>
@@ -61,6 +66,16 @@ export default async function MemberDetail({ params, searchParams }: { params: P
             </div>
             {u.system_role === 'member' && u.invite_tier === 'member_invited' && u.loyalty_status !== 'approved' && <form action={A.grantInviteRightsAction} style={{ marginTop: 12 }}><input type="hidden" name="id" value={id} /><button className="btn ghost small">Gi invitasjonsrett</button></form>}
           </div>
+          {disc && (
+            <div className="card"><h3>Medlemsrabatt</h3>
+              <div className="kpi" style={{ color: 'var(--gold-2)' }}>{disc.totalPct} %</div>
+              <small className="muted">{disc.basePct} % {disc.baseIsOverride ? 'personlig grunnrabatt' : 'standard'} + {disc.loyaltyPct} % lojalitet ({disc.bookingsCounted} bookinger, maks {disc.loyaltyMaxPct} %)</small>
+              <form action={A.memberDiscountAction} className="row" style={{ marginTop: 14 }}><input type="hidden" name="id" value={id} />
+                <input name="pct" defaultValue={disc.baseIsOverride ? disc.basePct : ''} placeholder={`Standard ${disc.standardPct} %`} style={{ width: 160 }} />
+                <button className="btn small">Sett personlig grunnrabatt</button>{disc.baseIsOverride && <button className="btn ghost small" name="reset" value="1">Tilbake til standard</button>}</form>
+              <small className="muted">Lojalitetsrabatten legges alltid oppå.</small>
+            </div>
+          )}
           {u.system_role === 'member' && (
             <>
               <div className="card"><h3>Juster bonus</h3>

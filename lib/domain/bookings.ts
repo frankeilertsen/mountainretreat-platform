@@ -12,6 +12,7 @@ import { insertBlock, isRangeFree, removeBlocksFor } from './availability';
 import { qualifyReferralForBooking, redeemForBooking, rewardBalance, reverseRedemptions } from './rewards';
 import { cardProvider, kidMod10, providerById } from './payments';
 import { reconcileCleaningTasks, upsertBookingPreparation } from './cleaning';
+import { memberDiscount } from './memberDiscount';
 
 export type BookingRequestInput = {
   propertyId: string; startDate: string; endDate: string; adults: number; children: number; infants: number;
@@ -37,6 +38,18 @@ async function memberOf(c: Db, id: string) {
 }
 async function propertyName(c: Db, id: string) {
   return (await one<{ name: string }>('SELECT name FROM properties WHERE id=$1', [id], c))!.name;
+}
+
+/** Tells the member their discount went up thanks to this booking (until the loyalty cap is reached). */
+async function announceDiscountLevel(c: PoolClient, memberId: string, bookingId: string) {
+  const before = await memberDiscount(memberId, c, bookingId);
+  const after = await memberDiscount(memberId, c);
+  if (after.totalPct <= before.totalPct) return;
+  const m = await memberOf(c, memberId);
+  await enqueue({ userId: memberId, to: m.email, type: 'discount_increased', dedupeKey: `discount_increased:${bookingId}`,
+    subject: `Medlemsrabatten din er nå ${after.totalPct} %`,
+    body: `Hei ${m.name}!\n\nTakk for bookingen. Medlemsrabatten din har økt fra ${before.totalPct} % til ${after.totalPct} % på alle fremtidige opphold.` +
+      (after.atMax ? `\nDu har nå nådd maksimal lojalitetsrabatt. 🎉` : `\nNeste booking gir ${after.nextTotalPct} %.`) }, c);
 }
 
 // ---------------------------------------------------------------- request
@@ -93,7 +106,7 @@ export async function approveBooking(bookingId: string, actor: Actor): Promise<{
     const guests = b.adults + b.children;
     // Re-price server-side with current rules and LOCK the price from here on
     const addOns = await q<{ add_on_item_id: string; quantity: number }>('SELECT add_on_item_id, quantity FROM booking_add_ons WHERE booking_id=$1', [b.id], c);
-    const quote = await quoteFor(b.property_id, b.member_id, b.start_date, b.end_date, guests, addOns.map(a => ({ id: a.add_on_item_id, quantity: a.quantity })), c);
+    const quote = await quoteFor(b.property_id, b.member_id, b.start_date, b.end_date, guests, addOns.map(a => ({ id: a.add_on_item_id, quantity: a.quantity })), c, b.id);
     // Authoritative double-booking guard
     await insertBlock(c, { propertyId: b.property_id, start: b.start_date, end: b.end_date, type: 'platform_booking', referenceId: b.id, userId: actor.id });
     const useRewards = !!b.price_breakdown?.use_rewards;
@@ -110,6 +123,7 @@ export async function approveBooking(bookingId: string, actor: Actor): Promise<{
       await c.query(`INSERT INTO booking_holds (booking_id, hold_duration_hours_at_creation, expires_at) VALUES ($1,$2, now() + make_interval(hours => $2))`, [b.id, holdHours]);
     } else {
       await reconcileCleaningTasks(c, b.property_id);
+      await announceDiscountLevel(c, b.member_id, b.id);
     }
     await audit(c, actor, 'booking.approved', 'booking', b.id, { status: b.status, total: b.price_total_ore }, { status: newStatus, total, reward });
     const m = await memberOf(c, b.member_id);
@@ -222,6 +236,7 @@ export async function handlePaymentSucceeded(paymentId: string, actor: Actor = S
     await c.query(`UPDATE invoices SET status='cancelled' WHERE payment_id IN (SELECT id FROM payments WHERE booking_id=$1 AND status='cancelled') AND status IN ('sent','overdue')`, [b.id]);
     await audit(c, actor, 'booking.confirmed', 'booking', b.id, { status: b.status }, { status: 'confirmed' });
     await reconcileCleaningTasks(c, b.property_id);
+    await announceDiscountLevel(c, b.member_id, b.id);
     const m = await memberOf(c, b.member_id);
     const prop = await propertyName(c, b.property_id);
     await enqueue({ userId: m.id, to: m.email, type: 'booking_confirmed', dedupeKey: `booking_confirmed:${b.id}`, subject: `Bekreftet: ${prop} ${fmtDate(b.start_date)} (${b.reference})`,

@@ -23,13 +23,13 @@ export async function seed() {
     const vals = [email, name, role, 'active', humanCode(8), ...Object.values(extra)];
     return (await one<{ id: string }>(`INSERT INTO users (${cols.join(',')}) VALUES (${cols.map((_, i) => '$' + (i + 1)).join(',')}) RETURNING id`, vals))!.id;
   };
-  const superAdmin = await mkUser('admin@byrampen.test', 'Frank (Super Admin)', 'super_admin', { phone: '+47 900 00 001' });
-  const propAdmin = await mkUser('eiendom@byrampen.test', 'Eva Eiendomsadmin', 'admin');
+  const superAdmin = await mkUser('admin@fkeproperty.test', 'Frank (Super Admin)', 'super_admin', { phone: '+47 900 00 001' });
+  const propAdmin = await mkUser('eiendom@fkeproperty.test', 'Eva Eiendomsadmin', 'admin');
   const kari = await mkUser('kari@example.test', 'Kari Nordmann', 'member', { invite_tier: 'admin_invited', invited_by_user_id: superAdmin, phone: '+47 900 00 002' });
   const ola = await mkUser('ola@example.test', 'Ola Hansen', 'member', { invite_tier: 'member_invited', loyalty_status: 'can_apply', invited_by_user_id: kari });
   const lise = await mkUser('lise@example.test', 'Lise Berg', 'member', { invite_tier: 'member_invited', loyalty_status: 'applied', invited_by_user_id: kari });
-  const helper = await mkUser('renhold@byrampen.test', 'Rita Renhold', 'helper', { phone: '+47 900 00 010' });
-  const helper2 = await mkUser('renhold2@byrampen.test', 'Rune Renhold', 'helper', { cleaning_scope: 'all' });
+  const helper = await mkUser('renhold@fkeproperty.test', 'Rita Renhold', 'helper', { phone: '+47 900 00 010' });
+  const helper2 = await mkUser('renhold2@fkeproperty.test', 'Rune Renhold', 'helper', { cleaning_scope: 'all', phone: '+47 900 00 011' });
 
   // Invitations + referral relations for the seeded members
   for (const [inviter, invitee, email] of [[superAdmin, kari, 'kari@example.test'], [kari, ola, 'ola@example.test'], [kari, lise, 'lise@example.test']] as const) {
@@ -38,6 +38,8 @@ export async function seed() {
     await db.query(`INSERT INTO referrals (referrer_user_id, referred_user_id, invitation_id) VALUES ($1,$2,$3)`, [inviter, invitee, inv!.id]);
   }
   await db.query(`INSERT INTO loyalty_applications (applicant_user_id) VALUES ($1)`, [lise]);
+  // A pending cleaner invitation (cleaner registers herself with name, phone, e-mail)
+  await db.query(`INSERT INTO invitations (inviter_user_id, invitee_email, invitee_name, role, token_hash, expires_at) VALUES ($1,'vaskehjelp@example.test','Vera','helper',$2, now() + interval '10 days')`, [superAdmin, hashToken('dev-helper-invite')]);
   // A pending invitation from Kari
   await db.query(`INSERT INTO invitations (inviter_user_id, invitee_email, invitee_name, token_hash, expires_at) VALUES ($1,'per@example.test','Per',$2, now() + interval '10 days')`, [kari, hashToken('dev-invite-token-per')]);
 
@@ -79,7 +81,7 @@ export async function seed() {
   // ---------------- Season pricing
   for (const [pid, low, high, hol] of [[cabin, 180000, 250000, 320000], [apt, 120000, 160000, 200000]] as const) {
     const cat = async (kind: string, name: string, price: number, min: number, color: string) =>
-      (await one<{ id: string }>(`INSERT INTO season_categories (property_id, kind, name, price_per_night_ore, member_discount_percentage, min_nights, color) VALUES ($1,$2,$3,$4,10,$5,$6) RETURNING id`, [pid, kind, name, price, min, color]))!.id;
+      (await one<{ id: string }>(`INSERT INTO season_categories (property_id, kind, name, price_per_night_ore, min_nights, color) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`, [pid, kind, name, price, min, color]))!.id;
     const lowId = await cat('low_season', 'Lavsesong', low, 2, '#A8B5A2');
     const highId = await cat('high_season', 'Høysesong', high, 4, '#C9A66B');
     const holId = await cat('holiday', 'Ferie', hol, 3, '#B5735A');
@@ -150,11 +152,11 @@ export async function seed() {
   await db.query(`UPDATE notifications SET status='sent', sent_at=now()`); // don't spam on first start
 
   console.log(`Seed complete.
-  Super admin:     admin@byrampen.test
-  Property admin:  eiendom@byrampen.test
+  Super admin:     admin@fkeproperty.test
+  Property admin:  eiendom@fkeproperty.test
   Members:         kari@example.test (can invite), ola@example.test (invited by Kari), lise@example.test (loyalty pending)
-  Cleaning:        renhold@byrampen.test (assigned tasks), renhold2@byrampen.test (broad access)
-  Pending invite:  /invitasjon/dev-invite-token-per
+  Cleaning:        renhold@fkeproperty.test (assigned tasks), renhold2@fkeproperty.test (broad access)
+  Pending invite:  /invitasjon/dev-invite-token-per (member), /invitasjon/dev-helper-invite (cleaner)
   Export feeds:    /api/ical/dev-export-airbnb-${cabin.slice(0, 4)}.ics`);
 }
 

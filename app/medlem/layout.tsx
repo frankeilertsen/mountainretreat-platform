@@ -9,6 +9,7 @@ export default async function MemberLayout({ children }: { children: React.React
   const props = await q<{ slug: string; name: string }>(`SELECT slug, name FROM properties WHERE active ORDER BY name`);
   const items: NavItem[] = [
     { href: '/medlem', label: 'Oversikt' },
+    { href: '/medlem/fordeler', label: 'Medlemsfordeler' },
     { group: 'Boliger' },
     ...props.map(p => ({ href: `/medlem/boliger/${p.slug}`, label: p.name })),
     { group: 'Min side' },
