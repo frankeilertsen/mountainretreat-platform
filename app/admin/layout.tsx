@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { requireUser } from '@/lib/auth/current';
 import { one } from '@/lib/db';
 import { SideNav } from '@/components/SideNav';
+import { Logo } from '@/components/Logo';
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const u = await requireUser('admin');
@@ -15,7 +16,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   return (
     <div className="admin-shell">
       <aside className="sidebar">
-        <Link href="/admin" className="brand">Mountain Retreat<span>Administrasjon</span></Link>
+        <Logo href="/admin" width={210} label="Administrasjon" />
         <SideNav exact={['/admin']} items={[
           { href: '/admin', label: 'Oversikt', badge: (c?.pending ?? 0) + (c?.cancel ?? 0) + (c?.loyalty ?? 0) },
           { group: 'Drift' },

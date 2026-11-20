@@ -1,3 +1,4 @@
+import { Logo } from '@/components/Logo';
 import { redirect } from 'next/navigation';
 import { getSession } from '@/lib/auth/current';
 import { beginEnrollment } from '@/lib/auth/totp';
@@ -27,7 +28,7 @@ export default async function Totp({ searchParams }: { searchParams: Promise<Rec
   const enrolling = !s.totp_enrolled_at;
   const enroll = enrolling ? await beginEnrollment(s.id, s.email) : null;
   return (
-    <div className="narrow"><div className="card">
+    <div className="narrow"><div style={{ textAlign: 'center', marginBottom: 28 }}><Logo width={200} /></div><div className="card">
       <span className="eyebrow">Steg 2 av 2</span>
       <h1>{enrolling ? 'Sett opp tofaktor' : 'Bekreft at det er deg'}</h1>
       <Flash sp={sp} />

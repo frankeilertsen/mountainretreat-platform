@@ -211,3 +211,9 @@ main { padding: 44px 0 90px; }
 .blk .lbl { position: relative; z-index: 2; white-space: nowrap; }
 .report-grid { display: grid; gap: 22px; grid-template-columns: repeat(auto-fit, minmax(460px, 1fr)); }
 .split-1-2 { grid-template-columns: minmax(0,1fr) minmax(0,2fr); } @media (max-width: 960px) { .split-1-2 { grid-template-columns: 1fr; } }
+/* Logo */
+.logo { display: inline-flex; flex-direction: column; gap: 10px; text-decoration: none; }
+.logo:hover img { opacity: .9; }
+.logo-label { font-size: .6rem; letter-spacing: .32em; text-transform: uppercase; color: var(--gold); font-weight: 500; }
+.sidebar .logo { padding: 4px 12px 24px; margin-bottom: 8px; border-bottom: 1px solid var(--line); width: 100%; }
+.hero-logo { width: min(520px, 82vw); height: auto; margin: 0 auto 36px; display: block; }

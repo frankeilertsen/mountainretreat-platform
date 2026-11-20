@@ -1,3 +1,4 @@
+import { Logo } from '@/components/Logo';
 import Link from 'next/link';
 import { getInvitationByToken } from '@/lib/domain/invitations';
 import { Flash } from '@/components/ui';
@@ -14,7 +15,7 @@ export default async function Invite({ params, searchParams }: { params: Promise
     : inv.status === 'revoked' ? 'Invitasjonen er trukket tilbake.' : (inv.status === 'expired' || new Date(inv.expires_at) < new Date()) ? 'Invitasjonen er utløpt. Be om en ny.' : null;
   return (
     <div className="narrow">
-      <Link href="/" className="brand">Mountain Retreat</Link>
+      <div style={{ textAlign: 'center' }}><Logo width={240} /></div>
       <div className="card" style={{ marginTop: 28 }}>
         {invalid ? (<><h1>Ugyldig invitasjon</h1><p>{invalid}</p><Link className="btn" href="/login">Til innlogging</Link></>) : (
           <>

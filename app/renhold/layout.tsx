@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { requireUser } from '@/lib/auth/current';
 import { isAdmin } from '@/lib/auth/rbac';
+import { Logo } from '@/components/Logo';
 
 export const metadata = { title: 'Renhold' };
 
@@ -9,7 +10,7 @@ export default async function CleaningLayout({ children }: { children: React.Rea
   return (
     <>
       <header className="topbar"><div className="container" style={{ height: 58 }}>
-        <Link href="/renhold" className="brand">Renhold</Link>
+        <span className="row" style={{ gap: 10 }}><Logo variant="mark" href="/renhold" width={84} /><span className="logo-label">Renhold</span></span>
         <span className="row"><small className="muted">{u.name.split(' ')[0]}</small>{isAdmin(u as any) && <Link href="/admin" className="btn ghost small">Admin</Link>}
           <form action="/logout" method="post"><button className="btn ghost small">Logg ut</button></form></span>
       </div></header>

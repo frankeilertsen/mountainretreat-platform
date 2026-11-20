@@ -3,6 +3,7 @@ import { requireUser } from '@/lib/auth/current';
 import { isAdmin, can } from '@/lib/auth/rbac';
 import { q } from '@/lib/db';
 import { SideNav, NavItem } from '@/components/SideNav';
+import { Logo } from '@/components/Logo';
 
 export default async function MemberLayout({ children }: { children: React.ReactNode }) {
   const u = await requireUser('request_booking');
@@ -22,7 +23,7 @@ export default async function MemberLayout({ children }: { children: React.React
   return (
     <div className="admin-shell">
       <aside className="sidebar">
-        <Link href="/medlem" className="brand">Mountain Retreat<span>Venner og familie</span></Link>
+        <Logo href="/medlem" width={210} label="Venner og familie" />
         <SideNav exact={['/medlem']} items={items} />
         <div className="user"><div>{u.name}</div><small>Medlem</small>
           <form action="/logout" method="post" style={{ marginTop: 12 }}><button className="btn ghost small">Logg ut</button></form></div>

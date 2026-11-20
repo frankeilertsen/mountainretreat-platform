@@ -1,9 +1,10 @@
 import Link from 'next/link';
-import { fmtDate } from '@/lib/format';
+import { fmtDate, todayOslo } from '@/lib/format';
 import { Status } from './ui';
 
 export function TaskCard({ t, shortHours = 6 }: { t: any; shortHours?: number }) {
-  const urgent = t.same_day;
+  const urgent = t.same_day && t.task_type === 'turnover';
+  const sameDayLabel = t.date === todayOslo() ? 'i dag' : 'samme dag';
   const cls = t.status === 'done' ? 'done' : t.status === 'not_needed' ? 'notneeded' : urgent ? 'urgent' : '';
   const guests = (t.next_adults ?? 0) + (t.next_children ?? 0);
   return (
@@ -14,7 +15,7 @@ export function TaskCard({ t, shortHours = 6 }: { t: any; shortHours?: number })
         {t.task_type === 'turnover'
           ? <span>⬆ Utsjekk <strong>{t.check_out_time}</strong>{t.checkout_guests ? ` · ${t.checkout_guests} gjester` : ''}</span>
           : <span>Klargjøring før ankomst</span>}
-        {t.next_checkin && <span>⬇ Neste inn <strong>{t.next_checkin === t.date ? `i dag ${t.check_in_time}` : fmtDate(t.next_checkin, true)}</strong>{guests ? ` · ${guests} gjester` : ''}{t.next_infants ? ` + ${t.next_infants} sped.` : ''}</span>}
+        {t.next_checkin && <span>⬇ Neste inn <strong>{t.next_checkin === t.date ? `${sameDayLabel} ${t.check_in_time}` : fmtDate(t.next_checkin, true)}</strong>{guests ? ` · ${guests} gjester` : ''}{t.next_infants ? ` + ${t.next_infants} sped.` : ''}</span>}
       </div>
       {urgent && t.status !== 'done' && <div style={{ marginTop: 8 }}><span className="badge b-danger">Kort snutid – ferdig før kl. {t.check_in_time}</span></div>}
       {(t.notes || t.comment_for_cleaner) && <div style={{ marginTop: 8, fontSize: '.88rem' }}>💬 {t.notes ?? t.comment_for_cleaner}</div>}

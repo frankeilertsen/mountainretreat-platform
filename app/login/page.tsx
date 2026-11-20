@@ -1,3 +1,4 @@
+import { Logo } from '@/components/Logo';
 import Link from 'next/link';
 import { Flash } from '@/components/ui';
 import { q } from '@/lib/db';
@@ -13,7 +14,7 @@ export default async function Login({ searchParams }: { searchParams: Promise<Re
     : [];
   return (
     <div className="narrow">
-      <Link href="/" className="brand">Mountain Retreat</Link>
+      <div style={{ textAlign: 'center' }}><Logo width={240} /></div>
       <div className="card" style={{ marginTop: 28 }}>
         <span className="eyebrow">Medlemsinnlogging</span>
         <h1>Logg inn</h1>
