@@ -20,10 +20,10 @@ export default async function RewardsAdmin({ searchParams }: { searchParams: Pro
       <div className="page-head"><h1>Verving og bonus</h1></div>
       <Flash sp={sp} />
       <div className="grid g4" style={{ marginBottom: 20 }}>
-        <div className="card"><small>Utdelt totalt</small><div className="kpi">{nok(Number(totals.granted))}</div></div>
-        <div className="card"><small>Tilgjengelig hos medlemmer</small><div className="kpi">{nok(Number(totals.outstanding))}</div></div>
-        <div className="card"><small>Opptjenes</small><div className="kpi">{nok(Number(totals.vesting))}</div></div>
-        <div className="card"><small>Brukt som rabatt</small><div className="kpi">{nok(Number(totals.redeemed))}</div></div>
+        <div className="card kpi-card"><span className="kpi-label">Utdelt totalt</span><div className="kpi">{nok(Number(totals.granted))}</div></div>
+        <div className="card kpi-card"><span className="kpi-label">Tilgjengelig hos medlemmer</span><div className="kpi">{nok(Number(totals.outstanding))}</div></div>
+        <div className="card kpi-card"><span className="kpi-label">Opptjenes</span><div className="kpi">{nok(Number(totals.vesting))}</div></div>
+        <div className="card kpi-card"><span className="kpi-label">Brukt som rabatt</span><div className="kpi">{nok(Number(totals.redeemed))}</div></div>
       </div>
       <div className="grid g2" style={{ alignItems: 'start' }}>
         <form action={saveSettingsAction} className="card">

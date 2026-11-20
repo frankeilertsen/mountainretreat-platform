@@ -39,9 +39,9 @@ export default async function CentralCalendar({ searchParams }: { searchParams: 
       </div>
       <Flash sp={sp} />
       <div className="legend" style={{ marginBottom: 12 }}>
-        <span><i style={{ background: 'var(--sage)' }} />Bekreftet (Mountain Retreat)</span><span><i style={{ background: 'var(--sand)' }} />Venter betaling</span>
-        <span><i style={{ background: 'var(--sky)' }} />Ekstern kanal</span><span><i style={{ background: '#9c968b' }} />Manuell sperring</span><span><i style={{ background: 'var(--danger)' }} />Konflikt</span>
-        <span><i style={{ background: 'transparent', border: '2px dashed var(--sand)' }} />Forespørsel (holder ikke datoer)</span>
+        <span><i style={{ background: 'var(--gold)' }} />Bekreftet (Mountain Retreat)</span><span><i style={{ background: '#8a7448' }} />Venter betaling</span>
+        <span><i style={{ background: '#6f8a9b' }} />Ekstern kanal</span><span><i style={{ background: '#4a4740' }} />Manuell sperring</span><span><i style={{ background: 'var(--danger)' }} />Konflikt</span>
+        <span><i style={{ background: 'transparent', border: '1px dashed var(--gold)' }} />Forespørsel (holder ikke datoer)</span>
       </div>
       <div className="mcal">
         <table>
@@ -62,10 +62,10 @@ export default async function CentralCalendar({ searchParams }: { searchParams: 
                     if (c) return <td key={d} className={cls} title={`KONFLIKT: ${c.display_name}`}><span className="blk blk-conflict">!</span></td>;
                     if (b) {
                       const first = b.start === d || d === from, last = addDays(d, 1) === b.end;
-                      const inner = <span className={`blk ${clsFor(b)} ${first ? 'start' : ''} ${last ? 'end' : ''}`} title={`${labelFor(b)} ${fmtDate(b.start)}–${fmtDate(b.end)}`}>{first ? labelFor(b) : ' '}</span>;
+                      const inner = <span className={`blk ${clsFor(b)} ${first ? 'start' : ''} ${last ? 'end' : ''}`} title={`${labelFor(b)} ${fmtDate(b.start)}–${fmtDate(b.end)}`}>{first ? <span className="lbl">{labelFor(b)}</span> : '\u00a0'}</span>;
                       return <td key={d} className={cls}>{b.block_type === 'platform_booking' ? <Link href={`/admin/bookinger/${b.reference_id}`}>{inner}</Link> : inner}</td>;
                     }
-                    if (pr) return <td key={d} className={cls}><Link href={`/admin/bookinger/${pr.id}`} title={`Forespørsel: ${pr.name}`} style={{ display: 'block', height: 26, margin: '0 1px', border: '2px dashed var(--sand)', borderRadius: 4 }} /></td>;
+                    if (pr) return <td key={d} className={cls}><Link href={`/admin/bookinger/${pr.id}`} title={`Forespørsel: ${pr.name}`} style={{ display: 'block', height: 26, margin: '0 1px', border: '1px dashed var(--gold)', borderRadius: 6 }} /></td>;
                     return <td key={d} className={cls} />;
                   })}
                 </tr>

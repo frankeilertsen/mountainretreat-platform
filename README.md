@@ -24,6 +24,9 @@ Privat, invitasjonsbasert bookingplattform med medlemsportal, administrasjon, re
 | **Varsler** | Outbox-tabell (sendes kun hvis endringen committes), dedupe-nøkler, e-post via Resend. Kanalfeltet (`email/sms/push`) er klart for SMS/push. Dekker alle hendelser i spesifikasjonen. |
 | **Sikkerhet/GDPR** | All autorisasjon server-side (én tilgangsmatrise, `lib/auth/rbac.ts`), append-only revisjonslogg håndhevet med trigger, ingen harde slettinger av forretningsdata, bildeopplasting validert på filsignatur og servert kun til autoriserte, sikkerhetsheadere, dataeksport (JSON) og anonymisering, oppbevaringsjobb. |
 
+### Design
+Mørk, eksklusiv profil: sort/antrasitt bakgrunn, gull/beige detaljer, Cormorant Garamond (titler) + Inter (tekst), selvhostet via `@fontsource` (ingen eksterne kall). Admin- og medlemsportalen har fast venstre sidemeny med aktiv markering; renholdsportalen har bunnmeny tilpasset mobil. Dashboards bruker informasjonskort, serverrendrede SVG-grafer (belegg per måned fordelt på egne/eksterne bookinger, beleggsringer per bolig, innbetalt per måned) og rene tabeller. Alle farger ligger som CSS-variabler øverst i `app/globals.css`.
+
 ## 2. Databasestruktur
 
 Fullt skjema: `db/migrations/0001_schema.sql` (+ standardinnstillinger i `0002`). Beløp i øre (heltall).

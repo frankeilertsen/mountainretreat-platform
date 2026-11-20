@@ -41,12 +41,12 @@ export default async function TaskPage({ params, searchParams }: { params: Promi
           <dt>Dato</dt><dd><strong>{fmtDate(t.date, true)}</strong></dd>
           <dt>Oppgave</dt><dd>{t.task_type === 'turnover' ? 'Utvask etter utsjekk' : 'Klargjøring før ankomst'} <small className="muted">({t.channel_name})</small></dd>
           {t.task_type === 'turnover' && <><dt>Utsjekk</dt><dd>kl. {t.cout}{t.checkout_guests ? ` · ${t.checkout_guests} gjester reiser` : ''}</dd></>}
-          <dt>Neste ankomst</dt><dd>{t.next_checkin ? <>{sameDay ? <strong style={{ color: 'var(--clay)' }}>I DAG kl. {t.cin}</strong> : `${fmtDate(t.next_checkin, true)} kl. ${t.cin}`}{t.arrival ? ` (ventet ${t.arrival})` : ''}</> : 'Ingen planlagt'}</dd>
+          <dt>Neste ankomst</dt><dd>{t.next_checkin ? <>{sameDay ? <strong style={{ color: 'var(--gold-2)' }}>I DAG kl. {t.cin}</strong> : `${fmtDate(t.next_checkin, true)} kl. ${t.cin}`}{t.arrival ? ` (ventet ${t.arrival})` : ''}</> : 'Ingen planlagt'}</dd>
           {t.deadline_at && <><dt>Frist</dt><dd><strong>{fmtDateTime(t.deadline_at)}</strong></dd></>}
           {t.next_checkin && <><dt>Gjester</dt><dd>{t.adults != null && (t.adults + t.children + t.infants) > 0 ? `${t.adults} voksne${t.children ? `, ${t.children} barn` : ''}${t.infants ? `, ${t.infants} spedbarn` : ''}` : 'Ingen info om neste gjester ennå'}</dd></>}
           <dt>Ansvarlig</dt><dd>{t.assignee ?? 'Ikke tildelt'}</dd>
         </dl>
-        {(t.notes || t.comment_for_cleaner) && <div className="flash ok" style={{ marginTop: 14, marginBottom: 0, background: 'var(--sand-soft)', color: 'var(--ink)' }}>{t.notes && <div>📋 {t.notes}</div>}{t.comment_for_cleaner && <div>💬 {t.comment_for_cleaner}</div>}</div>}
+        {(t.notes || t.comment_for_cleaner) && <div className="note" style={{ marginTop: 14 }}>{t.notes && <div>📋 {t.notes}</div>}{t.comment_for_cleaner && <div>💬 {t.comment_for_cleaner}</div>}</div>}
       </div>
 
       {t.status === 'not_needed' && <p className="muted" style={{ marginTop: 16 }}>Ikke nødvendig – gjesten vasker selv.</p>}

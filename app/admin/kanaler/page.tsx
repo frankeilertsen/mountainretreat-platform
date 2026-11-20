@@ -26,7 +26,7 @@ export default async function Channels({ searchParams }: { searchParams: Promise
     <>
       <div className="page-head"><span className="eyebrow">Airbnb · Booking.com · Vrbo · Expedia · egne kanaler</span><h1>Kanaler og synkronisering</h1></div>
       <Flash sp={sp} />
-      {sp.ny_eksport && <div className="card" style={{ borderColor: 'var(--sage)', marginBottom: 20 }}><h3>Ny eksportlenke</h3><p>Lim denne inn i kanalens kalenderinnstillinger («Importer kalender»). Den vises bare nå.</p><code style={{ wordBreak: 'break-all', display: 'block', background: 'var(--bg)', padding: 12, borderRadius: 8 }}>{sp.ny_eksport}</code></div>}
+      {sp.ny_eksport && <div className="card" style={{ borderColor: 'var(--gold-line)', marginBottom: 20 }}><h3>Ny eksportlenke</h3><p>Lim denne inn i kanalens kalenderinnstillinger («Importer kalender»). Den vises bare nå.</p><code style={{ wordBreak: 'break-all', display: 'block', background: 'var(--bg)', padding: 12, borderRadius: 8 }}>{sp.ny_eksport}</code></div>}
 
       <div className="card" style={{ marginBottom: 20 }}>
         <h3>Koblinger</h3>

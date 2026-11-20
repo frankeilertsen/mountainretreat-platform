@@ -1,5 +1,6 @@
 import { q } from '@/lib/db';
 import { nok } from '@/lib/format';
+import { BarChart } from '@/components/charts';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Rapporter' };
@@ -17,19 +18,16 @@ export default async function Reports() {
   const props = await q(`SELECT count(*)::int AS n FROM properties WHERE active`);
   const funnel = await q(`SELECT status, count(*)::int AS n FROM bookings WHERE requested_at > now() - interval '12 months' GROUP BY status ORDER BY n DESC`);
   const refs = await q(`SELECT (SELECT count(*) FROM invitations WHERE created_at > now() - interval '12 months')::int AS sent, (SELECT count(*) FROM invitations WHERE status='accepted' AND created_at > now() - interval '12 months')::int AS accepted, (SELECT count(*) FROM referrals WHERE status='qualified')::int AS qualified`);
-  const maxRev = Math.max(1, ...revenue.map(r => Number(r.amount)));
   const cap = (props[0]?.n || 1) * 30;
   return (
     <>
       <div className="page-head"><h1>Rapporter</h1></div>
-      <div className="grid g2" style={{ alignItems: 'start' }}>
-        <div className="card"><h3>Innbetalt per måned (netto)</h3><div className="stat-bars">{revenue.map(r => (
-          <div key={r.month} className="row"><span>{M[Number(r.month.slice(5)) - 1]} {r.month.slice(2, 4)}</span><div className="bar"><i style={{ width: `${Number(r.amount) / maxRev * 100}%` }} /></div><small style={{ width: 90, textAlign: 'right' }}>{nok(Number(r.amount))}</small></div>))}</div></div>
-        <div className="card"><h3>Belegg per måned (alle boliger)</h3><div className="stat-bars">{nights.map(r => (
-          <div key={r.month} className="row"><span>{M[Number(r.month.slice(5)) - 1]} {r.month.slice(2, 4)}</span>
-            <div className="bar" style={{ display: 'flex' }}><i style={{ width: `${r.own / cap * 100}%` }} /><i style={{ width: `${r.external / cap * 100}%`, background: 'var(--sky)' }} /></div>
-            <small style={{ width: 90, textAlign: 'right' }}>{Math.round((r.own + r.external) / cap * 100)} %</small></div>))}</div>
-          <div className="legend"><span><i style={{ background: 'var(--sage)' }} />Venner og familie</span><span><i style={{ background: 'var(--sky)' }} />Eksterne kanaler</span></div></div>
+      <div className="report-grid" style={{ alignItems: 'start' }}>
+        <div className="card"><h3>Innbetalt per måned (netto)</h3><small className="muted">Siste 12 måneder · totalt {nok(revenue.reduce((t, r) => t + Number(r.amount), 0))}</small>
+          <BarChart money data={revenue.map(r => ({ label: M[Number(r.month.slice(5)) - 1], value: Number(r.amount) }))} /></div>
+        <div className="card"><h3>Belegg per måned (alle boliger)</h3><small className="muted">Netter · kapasitet {cap} per måned</small>
+          <BarChart data={nights.map(r => ({ label: M[Number(r.month.slice(5)) - 1], value: r.own, value2: r.external }))} />
+          <div className="legend"><span><i style={{ background: 'var(--gold)' }} />Venner og familie</span><span><i style={{ background: '#6f8a9b' }} />Eksterne kanaler</span></div></div>
         <div className="card"><h3>Forespørsler siste 12 mnd</h3><ul className="list">{funnel.map(f => <li key={f.status} className="row between"><span>{f.status}</span><strong>{f.n}</strong></li>)}</ul></div>
         <div className="card"><h3>Verving</h3><dl className="dl"><dt>Invitasjoner sendt</dt><dd>{refs[0].sent}</dd><dt>Akseptert</dt><dd>{refs[0].accepted}</dd><dt>Kvalifiserte vervinger</dt><dd>{refs[0].qualified}</dd></dl></div>
       </div>

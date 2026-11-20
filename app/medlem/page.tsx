@@ -37,9 +37,9 @@ export default async function MemberHome({ searchParams }: { searchParams: Promi
               </li>))}</ul>
           )}
         </div>
-        <div className="card">
-          <h3>Bonus</h3>
-          <div className="kpi">{nok(bal.available)}</div>
+        <div className="card kpi-card">
+          <span className="kpi-label">Bonuslommebok</span>
+          <div className="kpi" style={{ color: 'var(--gold-2)' }}>{nok(bal.available)}</div>
           <p className="muted">tilgjengelig{bal.pending > 0 ? ` · ${nok(bal.pending)} opptjenes` : ''}</p>
           <Link className="btn ghost small" href="/medlem/invitasjoner">Inviter og få bonus</Link>
         </div>

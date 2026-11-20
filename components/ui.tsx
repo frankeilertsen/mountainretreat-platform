@@ -32,7 +32,7 @@ export function Empty({ children }: { children: React.ReactNode }) {
   return <p className="muted" style={{ padding: '18px 0' }}>{children}</p>;
 }
 
-export function Mountains({ color = '#d5dacf', color2 = '#b9c2b4' }: { color?: string; color2?: string }) {
+export function Mountains({ color = '#26251f', color2 = '#1c1b18' }: { color?: string; color2?: string }) {
   return (
     <svg viewBox="0 0 1200 400" preserveAspectRatio="none" aria-hidden="true">
       <path d="M0 400 L0 260 L160 140 L260 220 L420 80 L560 230 L700 120 L860 250 L1000 150 L1200 260 L1200 400 Z" fill={color} />

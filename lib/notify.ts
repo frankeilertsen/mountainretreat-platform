@@ -52,7 +52,7 @@ function escapeHtml(s: string) { return s.replace(/[&<>"]/g, c => ({ '&': '&amp;
 function renderHtml(subject: string, text: string) {
   const body = escapeHtml(text).replace(/(https?:\/\/\S+)/g, '<a href="$1">$1</a>').replace(/\n/g, '<br>');
   return `<div style="font-family:Georgia,serif;max-width:560px;margin:auto;color:#2b2a27">
-    <p style="letter-spacing:.2em;font-size:12px;color:#8a8579">MOUNTAIN RETREAT</p>
+    <p style="letter-spacing:.3em;font-size:11px;color:#b08f52">MOUNTAIN RETREAT</p>
     <h2 style="font-weight:normal">${escapeHtml(subject)}</h2><p style="font-family:Arial,sans-serif;line-height:1.6">${body}</p>
     <p style="font-family:Arial,sans-serif;font-size:12px;color:#8a8579">Byrampen Eiendom AS</p></div>`;
 }

@@ -3,6 +3,8 @@ import { q, one } from '@/lib/db';
 import { addDays, fmtDate, fmtDateTime, nok, todayOslo } from '@/lib/format';
 import { Flash, Status, Empty } from '@/components/ui';
 import { approveAction, loyaltyDecisionAction } from '../actions/admin';
+import { BarChart, Ring } from '@/components/charts';
+const MN = ['jan','feb','mar','apr','mai','jun','jul','aug','sep','okt','nov','des'];
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Admin' };
@@ -31,18 +33,38 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
        FROM channel_connections cc JOIN properties p ON p.id=cc.property_id WHERE cc.active ORDER BY p.name, cc.display_name`),
     q(`SELECT t.status, count(*)::int AS n FROM cleaning_tasks t WHERE t.checkout_date BETWEEN current_date AND current_date + 7 GROUP BY t.status`),
   ]);
+  const months = await q(`SELECT to_char(m,'YYYY-MM') AS month,
+      COALESCE(sum(CASE WHEN ab.block_type='platform_booking' THEN upper(ab.date_range * daterange(m::date,(m+interval '1 month')::date)) - lower(ab.date_range * daterange(m::date,(m+interval '1 month')::date)) END),0)::int AS own,
+      COALESCE(sum(CASE WHEN ab.block_type='external_sync' THEN upper(ab.date_range * daterange(m::date,(m+interval '1 month')::date)) - lower(ab.date_range * daterange(m::date,(m+interval '1 month')::date)) END),0)::int AS ext
+    FROM generate_series(date_trunc('month', now()), date_trunc('month', now()) + interval '5 months', interval '1 month') m
+    LEFT JOIN availability_blocks ab ON ab.date_range && daterange(m::date,(m+interval '1 month')::date) GROUP BY m ORDER BY m`);
+  const revenue = await q(`SELECT to_char(m,'YYYY-MM') AS month, COALESCE(sum(p.amount_ore - p.refunded_amount_ore),0)::bigint AS amount
+    FROM generate_series(date_trunc('month', now()) - interval '5 months', date_trunc('month', now()), interval '1 month') m
+    LEFT JOIN payments p ON date_trunc('month', p.created_at) = m AND p.status IN ('succeeded','partially_refunded','refunded') GROUP BY m ORDER BY m`);
   const queueEmpty = !pending.length && !cancels.length && !loyalty.length;
   return (
     <>
       <div className="page-head"><span className="eyebrow">{fmtDate(today, true)}</span><h1>Oversikt</h1></div>
       <Flash sp={sp} />
       <div className="grid g4" style={{ marginBottom: 24 }}>
-        <div className="card"><small>Venter godkjenning</small><div className="kpi">{pending.length}</div></div>
-        <div className="card"><small>Venter betaling</small><div className="kpi">{kpi.awaiting}</div></div>
-        <div className="card"><small>Kommende bekreftet</small><div className="kpi">{kpi.confirmed}</div></div>
-        <div className="card"><small>Innbetalt i år</small><div className="kpi">{nok(Number(kpi.revenue))}</div><small>{kpi.members} aktive medlemmer</small></div>
+        <div className="card kpi-card"><span className="kpi-label">Venter godkjenning</span><div className="kpi">{pending.length}</div><small>forespørsler i kø</small></div>
+        <div className="card kpi-card"><span className="kpi-label">Venter betaling</span><div className="kpi">{kpi.awaiting}</div><small>datoer holdt av</small></div>
+        <div className="card kpi-card"><span className="kpi-label">Kommende opphold</span><div className="kpi">{kpi.confirmed}</div><small>bekreftet</small></div>
+        <div className="card kpi-card"><span className="kpi-label">Innbetalt i år</span><div className="kpi" style={{ color: 'var(--gold-2)' }}>{nok(Number(kpi.revenue))}</div><small>{kpi.members} aktive medlemmer</small></div>
       </div>
-
+      <div className="grid" style={{ gridTemplateColumns: 'minmax(0,1.4fr) minmax(0,1fr)', marginBottom: 24 }}>
+        <div className="card">
+          <div className="row between"><h3 style={{ margin: 0 }}>Belegg neste 6 måneder</h3><div className="legend"><span><i style={{ background: 'var(--gold)' }} />Venner og familie</span><span><i style={{ background: '#6f8a9b' }} />Eksterne kanaler</span></div></div>
+          <small className="muted">Netter, alle boliger</small>
+          <BarChart data={months.map(m => ({ label: MN[Number(m.month.slice(5)) - 1], value: m.own, value2: m.ext }))} />
+        </div>
+        <div className="card">
+          <h3 style={{ margin: 0 }}>Belegg neste 30 dager</h3><small className="muted">Per bolig, eksl. manuelle sperringer</small>
+          <div className="row" style={{ justifyContent: 'space-around', marginTop: 14 }}>
+            {occ.map(o => <div key={o.name} style={{ textAlign: 'center' }}><Ring value={o.nights / 30} label={`${Math.round(o.nights / 30 * 100)}%`} sub={`${o.nights} NETTER`} /><div style={{ fontSize: '.82rem', color: 'var(--ink-2)', maxWidth: 150 }}>{o.name}</div></div>)}
+          </div>
+        </div>
+      </div>
       <div className="card" style={{ marginBottom: 24 }}>
         <h2>Godkjenningskø</h2>
         {queueEmpty ? <Empty>Ingenting venter. 🌿</Empty> : (
@@ -75,8 +97,8 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
         </div>
         <div className="stack">
           <div className="card">
-            <h3>Belegg neste 30 dager</h3>
-            <div className="stat-bars">{occ.map(o => <div key={o.name} className="row"><span style={{ width: 160 }}>{o.name}</span><div className="bar"><i style={{ width: `${Math.min(100, o.nights / 30 * 100)}%` }} /></div><small>{Math.round(o.nights / 30 * 100)} %</small></div>)}</div>
+            <h3 style={{ margin: 0 }}>Innbetalt siste 6 måneder</h3><small className="muted">Netto etter refusjoner</small>
+            <BarChart money height={170} data={revenue.map(r => ({ label: MN[Number(r.month.slice(5)) - 1], value: Number(r.amount) }))} />
           </div>
           <div className="card">
             <div className="row between"><h3>Kalendersynk</h3><Link href="/admin/kanaler" className="muted">Detaljer →</Link></div>

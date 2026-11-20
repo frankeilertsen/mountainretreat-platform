@@ -20,8 +20,8 @@ export default async function Payments({ searchParams }: { searchParams: Promise
       <div className="page-head"><h1>Betalinger</h1></div>
       <Flash sp={sp} />
       <div className="grid g4" style={{ marginBottom: 20 }}>
-        <div className="card"><small>Innbetalt</small><div className="kpi">{nok(Number(t.paid))}</div></div>
-        <div className="card"><small>Refundert</small><div className="kpi">{nok(Number(t.refunded))}</div></div>
+        <div className="card kpi-card"><span className="kpi-label">Innbetalt</span><div className="kpi">{nok(Number(t.paid))}</div></div>
+        <div className="card kpi-card"><span className="kpi-label">Refundert</span><div className="kpi">{nok(Number(t.refunded))}</div></div>
         <div className="card" style={{ gridColumn: 'span 2' }}><small>Leverandører</small>{prov.map(([n, s]) => <div key={n} className="row between"><span>{n}</span><small>{s}</small></div>)}</div>
       </div>
       {invoices.length > 0 && <div className="card" style={{ marginBottom: 20 }}><h3>Utestående fakturaer</h3><table><tbody>{invoices.map(i => (

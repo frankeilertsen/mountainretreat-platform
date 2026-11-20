@@ -39,7 +39,7 @@ export default async function CleaningCalendar({ searchParams }: { searchParams:
           const dt = tasks.filter(t => t.date === d);
           return (
             <div key={d} style={{ marginBottom: 16 }}>
-              <h3 style={{ fontSize: '1rem', color: d === today ? 'var(--clay)' : undefined }}>{fmtDate(d, true)}</h3>
+              <h3 style={{ fontSize: '1rem', color: d === today ? 'var(--gold-2)' : undefined }}>{fmtDate(d, true)}</h3>
               {dt.length === 0 ? <small className="muted">Ingen oppgaver</small> : dt.map(t => <TaskCard key={t.id} t={t} />)}
             </div>
           );
@@ -60,7 +60,7 @@ function MonthGrid({ from, to, tasks, today }: { from: string; to: string; tasks
         const dt = tasks.filter(t => t.date === d && t.status !== 'not_needed');
         const urgent = dt.some(t => t.same_day && t.status !== 'done');
         return (
-          <Link key={d} href={`?visning=dag&dato=${d}`} className="day" style={{ textDecoration: 'none', background: dt.length ? (urgent ? 'var(--clay-soft)' : 'var(--sage-soft)') : '#fff', borderColor: d === today ? 'var(--clay)' : undefined }}>
+          <Link key={d} href={`?visning=dag&dato=${d}`} className={`day ${dt.length ? (urgent ? 'urgent' : 'has') : ''} ${d === today ? 'today' : ''}`} style={{ textDecoration: 'none' }}>
             {Number(d.slice(8))}{dt.length > 0 && <small>{dt.length} jobb</small>}
           </Link>
         );

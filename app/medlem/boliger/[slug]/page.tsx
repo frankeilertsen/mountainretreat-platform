@@ -106,7 +106,7 @@ export default async function PropertyPage({ params, searchParams }: { params: P
         </div>
       </div>
       <hr className="divider" />
-      <div className="row between"><h2>Tilgjengelighet</h2><div className="legend"><span><i style={{ background: '#fff', border: '1px solid var(--line)' }} />Ledig</span><span><i style={{ background: '#ece7df' }} />Opptatt</span></div></div>
+      <div className="row between"><h2>Tilgjengelighet</h2><div className="legend"><span><i style={{ background: 'var(--surface-2)', border: '1px solid var(--line-2)' }} />Ledig</span><span><i style={{ background: '#121210', border: '1px solid #2c2b26' }} />Opptatt</span></div></div>
       <MonthCalendar blocks={blocks} months={6} selStart={fra} selEnd={til} />
       <p className="muted" style={{ marginTop: 12, fontSize: '.85rem' }}>Innsjekk fra kl. {fmtTime(p.cin)}. Kalenderen oppdateres fortløpende fra alle kanaler.</p>
     </>
