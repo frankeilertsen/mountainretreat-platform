@@ -32,7 +32,7 @@ export default async function Landing() {
           {[
             ['Invitasjon', 'Du blir medlem når noen du kjenner inviterer deg. Ingen åpen registrering.'],
             ['Forespørsel', 'Velg datoer og send en forespørsel. Vi bekrefter, og du betaler trygt via kort.'],
-            ['Medlemspriser', `Alle medlemmer får ${st.member_base_discount_pct} % rabatt på oppholdet – og rabatten øker med ${st.member_loyalty_step_pct} % for hver booking, opptil ${st.member_loyalty_max_pct} % ekstra.`],
+            ['Medlemspriser', `Ingen Airbnb-avgift (ca. ${st.airbnb_guest_fee_pct} %), ${st.member_base_discount_pct} % medlemsrabatt – og opptil ${st.member_loyalty_max_pct} % ekstra lojalitetsrabatt, +${st.member_loyalty_step_pct} % per booking.`],
             ['Del gleden', 'Inviter andre når medlemskapet ditt er godkjent – dere får begge bonus etter det første oppholdet.'],
           ].map(([t, d]) => (
             <div key={t}><span className="eyebrow">{t}</span><p style={{ fontFamily: 'var(--serif)', fontSize: '1.45rem', lineHeight: 1.35, color: 'var(--ink-2)' }}>{d}</p></div>

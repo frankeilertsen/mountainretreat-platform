@@ -162,3 +162,64 @@ export async function saveCancellationTierAction(f: FormData) {
     return 'Kanselleringsvilkår oppdatert.';
   });
 }
+
+// ---------------- Airbnb-linked pricing
+export async function pricingModeAction(f: FormData) {
+  const { actor } = await admin(); const pid = str(f, 'propertyId');
+  await run(back(pid, 'priser'), async () => {
+    const mode = str(f, 'mode') === 'manual' ? 'manual' : 'airbnb';
+    await getPool().query(`UPDATE properties SET pricing_mode=$2, default_min_nights=$3, updated_at=now() WHERE id=$1`, [pid, mode, Math.max(1, int(f, 'default_min_nights', 2))]);
+    await audit(null, actor, 'pricing.mode_changed', 'property', pid, undefined, { mode });
+    return mode === 'airbnb' ? 'Prisene følger nå Airbnb-prisene.' : 'Prisene settes nå individuelt (sesongpriser).';
+  });
+}
+
+async function upsertRates(pid: string, rows: [string, number][], source: 'manual_entry' | 'paste', userId: string | null) {
+  await tx(async c => {
+    for (const [d, ore] of rows) {
+      await c.query(`INSERT INTO external_nightly_rates (property_id, date, price_ore, source, updated_by_user_id) VALUES ($1,$2,$3,$4,$5)
+        ON CONFLICT (property_id, date) DO UPDATE SET price_ore=EXCLUDED.price_ore, source=EXCLUDED.source, updated_by_user_id=EXCLUDED.updated_by_user_id, updated_at=now()`, [pid, d, ore, source, userId]);
+    }
+  });
+}
+
+/** Set the Airbnb price for a date range, with optional separate weekend (Fri/Sat night) price. */
+export async function airbnbRangeAction(f: FormData) {
+  const { actor } = await admin(); const pid = str(f, 'propertyId');
+  await run(back(pid, 'priser'), async () => {
+    const start = date(f, 'start'), end = date(f, 'end');
+    if (end < start) throw new DomainError('dates', 'Sluttdato må være etter startdato.');
+    const weekday = kr(f, 'weekday'); const weekend = kr(f, 'weekend') ?? weekday;
+    if (!weekday) throw new DomainError('price', 'Oppgi pris per natt.');
+    const rows: [string, number][] = [];
+    for (let d = start; d <= end; d = new Date(Date.parse(d + 'T12:00:00Z') + 864e5).toISOString().slice(0, 10)) {
+      const wd = new Date(d + 'T12:00:00Z').getUTCDay(); // 5 = Fri, 6 = Sat
+      rows.push([d, wd === 5 || wd === 6 ? weekend! : weekday]);
+      if (rows.length > 731) throw new DomainError('range', 'Maks to år om gangen.');
+    }
+    await upsertRates(pid, rows, 'manual_entry', actor.id);
+    await audit(null, actor, 'pricing.airbnb_rates_set', 'property', pid, undefined, { start, end, weekday, weekend, nights: rows.length });
+    return `Airbnb-pris lagret for ${rows.length} netter.`;
+  });
+}
+
+/** Paste lines like "2027-01-10;1890" or "10.01.2027 1 890" (copied from Airbnb's calendar or a spreadsheet). */
+export async function airbnbPasteAction(f: FormData) {
+  const { actor } = await admin(); const pid = str(f, 'propertyId');
+  await run(back(pid, 'priser'), async () => {
+    const rows: [string, number][] = []; const bad: string[] = [];
+    for (const line of str(f, 'rates').split(/\r?\n/).map(l => l.trim()).filter(Boolean)) {
+      const m = line.match(/^(\d{4}-\d{2}-\d{2}|\d{1,2}\.\d{1,2}\.\d{4})[\s;,\t]+(?:kr\s*)?([\d\s.,]+)\s*(?:kr)?$/i);
+      if (!m) { bad.push(line); continue; }
+      let d = m[1];
+      if (d.includes('.')) { const [dd, mm, yy] = d.split('.'); d = `${yy}-${mm.padStart(2, '0')}-${dd.padStart(2, '0')}`; }
+      const n = Number(m[2].replace(/\s/g, '').replace(/\.(?=\d{3}\b)/g, '').replace(',', '.'));
+      if (!Number.isFinite(n) || n <= 0 || isNaN(Date.parse(d))) { bad.push(line); continue; }
+      rows.push([d, Math.round(n * 100)]);
+    }
+    if (!rows.length) throw new DomainError('empty', 'Fant ingen gyldige linjer. Format: 2027-01-10;1890');
+    await upsertRates(pid, rows, 'paste', actor.id);
+    await audit(null, actor, 'pricing.airbnb_rates_pasted', 'property', pid, undefined, { rows: rows.length, rejected: bad.length });
+    return `Importerte ${rows.length} priser${bad.length ? ` (${bad.length} linjer kunne ikke leses: ${bad.slice(0, 3).join(' | ')})` : ''}.`;
+  });
+}

@@ -145,3 +145,23 @@ describe('referral rewards', () => {
     expect(n!.n).toBe(2);
   });
 });
+
+describe('referral bonus cap', () => {
+  it('a member can hold at most N unused referral bonuses', async () => {
+    await getPool().query(`UPDATE platform_settings SET value='2' WHERE key='referral_reward_max_unused'`);
+    try {
+      const pid = await property();
+      const inviter = await user('member', { invite_tier: 'admin_invited' });
+      for (let i = 0; i < 3; i++) {
+        const friend = await user('member');
+        await referral(inviter.id, friend.id);
+        const bk = (await one<{ id: string }>(`INSERT INTO bookings (reference, property_id, member_id, start_date, end_date, status, stay_price_ore, price_total_ore)
+          VALUES ('C-'||substr(md5(random()::text),1,8), $1, $2, current_date - 10, current_date - 7, 'completed', 300000, 300000) RETURNING id`, [pid, friend.id]))!.id;
+        await tx(c => qualifyReferralForBooking(c, bk));
+      }
+      const n = await one<{ n: number }>(`SELECT count(*)::int AS n FROM reward_credits WHERE user_id=$1`, [inviter.id]);
+      expect(n!.n).toBe(2);
+      expect(await one(`SELECT 1 FROM notifications WHERE user_id=$1 AND type='reward_cap'`, [inviter.id])).toBeTruthy();
+    } finally { await getPool().query(`UPDATE platform_settings SET value='10' WHERE key='referral_reward_max_unused'`); }
+  });
+});

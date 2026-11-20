@@ -28,13 +28,14 @@ export default async function RewardsAdmin({ searchParams }: { searchParams: Pro
       <div className="grid g2" style={{ alignItems: 'start' }}>
         <form action={saveSettingsAction} className="card">
           <h3>Medlemsrabatt</h3><input type="hidden" name="back" value="/admin/bonus" />
-          <p className="muted" style={{ fontSize: '.88rem' }}>Gjelder overnattingsprisen for alle medlemmer. Kan overstyres per medlem på medlemssiden. Lojalitetsrabatten legges oppå: +steg % per booking (bekreftet/fullført), opp til maks.</p>
+          <p className="muted" style={{ fontSize: '.88rem' }}>Ved Airbnb-prising slipper medlemmet Airbnbs serviceavgift (brukes i sammenligningen medlemmet ser). Medlemsrabatten gjelder nattprisen for alle medlemmer i tillegg. Kan overstyres per medlem på medlemssiden. Lojalitetsrabatten legges oppå: +steg % per booking (bekreftet/fullført), opp til maks.</p>
           <div className="fields">
-            <div><label>Standardrabatt %</label><input name="member_base_discount_pct" defaultValue={s.member_base_discount_pct} /></div>
+            <div><label>Airbnb-avgift medlemmer slipper %</label><input name="airbnb_guest_fee_pct" defaultValue={s.airbnb_guest_fee_pct} /></div>
+            <div><label>Medlemsrabatt %</label><input name="member_base_discount_pct" defaultValue={s.member_base_discount_pct} /></div>
             <div><label>Økning per booking %</label><input name="member_loyalty_step_pct" defaultValue={s.member_loyalty_step_pct} /></div>
             <div><label>Maks lojalitet %</label><input name="member_loyalty_max_pct" defaultValue={s.member_loyalty_max_pct} /></div>
           </div>
-          <small className="muted">Eksempel: {s.member_base_discount_pct} % ved første booking, {Number(s.member_base_discount_pct) + Number(s.member_loyalty_max_pct)} % etter {Math.round(Number(s.member_loyalty_max_pct) / Math.max(Number(s.member_loyalty_step_pct), 0.0001))} bookinger.</small><br />
+          <small className="muted">Eksempel: {s.member_base_discount_pct} % ved første booking (lojalitet starter på 0 %), {Number(s.member_base_discount_pct) + Number(s.member_loyalty_max_pct)} % etter {Math.round(Number(s.member_loyalty_max_pct) / Math.max(Number(s.member_loyalty_step_pct), 0.0001))} bookinger.</small><br />
           <button className="btn" style={{ marginTop: 12 }}>Lagre rabatt</button>
         </form>
         <form action={saveSettingsAction} className="card">
@@ -49,6 +50,7 @@ export default async function RewardsAdmin({ searchParams }: { searchParams: Pro
             <div><label>Min. oppholdsverdi (kr)</label><input name="referral_min_qualifying_amount_ore" defaultValue={Number(s.referral_min_qualifying_amount_ore) / 100} /></div>
             <div><label>Opptjening (dager)</label><input name="referral_reward_vesting_days" defaultValue={s.referral_reward_vesting_days} /></div>
             <div><label>Gyldighet (dager)</label><input name="referral_reward_validity_days" defaultValue={s.referral_reward_validity_days} /></div>
+            <div><label>Maks ubrukte bonuser</label><input name="referral_reward_max_unused" defaultValue={s.referral_reward_max_unused} /></div>
           </div>
           <button className="btn" style={{ marginTop: 12 }}>Lagre regler</button>
         </form>

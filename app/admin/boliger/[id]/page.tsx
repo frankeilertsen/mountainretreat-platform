@@ -8,6 +8,7 @@ import * as A from '../../../actions/properties';
 
 export const dynamic = 'force-dynamic';
 const TABS: [string, string][] = [['', 'Detaljer'], ['rom', 'Rom og senger'], ['priser', 'Priser og regler']];
+const WDS = ['sø', 'ma', 'ti', 'on', 'to', 'fr', 'lø'];
 const WD = ['', 'mandag', 'tirsdag', 'onsdag', 'torsdag', 'fredag', 'lørdag', 'søndag'];
 
 export default async function PropertyAdmin({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<Record<string, string>> }) {
@@ -25,7 +26,7 @@ export default async function PropertyAdmin({ params, searchParams }: { params: 
       <Flash sp={sp} />
       {tab === '' && <Details p={p} />}
       {tab === 'rom' && <Rooms pid={id} />}
-      {tab === 'priser' && <Pricing pid={id} />}
+      {tab === 'priser' && <Pricing pid={id} mode={p.pricing_mode} minNights={p.default_min_nights} />}
     </>
   );
 }
@@ -126,7 +127,7 @@ async function Rooms({ pid }: { pid: string }) {
   );
 }
 
-async function Pricing({ pid }: { pid: string }) {
+async function Pricing({ pid, mode, minNights }: { pid: string; mode: string; minNights: number }) {
   const cats = await q(`SELECT id, kind, name, price_per_night_ore, min_nights, max_nights, color FROM season_categories WHERE property_id=$1 ORDER BY price_per_night_ore`, [pid]);
   const periods = await q(`SELECT pp.*, to_char(start_date,'YYYY-MM-DD') AS s, to_char(end_date,'YYYY-MM-DD') AS e, sc.name AS cat, sc.color FROM pricing_periods pp JOIN season_categories sc ON sc.id=pp.season_category_id WHERE pp.property_id=$1 AND pp.active ORDER BY start_date`, [pid]);
   const los = await q(`SELECT l.id, l.min_nights, l.discount_percentage::float AS pct, sc.name AS cat FROM length_of_stay_discounts l LEFT JOIN season_categories sc ON sc.id=l.season_category_id WHERE l.property_id=$1 AND l.active ORDER BY min_nights`, [pid]);
@@ -139,18 +140,62 @@ async function Pricing({ pid }: { pid: string }) {
     return { d, color: p?.color ?? null, name: p?.name };
   });
   const unpriced = strip.filter(s => !s.color).length;
+  const rates = await q<{ d: string; price_ore: number; updated_at: string }>(`SELECT to_char(date,'YYYY-MM-DD') AS d, price_ore, updated_at FROM external_nightly_rates WHERE property_id=$1 AND date >= current_date AND date < current_date + 365 ORDER BY date`, [pid]);
+  const rateMap = new Map(rates.map(r => [r.d, r.price_ore]));
+  const missing = strip.filter(s => !rateMap.has(s.d)).length;
+  const lastUpdate = rates.reduce((m, r) => (r.updated_at > m ? r.updated_at : m), '');
+  const fee = Number((await q<{ value: string }>(`SELECT value FROM platform_settings WHERE key='airbnb_guest_fee_pct'`))[0]?.value ?? 15);
+  const next60 = strip.slice(0, 63);
   return (
     <div className="stack">
+      <div className="card" style={{ borderColor: 'var(--gold-line)' }}>
+        <div className="row between"><h3 style={{ margin: 0 }}>Prismodell</h3><span className="badge b-warn">{mode === 'airbnb' ? 'Følger Airbnb' : 'Egne priser'}</span></div>
+        <form action={A.pricingModeAction} className="row" style={{ marginTop: 14, alignItems: 'flex-end' }}>
+          <input type="hidden" name="propertyId" value={pid} />
+          <label className="check" style={{ margin: 0 }}><input type="radio" name="mode" value="airbnb" defaultChecked={mode === 'airbnb'} /> Følg Airbnb-prisene (standard)</label>
+          <label className="check" style={{ margin: 0 }}><input type="radio" name="mode" value="manual" defaultChecked={mode === 'manual'} /> Sett prisene individuelt (sesongpriser)</label>
+          <div style={{ width: 150 }}><label>Min. netter (standard)</label><input type="number" name="default_min_nights" min={1} defaultValue={minNights} /></div>
+          <button className="btn small">Lagre</button>
+        </form>
+        <p className="muted" style={{ fontSize: '.85rem', marginTop: 12 }}>Med Airbnb-prising er utgangspunktet nattprisen på Airbnb. Medlemmene slipper Airbnbs serviceavgift ({fee} %) og får i tillegg medlemsrabatt og lojalitetsrabatt. Sesongperiodene under brukes da kun for regler (min. netter, hel periode, byttedag).</p>
+      </div>
+      {mode === 'airbnb' && (
+        <div className="card">
+          <div className="row between"><h3 style={{ margin: 0 }}>Airbnb-priser</h3><small className="muted">{lastUpdate ? `Sist oppdatert ${new Date(lastUpdate).toLocaleDateString('nb-NO')}` : 'Ingen priser lagt inn'}</small></div>
+          <p className="muted" style={{ fontSize: '.85rem' }}>Airbnb tilbyr ikke prisene via iCal eller åpent API. Legg dem inn fra Airbnb-kalenderen (periode eller lim inn), eller koble til en channel manager (Guesty/Hostaway) senere for automatisk synk. Datoer uten pris kan ikke bookes.</p>
+          {missing > 0 && <p style={{ color: 'var(--danger)', fontSize: '.88rem' }}>{missing} av de neste 365 nettene mangler Airbnb-pris.</p>}
+          <div className="cal" style={{ gridTemplateColumns: 'repeat(9, 1fr)', marginBottom: 18 }}>
+            {next60.map(s => (<div key={s.d} className={`day ${rateMap.has(s.d) ? '' : 'urgent'}`} style={{ aspectRatio: 'auto', padding: '6px 2px' }} title={s.d}>
+              <small style={{ color: 'var(--muted)' }}>{WDS[new Date(s.d + 'T12:00:00Z').getUTCDay()]} {Number(s.d.slice(8))}.{Number(s.d.slice(5, 7))}</small>
+              <span style={{ fontSize: '.78rem', color: rateMap.has(s.d) ? 'var(--ink)' : 'var(--danger)' }}>{rateMap.has(s.d) ? nok(rateMap.get(s.d)!).replace(/\s?kr/, '') : '–'}</span></div>))}
+          </div>
+          <div className="grid g2">
+            <form action={A.airbnbRangeAction}>
+              <input type="hidden" name="propertyId" value={pid} />
+              <h4>Sett pris for en periode</h4>
+              <div className="fields"><div><label>Fra natt</label><input type="date" name="start" required /></div><div><label>Til og med natt</label><input type="date" name="end" required /></div></div>
+              <div className="fields" style={{ marginTop: 10 }}><div><label>Pris søn–tor (kr)</label><input name="weekday" required /></div><div><label>Pris fre–lør (kr)</label><input name="weekend" placeholder="samme" /></div></div>
+              <button className="btn small" style={{ marginTop: 12 }}>Lagre priser</button>
+            </form>
+            <form action={A.airbnbPasteAction}>
+              <input type="hidden" name="propertyId" value={pid} />
+              <h4>Lim inn priser</h4>
+              <textarea name="rates" rows={5} placeholder={'2027-01-10;1890\n11.01.2027 1 890'} />
+              <button className="btn small secondary" style={{ marginTop: 8 }}>Importer</button>
+            </form>
+          </div>
+        </div>
+      )}
       <div className="card">
-        <h3>Årsoversikt (neste 12 måneder)</h3>
+        <h3>Årsoversikt – sesongperioder (neste 12 måneder)</h3>
         <div style={{ display: 'flex', height: 34, borderRadius: 8, overflow: 'hidden', border: '1px solid var(--line)' }}>
           {strip.map(s => <span key={s.d} title={`${fmtDate(s.d)}: ${s.name ?? 'IKKE PRISSATT'}`} style={{ flex: 1, background: s.color ?? 'var(--danger)' }} />)}
         </div>
         <div className="row between" style={{ fontSize: '.75rem', color: 'var(--muted)', marginTop: 4 }}>{[0, 3, 6, 9, 12].map(m => <span key={m}>{fmtDate(addDays(today, Math.min(364, m * 30)))}</span>)}</div>
-        {unpriced > 0 && <p style={{ color: 'var(--danger)', marginTop: 8 }}>{unpriced} dager har ingen periode og kan ikke bookes (rødt).</p>}
+        {unpriced > 0 && mode === 'manual' && <p style={{ color: 'var(--danger)', marginTop: 8 }}>{unpriced} dager har ingen periode og kan ikke bookes (rødt).</p>}
       </div>
       <div className="card">
-        <h3>Sesonggrupper</h3><p className="muted" style={{ fontSize: '.88rem' }}>Ordinær pris per natt (før medlemsrabatt). Medlemsrabatten styres under Medlemsfordeler. Perioder under knytter datoer til en gruppe og kan overstyre enkeltverdier.</p>
+        <h3>Sesonggrupper {mode === 'airbnb' && <small className="muted" style={{ fontSize: '.8rem' }}>(brukes kun ved egne priser)</small>}</h3><p className="muted" style={{ fontSize: '.88rem' }}>Ordinær pris per natt (før medlemsrabatt). Medlemsrabatten styres under Medlemsfordeler. Perioder under knytter datoer til en gruppe og kan overstyre enkeltverdier.</p>
         {cats.map(c => (
           <form key={c.id} action={A.saveCategoryAction} className="row" style={{ marginBottom: 8, flexWrap: 'nowrap', gap: 8 }}>
             <input type="hidden" name="id" value={c.id} /><input type="hidden" name="propertyId" value={pid} />

@@ -59,3 +59,24 @@ describe('price engine (spec §12a)', () => {
     expect(computeQuote(base({ cleaningExempt: true })).cleaning_fee_ore).toBe(0);
   });
 });
+
+describe('Airbnb-linked pricing', () => {
+  const airbnb = (over: Partial<PricingInput> = {}) => computeQuote(base({
+    pricingMode: 'airbnb', periods: [], categories: [], losDiscounts: [], defaultMinNights: 2, airbnbGuestFeePct: 15,
+    externalRates: { '2027-01-10': 200000, '2027-01-11': 200000, '2027-01-12': 250000 },
+    startDate: '2027-01-10', endDate: '2027-01-13', memberDiscountPct: 13, memberDiscountSplit: { basePct: 10, loyaltyPct: 3 }, ...over,
+  }));
+  it('uses the Airbnb nightly price, then member + loyalty discount, and shows the Airbnb comparison incl. fee', () => {
+    const q = airbnb();
+    expect(q.pricing_mode).toBe('airbnb');
+    expect(q.stay_ore).toBe(Math.round(650000 * 0.87));
+    expect(q.base_discount_ore).toBe(65000);
+    expect(q.loyalty_discount_ore).toBe(19500);
+    expect(q.airbnb_comparison_ore).toBe(Math.round((650000 + 120000) * 1.15));
+    expect(q.airbnb_fee_saved_ore).toBe(Math.round((650000 + 120000) * 0.15));
+  });
+  it('refuses dates without an Airbnb price and applies the default minimum stay', () => {
+    expect(() => airbnb({ endDate: '2027-01-14' })).toThrow(/ikke tilgjengelig/);
+    expect(() => airbnb({ endDate: '2027-01-11' })).toThrow(/Minimum 2/);
+  });
+});

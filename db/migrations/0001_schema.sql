@@ -122,6 +122,10 @@ CREATE TABLE properties (
   check_in_time     TIME NOT NULL DEFAULT '15:00',
   check_out_time    TIME NOT NULL DEFAULT '11:00',
   cleaning_fee_ore  INTEGER NOT NULL DEFAULT 0 CHECK (cleaning_fee_ore >= 0),
+  -- 'airbnb' (default): nightly prices follow the listing's Airbnb prices (external_nightly_rates)
+  -- 'manual': nightly prices come from the season pricing below
+  pricing_mode      TEXT NOT NULL DEFAULT 'airbnb' CHECK (pricing_mode IN ('airbnb','manual')),
+  default_min_nights INTEGER NOT NULL DEFAULT 2 CHECK (default_min_nights >= 1),
   base_currency     TEXT NOT NULL DEFAULT 'NOK',
   timezone          TEXT NOT NULL DEFAULT 'Europe/Oslo',
   owner_user_id     UUID REFERENCES users(id),
@@ -169,6 +173,17 @@ CREATE TABLE pricing_periods (
   FOREIGN KEY (season_category_id, property_id) REFERENCES season_categories (id, property_id)
 );
 CREATE INDEX idx_pricing_periods_property_dates ON pricing_periods (property_id, start_date, end_date);
+
+-- Airbnb nightly prices per date (entered from the Airbnb calendar, pasted/CSV, or later synced from a channel manager)
+CREATE TABLE external_nightly_rates (
+  property_id        UUID NOT NULL REFERENCES properties(id),
+  date               DATE NOT NULL,
+  price_ore          INTEGER NOT NULL CHECK (price_ore > 0),
+  source             TEXT NOT NULL DEFAULT 'manual_entry' CHECK (source IN ('manual_entry','paste','channel_manager')),
+  updated_by_user_id UUID REFERENCES users(id),
+  updated_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (property_id, date)
+);
 
 CREATE TABLE length_of_stay_discounts (
   id                    UUID PRIMARY KEY DEFAULT gen_random_uuid(),

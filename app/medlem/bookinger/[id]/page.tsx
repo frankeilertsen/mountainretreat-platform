@@ -8,6 +8,7 @@ import { Flash, Status } from '@/components/ui';
 import { payAction, cancelAction, updateMyPreparationAction } from '../../../actions/member';
 import { stripeProvider, mockProvider } from '@/lib/domain/payments';
 import { getStr } from '@/lib/settings';
+import { SavingsBreakdown } from '@/components/Savings';
 
 export const dynamic = 'force-dynamic';
 
@@ -73,14 +74,8 @@ export default async function BookingDetail({ params, searchParams }: { params: 
         <div className="stack">
           <div className="card">
             <h3>Pris</h3>
-            <div className="price-lines">
-              {quote && <div className="row"><span>{quote.nights} netter, ordinær pris</span><span>{nok(b.stay_price_ore + (quote.member_discount_ore ?? 0))}</span></div>}
-              {quote?.member_discount_ore > 0 && <div className="row" style={{ color: 'var(--gold-2)' }}><span>Medlemsrabatt {quote.member_discount_pct} %</span><span>−{nok(quote.member_discount_ore)}</span></div>}
-              <div className="row"><span>Sluttrengjøring</span><span>{nok(b.cleaning_fee_ore)}</span></div>
-              {addOns.map((a, i) => <div className="row" key={i}><span>{a.name}{a.quantity > 1 ? ` × ${a.quantity}` : ''}</span><span>{nok(a.total_price_ore)}</span></div>)}
-              {b.reward_discount_ore > 0 && <div className="row"><span>Bonus brukt</span><span>−{nok(b.reward_discount_ore)}</span></div>}
-              <div className="row price-total"><span>{b.price_locked_at ? 'Å betale' : 'Estimert'}</span><span>{nok(b.price_total_ore)}</span></div>
-            </div>
+            {quote ? <SavingsBreakdown quote={{ ...quote, stay_ore: b.stay_price_ore, cleaning_fee_ore: b.cleaning_fee_ore, subtotal_ore: b.price_total_ore + b.reward_discount_ore }} rewardOre={b.reward_discount_ore} />
+              : <div className="row price-total"><span>Totalt</span><span>{nok(b.price_total_ore)}</span></div>}
             {!b.price_locked_at && b.price_breakdown?.use_rewards && <small className="muted">Bonus trekkes fra når forespørselen godkjennes.</small>}
           </div>
           {b.status === 'awaiting_payment' && (

@@ -21,7 +21,7 @@ export async function referral(referrerId: string, referredId: string) {
 
 /** Property priced 1000 kr/night (low season; tests run with a flat 10 % member discount, min 2 nights), cleaning fee 500 kr. */
 export async function property(opts: { maxGuests?: number } = {}) {
-  const p = (await one<{ id: string }>(`INSERT INTO properties (slug, name, max_guests, cleaning_fee_ore) VALUES ($1,'Testhytte',$2,50000) RETURNING id`,
+  const p = (await one<{ id: string }>(`INSERT INTO properties (slug, name, max_guests, cleaning_fee_ore, pricing_mode) VALUES ($1,'Testhytte',$2,50000,'manual') RETURNING id`,
     ['p-' + humanCode(6).toLowerCase(), opts.maxGuests ?? 6]))!.id;
   const cat = (await one<{ id: string }>(`INSERT INTO season_categories (property_id, kind, name, price_per_night_ore, min_nights) VALUES ($1,'low_season','Lavsesong',100000,2) RETURNING id`, [p]))!.id;
   await getPool().query(`INSERT INTO pricing_periods (property_id, season_category_id, name, start_date, end_date) VALUES ($1,$2,'Alt',$3,$4)`, [p, cat, d(-30), d(400)]);

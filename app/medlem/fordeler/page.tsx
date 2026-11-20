@@ -1,42 +1,71 @@
 import Link from 'next/link';
 import { requireUser } from '@/lib/auth/current';
-import { rewardBalance } from '@/lib/domain/rewards';
-import { memberDiscount } from '@/lib/domain/memberDiscount';
-import { invitationsWithOutcome, rewardTerms } from '@/lib/domain/memberOverview';
+import { loadBenefits } from '@/lib/domain/benefits';
 import { BenefitCards } from '@/components/Benefits';
+import { nok } from '@/lib/format';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Medlemsfordeler' };
 
 export default async function Benefits() {
   const u = await requireUser('request_booking');
-  const [disc, bal, invites, terms] = await Promise.all([memberDiscount(u.id), rewardBalance(u.id), invitationsWithOutcome(u.id), rewardTerms()]);
+  const b = await loadBenefits(u.id);
+  const { disc, terms } = b;
+  // Worked example: 3 nights at 2 000 kr + 1 200 kr cleaning
+  const nightly = 200000, nights = 3, cleaning = 120000;
+  const airbnbStay = nightly * nights, airbnbTotal = Math.round((airbnbStay + cleaning) * (1 + b.airbnbFeePct / 100));
+  const fee = airbnbTotal - airbnbStay - cleaning;
+  const baseDisc = Math.round(airbnbStay * disc.basePct / 100), loyDisc = Math.round(airbnbStay * disc.loyaltyPct / 100);
+  const maxLoy = Math.round(airbnbStay * disc.loyaltyMaxPct / 100);
+  const yours = airbnbStay - baseDisc - loyDisc + cleaning;
+  const yoursMax = airbnbStay - baseDisc - maxLoy + cleaning;
   const steps = Array.from({ length: Math.round(disc.loyaltyMaxPct / Math.max(disc.stepPct, 0.0001)) + 1 }, (_, i) => i);
+  const Line = ({ l, v, gold, total }: { l: string; v: number; gold?: boolean; total?: boolean }) => (
+    <div className={total ? 'row price-total' : 'row'} style={{ justifyContent: 'space-between', color: gold ? 'var(--gold-2)' : undefined, padding: total ? undefined : '5px 0' }}><span>{l}</span><span>{v < 0 ? '−' : ''}{nok(Math.abs(v))}</span></div>);
   return (
     <>
-      <div className="page-head"><span className="eyebrow">Medlemsfordeler</span><h1>Tre fordeler som medlem</h1>
-        <p className="muted" style={{ maxWidth: '64ch' }}>Som medlem av Mountain Retreat får du rabatterte priser, rabatten øker for hver booking, og du får bonus når du inviterer venner og familie.</p></div>
-      <BenefitCards disc={disc} balance={bal.available} pending={bal.pending} invited={invites.length} qualified={invites.filter(i => i.stage === 'qualified').length} terms={terms} />
-      <div className="grid g3" style={{ marginTop: 28, alignItems: 'start' }}>
+      <div className="page-head"><span className="eyebrow">Medlemsfordeler</span><h1>Hva du sparer som medlem</h1>
+        <p className="muted" style={{ maxWidth: '68ch' }}>Prisene på Mountain Retreat tar utgangspunkt i det samme oppholdet på Airbnb. Som medlem slipper du Airbnbs serviceavgift, du får en fast medlemsrabatt, rabatten øker for hver booking, og du kan bruke vervebonus i tillegg.</p></div>
+      <BenefitCards {...b} />
+
+      <div className="grid g2" style={{ marginTop: 28, alignItems: 'start' }}>
         <div className="card">
-          <span className="eyebrow">1 · Rabatterte priser</span>
-          <h3>{disc.basePct} % på alle opphold</h3>
-          <p className="muted">Alle medlemmer får {disc.standardPct} % rabatt på overnattingsprisen.{disc.baseIsOverride ? ` Du har en personlig rabatt på ${disc.basePct} %.` : ''} Rabatten gjelder overnatting – ikke sluttrengjøring og tillegg.</p>
+          <span className="eyebrow">Slik regnes prisen</span>
+          <h3>Eksempel: {nights} netter à {nok(nightly)} + vask</h3>
+          <div className="price-lines">
+            <div className="kpi-label" style={{ marginBottom: 4 }}>På Airbnb</div>
+            <Line l={`${nights} netter + vask`} v={airbnbStay + cleaning} />
+            <Line l={`Serviceavgift (≈ ${b.airbnbFeePct} %)`} v={fee} />
+            <Line l="Totalt på Airbnb" v={airbnbTotal} />
+            <div className="kpi-label" style={{ margin: '14px 0 4px' }}>Hos oss</div>
+            <Line l={`${nights} netter + vask`} v={airbnbStay + cleaning} />
+            <Line gold l="Ingen serviceavgift" v={0} />
+            <Line gold l={`Medlemsrabatt ${disc.basePct} % av nattprisen`} v={-baseDisc} />
+            {loyDisc > 0 && <Line gold l={`Din lojalitetsrabatt ${disc.loyaltyPct} %`} v={-loyDisc} />}
+            <Line total l="Din pris" v={yours} />
+          </div>
+          <div className="note" style={{ marginTop: 12 }}>Du sparer <strong style={{ color: 'var(--gold-2)' }}>{nok(airbnbTotal - yours)}</strong> ({Math.round((airbnbTotal - yours) / airbnbTotal * 100)} %) i dag. Med full lojalitetsrabatt ({disc.loyaltyMaxPct} %) sparer du {nok(airbnbTotal - yoursMax)} ({Math.round((airbnbTotal - yoursMax) / airbnbTotal * 100)} %) – før eventuell vervebonus.</div>
+          <p className="muted" style={{ fontSize: '.82rem', marginTop: 10 }}>Rabattene gjelder nattprisen. Sluttrengjøring og tillegg betales fullt. Vervebonus trekkes fra totalbeløpet. Endelig pris låses når forespørselen godkjennes.</p>
         </div>
-        <div className="card">
-          <span className="eyebrow">2 · Lojalitetsrabatt</span>
-          <h3>+{disc.stepPct} % per booking, opptil {disc.loyaltyMaxPct} %</h3>
-          <p className="muted">For hver booking du gjennomfører øker rabatten med {disc.stepPct} prosentpoeng, til du har {disc.loyaltyMaxPct} % ekstra. Kansellerte bookinger teller ikke.</p>
-          <div className="table-wrap"><table><thead><tr><th>Bookinger</th><th>Din rabatt</th></tr></thead><tbody>
-            {steps.map(n => { const tot = Math.min(100, disc.basePct + Math.min(disc.loyaltyMaxPct, n * disc.stepPct)); const me = Math.min(n, steps.length - 1) === Math.min(disc.bookingsCounted, steps.length - 1);
-              return <tr key={n} style={me ? { outline: '1px solid var(--gold-line)' } : undefined}><td>{n}{n === steps.length - 1 ? '+' : ''}{me ? <span className="badge b-warn" style={{ marginLeft: 8 }}>Du er her</span> : null}</td><td style={{ color: me ? 'var(--gold-2)' : undefined }}>{tot} %</td></tr>; })}
-          </tbody></table></div>
-        </div>
-        <div className="card">
-          <span className="eyebrow">3 · Verdi for å invitere</span>
-          <h3>Dere får begge bonus</h3>
-          <p className="muted">Når noen du inviterer fullfører sitt <strong>første</strong> opphold, får du {terms.referrer} og vedkommende {terms.referred} i bonus. Bonusen blir tilgjengelig etter {terms.vestingDays} dager og trekkes fra prisen på neste booking. Senere opphold gir ikke ny vervebonus.</p>
-          <Link className="btn" href="/medlem/invitasjoner">Inviter noen</Link>
+        <div className="stack">
+          <div className="card">
+            <span className="eyebrow">Lojalitetsrabatt</span>
+            <h3>Starter på 0 %, +{disc.stepPct} % per booking, maks {disc.loyaltyMaxPct} %</h3>
+            <p className="muted">Hver gjennomførte booking gir {disc.stepPct} prosentpoeng ekstra rabatt på alle fremtidige opphold. Kansellerte bookinger teller ikke.</p>
+            <div className="row" style={{ gap: 6 }}>
+              {steps.map(n => { const me = Math.min(disc.bookingsCounted, steps.length - 1) === n; return (
+                <div key={n} style={{ flex: 1, minWidth: 34, textAlign: 'center', padding: '8px 0', borderRadius: 8, border: `1px solid ${me ? 'var(--gold)' : 'var(--line-2)'}`, background: n <= disc.bookingsCounted ? 'var(--gold-soft)' : 'transparent' }}>
+                  <div style={{ fontSize: '.95rem', color: me ? 'var(--gold-2)' : 'var(--ink-2)' }}>{disc.basePct + Math.min(disc.loyaltyMaxPct, n * disc.stepPct)}%</div>
+                  <small style={{ fontSize: '.62rem' }}>{n}{n === steps.length - 1 ? '+' : ''}</small></div>); })}
+            </div>
+            <small className="muted">Total medlemsrabatt etter antall bookinger (du har {disc.bookingsCounted}).</small>
+          </div>
+          <div className="card">
+            <span className="eyebrow">Vervebonus</span>
+            <h3>Dere får begge bonus</h3>
+            <p className="muted">Når noen du inviterer fullfører sitt <strong>første</strong> opphold, får du {terms.referrer} og vedkommende {terms.referred}. Bonusen blir tilgjengelig etter noen dager og trekkes fra prisen på neste booking. Du kan ha opptil {b.maxUnused} ubrukte vervebonuser – bruk dem for å kunne tjene nye.</p>
+            <Link className="btn" href="/medlem/invitasjoner">Inviter noen</Link>
+          </div>
         </div>
       </div>
     </>

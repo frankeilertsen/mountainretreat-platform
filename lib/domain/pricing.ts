@@ -2,6 +2,7 @@ import { Db, getPool, q, one } from '../db';
 import { addDays, isoWeekday, nightsBetween } from '../format';
 import { DomainError } from '../errors';
 import { memberDiscount } from './memberDiscount';
+import { getNum } from '../settings';
 
 export type SeasonCategory = { id: string; kind: string; name: string; price_per_night_ore: number;
   min_nights: number; max_nights: number | null; color?: string | null };
@@ -17,6 +18,14 @@ export type PricingInput = {
   cleaningFeeOre: number; cleaningExempt?: boolean;
   /** Member's total discount % on the stay price (standard/override + loyalty). */
   memberDiscountPct?: number;
+  /** Split of memberDiscountPct, for showing the member what each benefit is worth. */
+  memberDiscountSplit?: { basePct: number; loyaltyPct: number };
+  /** 'airbnb' = nightly price from externalRates (the listing's Airbnb price); 'manual' = season pricing. */
+  pricingMode?: 'airbnb' | 'manual';
+  externalRates?: Record<string, number>;
+  defaultMinNights?: number;
+  /** Airbnb guest service fee %, used to show what the same stay would cost on Airbnb. */
+  airbnbGuestFeePct?: number;
   addOns: AddOnItem[]; selectedAddOns: { id: string; quantity: number }[];
 };
 
@@ -26,6 +35,10 @@ export type Quote = {
   add_ons: { id: string; name: string; quantity: number; unit_price_ore: number; total_ore: number }[];
   add_ons_ore: number; subtotal_ore: number;
   member_discount_pct: number; member_discount_ore: number;
+  base_discount_ore: number; loyalty_discount_ore: number;
+  pricing_mode: 'airbnb' | 'manual';
+  /** What the same nights + cleaning would cost a guest on Airbnb (incl. service fee). */
+  airbnb_comparison_ore: number; airbnb_fee_pct: number; airbnb_fee_saved_ore: number;
   member_discount?: import('./memberDiscount').MemberDiscount;
 };
 
@@ -46,26 +59,31 @@ export function computeQuote(input: PricingInput): Quote {
     .filter(p => p.start_date <= date && p.end_date >= date && cats.has(p.season_category_id))
     .sort((a, b) => b.priority - a.priority)[0];
 
-  type Resolved = { date: string; p: PricingPeriod; c: SeasonCategory; price: number; min: number; max: number | null };
+  const mode = input.pricingMode ?? 'manual';
+  type Resolved = { date: string; p: PricingPeriod | null; c: SeasonCategory | null; label: string; price: number; min: number; max: number | null };
   const resolved: Resolved[] = [];
   for (let i = 0; i < nights; i++) {
     const date = addDays(startDate, i);
-    const p = periodFor(date);
-    if (!p) throw new DomainError('unpriced', 'Noen av datoene er ikke åpne for booking.');
-    const c = cats.get(p.season_category_id)!;
-    resolved.push({
-      date, p, c,
-      price: p.price_per_night_ore ?? c.price_per_night_ore,
-      min: p.min_nights ?? c.min_nights,
-      max: p.max_nights ?? c.max_nights,
-    });
+    const p = periodFor(date) ?? null;
+    const c = p ? cats.get(p.season_category_id)! : null;
+    if (mode === 'airbnb') {
+      // Price follows Airbnb; periods (if any) still provide stay rules (min nights, whole period, changeover day)
+      const rate = input.externalRates?.[date];
+      if (!rate) throw new DomainError('unpriced', 'Pris er ikke tilgjengelig for noen av datoene ennå. Velg andre datoer eller kontakt oss.');
+      resolved.push({ date, p, c, label: p?.name ?? 'Airbnb-pris', price: rate,
+        min: p?.min_nights ?? c?.min_nights ?? input.defaultMinNights ?? 1, max: p?.max_nights ?? c?.max_nights ?? null });
+    } else {
+      if (!p || !c) throw new DomainError('unpriced', 'Noen av datoene er ikke åpne for booking.');
+      resolved.push({ date, p, c, label: p.name, price: p.price_per_night_ore ?? c.price_per_night_ore, min: p.min_nights ?? c.min_nights, max: p.max_nights ?? c.max_nights });
+    }
   }
 
   // Stay rules — evaluated from the check-in night's effective values
   const first = resolved[0];
-  if (nights < first.min) throw new DomainError('min_nights', `Minimum ${first.min} netter i ${first.c.name.toLowerCase()}.`);
-  if (first.max && nights > first.max) throw new DomainError('max_nights', `Maksimum ${first.max} netter i ${first.c.name.toLowerCase()}.`);
-  const touched = new Map(resolved.map(r => [r.p.id, r.p]));
+  const when = first.c ? ` i ${first.c.name.toLowerCase()}` : '';
+  if (nights < first.min) throw new DomainError('min_nights', `Minimum ${first.min} netter${when}.`);
+  if (first.max && nights > first.max) throw new DomainError('max_nights', `Maksimum ${first.max} netter${when}.`);
+  const touched = new Map(resolved.filter(r => r.p).map(r => [r.p!.id, r.p!]));
   for (const p of touched.values()) {
     if (p.booking_mode === 'whole_period') {
       const pEndExclusive = addDays(p.end_date, 1);
@@ -86,12 +104,12 @@ export function computeQuote(input: PricingInput): Quote {
   const memberPct = Math.min(100, Math.max(0, num(input.memberDiscountPct ?? 0)));
   let stayExact = 0, undiscounted = 0;
   const nightLines: NightLine[] = resolved.map(r => {
-    const tiers = input.losDiscounts.filter(t => t.min_nights <= nights && (t.season_category_id === null || t.season_category_id === r.c.id));
+    const tiers = input.losDiscounts.filter(t => t.min_nights <= nights && (t.season_category_id === null || t.season_category_id === r.c?.id));
     const best = tiers.sort((a, b) => (b.min_nights - a.min_nights) || ((b.season_category_id ? 1 : 0) - (a.season_category_id ? 1 : 0)))[0];
     const losPct = best ? num(best.discount_percentage) : 0;
     const exact = r.price * (1 - memberPct / 100) * (1 - losPct / 100);
     stayExact += exact; undiscounted += r.price * (1 - losPct / 100);
-    return { date: r.date, period: r.p.name, category: r.c.name, base_ore: r.price, member_discount_pct: memberPct, los_discount_pct: losPct, price_ore: Math.round(exact) };
+    return { date: r.date, period: r.label, category: r.c?.name ?? 'Airbnb', base_ore: r.price, member_discount_pct: memberPct, los_discount_pct: losPct, price_ore: Math.round(exact) };
   });
   const stay_ore = Math.round(stayExact);
 
@@ -105,13 +123,20 @@ export function computeQuote(input: PricingInput): Quote {
     });
   const add_ons_ore = add_ons.reduce((s, a) => s + a.total_ore, 0);
   const cleaning_fee_ore = input.cleaningExempt ? 0 : input.cleaningFeeOre;
+  const member_discount_ore = Math.round(undiscounted) - stay_ore;
+  const split = input.memberDiscountSplit;
+  const base_discount_ore = split && memberPct > 0 ? Math.round(member_discount_ore * split.basePct / memberPct) : member_discount_ore;
+  const feePct = num(input.airbnbGuestFeePct ?? 0);
+  const comparisonBase = Math.round(undiscounted) + input.cleaningFeeOre;
+  const airbnb_comparison_ore = Math.round(comparisonBase * (1 + feePct / 100));
   return { nights, nightLines, stay_ore, cleaning_fee_ore, add_ons, add_ons_ore, subtotal_ore: stay_ore + cleaning_fee_ore + add_ons_ore,
-    member_discount_pct: memberPct, member_discount_ore: Math.round(undiscounted) - stay_ore };
+    member_discount_pct: memberPct, member_discount_ore, base_discount_ore, loyalty_discount_ore: member_discount_ore - base_discount_ore,
+    pricing_mode: mode, airbnb_comparison_ore, airbnb_fee_pct: feePct, airbnb_fee_saved_ore: airbnb_comparison_ore - comparisonBase };
 }
 
 export async function loadPricingContext(propertyId: string, db: Db = getPool()) {
-  const property = await one<{ id: string; max_guests: number; cleaning_fee_ore: number; active: boolean; name: string }>(
-    'SELECT id, name, max_guests, cleaning_fee_ore, active FROM properties WHERE id = $1', [propertyId], db);
+  const property = await one<{ id: string; max_guests: number; cleaning_fee_ore: number; active: boolean; name: string; pricing_mode: 'airbnb' | 'manual'; default_min_nights: number }>(
+    'SELECT id, name, max_guests, cleaning_fee_ore, active, pricing_mode, default_min_nights FROM properties WHERE id = $1', [propertyId], db);
   if (!property || !property.active) throw new DomainError('not_found', 'Boligen finnes ikke.');
   // Sequential on purpose: db may be a single transaction client
   const categories = await 
@@ -122,7 +147,11 @@ export async function loadPricingContext(propertyId: string, db: Db = getPool())
                        booking_mode, changeover_weekday, priority FROM pricing_periods WHERE property_id=$1 AND active`, [propertyId], db);
   const losDiscounts = await q<LosDiscount>(`SELECT season_category_id, min_nights, discount_percentage::float AS discount_percentage FROM length_of_stay_discounts WHERE property_id=$1 AND active`, [propertyId], db);
   const addOns = await q<AddOnItem>(`SELECT id, name, price_type, unit_price_ore, mandatory FROM add_on_items WHERE (property_id=$1 OR property_id IS NULL) AND active ORDER BY mandatory DESC, name`, [propertyId], db);
-  return { property, categories, periods, losDiscounts, addOns };
+  const rates = property.pricing_mode === 'airbnb'
+    ? Object.fromEntries((await q<{ d: string; price_ore: number }>(`SELECT to_char(date,'YYYY-MM-DD') AS d, price_ore FROM external_nightly_rates WHERE property_id=$1 AND date >= current_date - 1`, [propertyId], db)).map(r => [r.d, r.price_ore]))
+    : {};
+  const airbnbFee = await getNum('airbnb_guest_fee_pct', 15, db);
+  return { property, categories, periods, losDiscounts, addOns, rates, airbnbFee };
 }
 
 export async function isCleaningExempt(userId: string, propertyId: string, db: Db = getPool()) {
@@ -138,6 +167,8 @@ export async function quoteFor(propertyId: string, memberId: string, startDate: 
     categories: ctx.categories, periods: ctx.periods, losDiscounts: ctx.losDiscounts,
     cleaningFeeOre: ctx.property.cleaning_fee_ore, cleaningExempt: await isCleaningExempt(memberId, propertyId, db),
     addOns: ctx.addOns, selectedAddOns, memberDiscountPct: discount.totalPct,
+    memberDiscountSplit: { basePct: discount.basePct, loyaltyPct: discount.loyaltyPct },
+    pricingMode: ctx.property.pricing_mode, externalRates: ctx.rates, defaultMinNights: ctx.property.default_min_nights, airbnbGuestFeePct: ctx.airbnbFee,
   });
   return { ...quote, member_discount: discount };
 }

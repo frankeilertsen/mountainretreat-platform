@@ -49,9 +49,19 @@ export async function qualifyReferralForBooking(c: PoolClient, bookingId: string
   const parties: { user: typeof referred; role: 'referrer' | 'referred' }[] = [{ user: referred, role: 'referred' }];
   // Abuse guard: a suspended/revoked referrer gets nothing
   if (referrer && referrer.status === 'active') parties.push({ user: referrer, role: 'referrer' });
+  const maxUnused = await getNum('referral_reward_max_unused', 10, c);
   for (const p of parties) {
     const amount = await computeRewardAmount(p.role, b.stay_price_ore, c);
     if (amount <= 0) continue;
+    // Cap: a member can hold at most N unused referral bonuses; they must use some before earning more
+    const unused = await one<{ n: number }>(`SELECT count(*)::int AS n FROM reward_credits WHERE user_id=$1 AND source='referral' AND status IN ('pending_vest','available')`, [p.user.id], c);
+    if (maxUnused > 0 && (unused?.n ?? 0) >= maxUnused) {
+      await audit(c, SYSTEM, 'reward.skipped_cap_reached', 'user', p.user.id, undefined, { referral: ref.id, maxUnused });
+      await enqueue({ userId: p.user.id, to: p.user.email, type: 'reward_cap', dedupeKey: `reward_cap:${ref.id}:${p.role}`,
+        subject: 'Du har nådd maks antall ubrukte vervebonuser',
+        body: `Hei ${p.user.name}! Du har ${unused!.n} ubrukte vervebonuser, som er maksimum. Bruk bonusen på en booking for å kunne tjene nye.` }, c);
+      continue;
+    }
     const credit = await one<{ id: string }>(
       `INSERT INTO reward_credits (user_id, referral_id, source, role_in_referral, amount_ore, remaining_amount_ore, vests_at, expires_at)
        VALUES ($1,$2,'referral',$3,$4,$4, now() + make_interval(days => $5), now() + make_interval(days => $6))

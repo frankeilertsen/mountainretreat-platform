@@ -1,9 +1,7 @@
 import Link from 'next/link';
 import { requireUser } from '@/lib/auth/current';
 import { q } from '@/lib/db';
-import { rewardBalance } from '@/lib/domain/rewards';
-import { memberDiscount } from '@/lib/domain/memberDiscount';
-import { invitationsWithOutcome, rewardTerms } from '@/lib/domain/memberOverview';
+import { loadBenefits } from '@/lib/domain/benefits';
 import { fmtDate, nok } from '@/lib/format';
 import { Flash, PropertyMedia, Status, Empty } from '@/components/ui';
 import { BenefitCards } from '@/components/Benefits';
@@ -13,16 +11,17 @@ export const dynamic = 'force-dynamic';
 export default async function MemberHome({ searchParams }: { searchParams: Promise<Record<string, string>> }) {
   const sp = await searchParams;
   const u = await requireUser('request_booking');
-  const [props, history, bal, disc, invites, terms] = await Promise.all([
+  const [props, history, benefits] = await Promise.all([
     q(`SELECT p.id, p.slug, p.name, p.short_description, p.max_guests,
               (SELECT ph.id FROM photos ph WHERE ph.entity_type='property' AND ph.entity_id=p.id ORDER BY ph.created_at LIMIT 1) AS photo_id,
-              (SELECT min(sc.price_per_night_ore) FROM season_categories sc WHERE sc.property_id=p.id AND sc.active)::int AS from_price
+              (CASE WHEN p.pricing_mode='airbnb' THEN (SELECT min(r.price_ore) FROM external_nightly_rates r WHERE r.property_id=p.id AND r.date BETWEEN current_date AND current_date + 90) ELSE (SELECT min(sc.price_per_night_ore) FROM season_categories sc WHERE sc.property_id=p.id AND sc.active) END)::int AS from_price
        FROM properties p WHERE p.active ORDER BY p.name`),
     q(`SELECT b.id, b.reference, b.status, to_char(b.start_date,'YYYY-MM-DD') AS start, to_char(b.end_date,'YYYY-MM-DD') AS "end", b.price_total_ore, p.name AS property,
               (b.price_breakdown->'quote'->>'member_discount_pct')::numeric AS disc
        FROM bookings b JOIN properties p ON p.id=b.property_id WHERE b.member_id=$1 ORDER BY b.start_date DESC LIMIT 12`, [u.id]),
-    rewardBalance(u.id), memberDiscount(u.id), invitationsWithOutcome(u.id), rewardTerms(),
+    loadBenefits(u.id),
   ]);
+  const { disc, invites, terms } = benefits;
   const upcoming = history.filter(b => ['pending_review', 'awaiting_payment', 'confirmed', 'cancellation_requested'].includes(b.status));
   return (
     <>
@@ -31,7 +30,7 @@ export default async function MemberHome({ searchParams }: { searchParams: Promi
         <Link href="/medlem/fordeler" className="btn secondary small">Slik fungerer fordelene</Link>
       </div>
       <Flash sp={sp} />
-      <BenefitCards disc={disc} balance={bal.available} pending={bal.pending} invited={invites.length} qualified={invites.filter(i => i.stage === 'qualified').length} terms={terms} />
+      <BenefitCards {...benefits} />
 
       <h2 style={{ marginTop: 40 }}>Boliger</h2>
       <div className="grid g3">

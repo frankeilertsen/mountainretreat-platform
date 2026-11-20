@@ -9,6 +9,7 @@ import { addDays, fmtDate, fmtTime, nok, todayOslo } from '@/lib/format';
 import { DomainError } from '@/lib/errors';
 import { Flash, PropertyMedia } from '@/components/ui';
 import { MonthCalendar } from '@/components/MonthCalendar';
+import { SavingsBreakdown } from '@/components/Savings';
 import { requestBookingAction } from '../../../actions/member';
 import crypto from 'crypto';
 
@@ -18,7 +19,7 @@ export default async function PropertyPage({ params, searchParams }: { params: P
   const { slug } = await params;
   const sp = await searchParams;
   const u = await requireUser('request_booking');
-  const p = await one(`SELECT id, name, address, description, amenities, house_rules, max_guests, to_char(check_in_time,'HH24:MI') AS cin, to_char(check_out_time,'HH24:MI') AS cout, cleaning_fee_ore,
+  const p = await one(`SELECT id, name, address, description, pricing_mode, amenities, house_rules, max_guests, to_char(check_in_time,'HH24:MI') AS cin, to_char(check_out_time,'HH24:MI') AS cout, cleaning_fee_ore,
      (SELECT ph.id FROM photos ph WHERE ph.entity_type='property' AND ph.entity_id=properties.id ORDER BY ph.created_at LIMIT 1) AS photo_id
      FROM properties WHERE slug=$1 AND active`, [slug]);
   if (!p) notFound();
@@ -28,6 +29,8 @@ export default async function PropertyPage({ params, searchParams }: { params: P
   const addOns = await q(`SELECT id, name, description, price_type, unit_price_ore, mandatory FROM add_on_items WHERE (property_id=$1 OR property_id IS NULL) AND active ORDER BY mandatory DESC, name`, [p.id]);
   const bal = await rewardBalance(u.id);
   const disc = await memberDiscount(u.id);
+  const airbnbFee = Number((await one<{ value: string }>(`SELECT value FROM platform_settings WHERE key='airbnb_guest_fee_pct'`))?.value ?? 15);
+  const rateStats = p.pricing_mode === 'airbnb' ? await one<{ min: number; avg: number }>(`SELECT min(price_ore)::int AS min, avg(price_ore)::int AS avg FROM external_nightly_rates WHERE property_id=$1 AND date BETWEEN current_date AND current_date + 90`, [p.id]) : null;
 
   const fra = sp.fra, til = sp.til;
   const adults = Math.max(1, parseInt(sp.voksne ?? '2', 10) || 1), children = Math.max(0, parseInt(sp.barn ?? '0', 10) || 0), infants = Math.max(0, parseInt(sp.sped ?? '0', 10) || 0);
@@ -56,8 +59,16 @@ export default async function PropertyPage({ params, searchParams }: { params: P
           {p.house_rules && <p className="muted"><strong>Husregler:</strong> {p.house_rules}</p>}
           <div className="card flat">
             <h3>Priser</h3>
-            {seasons.map(s => <div key={s.name} className="row between"><span><i style={{ display: 'inline-block', width: 10, height: 10, borderRadius: 3, background: s.color ?? '#ccc', marginRight: 8 }} />{s.name} <small>· min. {s.min_nights} netter</small></span><span><small className="muted" style={{ textDecoration: 'line-through', marginRight: 8 }}>{nok(s.price_per_night_ore)}</small>{nok(s.price_per_night_ore * (1 - disc.totalPct / 100))} <small>/ natt</small></span></div>)}
-            <small className="muted">Din medlemsrabatt på <strong style={{ color: 'var(--gold-2)' }}>{disc.totalPct} %</strong> er trukket fra{disc.atMax ? '' : ` – neste booking gir ${disc.nextTotalPct} %`}. Lengre opphold gir ekstra rabatt.</small>
+            {p.pricing_mode === 'airbnb' ? (
+              rateStats?.min ? <>
+                <div className="row between"><span>Airbnb-pris de neste 3 mnd</span><span>fra {nok(rateStats.min)} <small>/ natt</small></span></div>
+                <div className="row between" style={{ color: 'var(--gold-2)' }}><span>Din pris</span><span>fra {nok(rateStats.min * (1 - disc.totalPct / 100))} <small>/ natt</small></span></div>
+                <small className="muted">Prisene følger Airbnb. Du slipper Airbnbs serviceavgift på ca. {airbnbFee} %, og får {disc.totalPct} % medlemsrabatt{disc.loyaltyPct ? ` (inkl. ${disc.loyaltyPct} % lojalitet)` : ''} i tillegg. <a href="/medlem/fordeler">Slik regnes prisen →</a></small>
+              </> : <p className="muted">Prisene for de neste månedene er ikke lagt inn ennå.</p>
+            ) : <>
+              {seasons.map(s => <div key={s.name} className="row between"><span><i style={{ display: 'inline-block', width: 10, height: 10, borderRadius: 3, background: s.color ?? '#ccc', marginRight: 8 }} />{s.name} <small>· min. {s.min_nights} netter</small></span><span><small className="muted" style={{ textDecoration: 'line-through', marginRight: 8 }}>{nok(s.price_per_night_ore)}</small>{nok(s.price_per_night_ore * (1 - disc.totalPct / 100))} <small>/ natt</small></span></div>)}
+              <small className="muted">Din medlemsrabatt på <strong style={{ color: 'var(--gold-2)' }}>{disc.totalPct} %</strong> er trukket fra{disc.atMax ? '' : ` – neste booking gir ${disc.nextTotalPct} %`}.</small>
+            </>}
           </div>
         </div>
 
@@ -87,14 +98,7 @@ export default async function PropertyPage({ params, searchParams }: { params: P
           {quoteErr && <div className="flash err" style={{ marginTop: 16 }}>{quoteErr}</div>}
           {quote && (
             <form action={requestBookingAction} style={{ marginTop: 20 }}>
-              <div className="price-lines">
-                <div className="row"><span>{quote.nights} netter, ordinær pris</span><span>{nok(quote.stay_ore + quote.member_discount_ore)}</span></div>
-                {quote.member_discount_ore > 0 && <div className="row" style={{ color: 'var(--gold-2)' }}><span>Medlemsrabatt {quote.member_discount_pct} %</span><span>−{nok(quote.member_discount_ore)}</span></div>}
-                {quote.nightLines.some(n => n.los_discount_pct > 0) && <div className="row muted"><span>inkl. langtidsrabatt {quote.nightLines[0].los_discount_pct} %</span><span></span></div>}
-                <div className="row"><span>Sluttrengjøring</span><span>{nok(quote.cleaning_fee_ore)}</span></div>
-                {quote.add_ons.map(a => <div key={a.id} className="row"><span>{a.name}{a.quantity > 1 ? ` × ${a.quantity}` : ''}</span><span>{nok(a.total_ore)}</span></div>)}
-                <div className="row price-total"><span>Totalt</span><span>{nok(quote.subtotal_ore)}</span></div>
-              </div>
+              <SavingsBreakdown quote={quote} rewardOre={bal.available > 0 ? Math.min(bal.available, quote.subtotal_ore) : 0} rewardEstimated />
               <p className="muted" style={{ fontSize: '.82rem' }}>{fmtDate(fra!, true)} – {fmtDate(til!, true)}. Endelig pris låses når forespørselen godkjennes.</p>
               <input type="hidden" name="propertyId" value={p.id} /><input type="hidden" name="slug" value={slug} />
               <input type="hidden" name="fra" value={fra} /><input type="hidden" name="til" value={til} />

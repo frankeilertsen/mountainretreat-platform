@@ -49,6 +49,12 @@ export async function seed() {
     'Lys og luftig hytte over to plan med åpen stue/kjøkken, peis og en 8,6 meter lang veranda med utsikt. Fire soverom og loftstue med sovesofa – plass til åtte.',
     ARRAY['Peis','Veranda','Fullt utstyrt kjøkken','Vaskemaskin','Wi-Fi','Parkering','Barneseng','Skiboks'],
     'Ingen røyking innendørs. Dyr etter avtale. Ro etter kl. 23.', 8, '15:00', '11:00', 120000, $1) RETURNING id`, [superAdmin]))!.id;
+  // The cabin follows its Airbnb prices (default). Demo rates: 1 800 kr weekdays, 2 300 kr Fri/Sat, 3 200 kr Christmas.
+  for (let i = -2; i < 400; i++) {
+    const d = addDays(today, i); const wd = new Date(d + 'T12:00:00Z').getUTCDay();
+    const price = d >= '2026-12-21' && d <= '2027-01-01' ? 320000 : wd === 5 || wd === 6 ? 230000 : 180000;
+    await db.query(`INSERT INTO external_nightly_rates (property_id, date, price_ore, source) VALUES ($1,$2,$3,'manual_entry')`, [cabin, d, price]);
+  }
   const room = async (pid: string, name: string, floor: string, desc: string, cap: number, instr: string, order: number) =>
     (await one<{ id: string }>(`INSERT INTO rooms (property_id, name, floor, description, max_capacity, bedding_instructions, sort_order) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id`, [pid, name, floor, desc, cap, instr, order]))!.id;
   const bed = async (pid: string, roomId: string, label: string, type: string, sleeps: number, prio: number, w?: number, l?: number, kidsOnly = false) =>
@@ -67,9 +73,9 @@ export async function seed() {
   await bed(cabin, r4, 'Ekstra madrass', 'extra_mattress', 1, 95, 80, 190);
 
   // ---------------- Property 2: example apartment from the brief
-  const apt = (await one<{ id: string }>(`INSERT INTO properties (slug, name, address, short_description, description, amenities, max_guests, check_in_time, check_out_time, cleaning_fee_ore, owner_user_id)
+  const apt = (await one<{ id: string }>(`INSERT INTO properties (slug, name, address, short_description, description, amenities, max_guests, check_in_time, check_out_time, cleaning_fee_ore, owner_user_id, pricing_mode)
     VALUES ('leilighet-a', 'Leilighet A – Ålesund sentrum', 'Kongens gate 5, 6002 Ålesund', 'Moderne byleilighet med utsikt over Brosundet.',
-    'To soverom, åpen stue med sovesofa og balkong. Gangavstand til alt.', ARRAY['Balkong','Wi-Fi','Heis','Oppvaskmaskin'], 5, '16:00', '11:00', 80000, $1) RETURNING id`, [superAdmin]))!.id;
+    'To soverom, åpen stue med sovesofa og balkong. Gangavstand til alt.', ARRAY['Balkong','Wi-Fi','Heis','Oppvaskmaskin'], 5, '16:00', '11:00', 80000, $1, 'manual') RETURNING id`, [superAdmin]))!.id;
   const a1 = await room(apt, 'Soverom 1', '', 'Dobbeltseng.', 2, 'Standard dobbeltseng.', 1);
   const a2 = await room(apt, 'Soverom 2', '', 'Køyeseng.', 2, '', 2);
   const a3 = await room(apt, 'Stue', '', 'Sovesofa.', 2, 'Kun ved behov.', 3);

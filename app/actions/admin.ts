@@ -215,7 +215,7 @@ export async function revokeRewardAction(f: FormData) {
 // ------------------------------------------------ settings
 const SETTING_KEYS = ['booking_hold_duration_hours', 'invoice_due_date_days', 'cancellation_approval_timeout_hours', 'ical_poll_interval_minutes', 'ical_failure_alert_threshold',
   'invitation_validity_days', 'referral_reward_type', 'referral_reward_referrer_ore', 'referral_reward_referred_ore', 'referral_reward_percentage', 'referral_reward_max_ore',
-  'referral_reward_vesting_days', 'referral_reward_validity_days', 'referral_min_qualifying_amount_ore', 'audit_log_retention_days', 'notification_log_retention_days', 'short_turnaround_hours', 'invoice_bank_account', 'company_name', 'member_base_discount_pct', 'member_loyalty_step_pct', 'member_loyalty_max_pct', 'cleaning_same_day_reminder_hour'];
+  'referral_reward_vesting_days', 'referral_reward_validity_days', 'referral_min_qualifying_amount_ore', 'audit_log_retention_days', 'notification_log_retention_days', 'short_turnaround_hours', 'invoice_bank_account', 'company_name', 'member_base_discount_pct', 'airbnb_guest_fee_pct', 'referral_reward_max_unused', 'member_loyalty_step_pct', 'member_loyalty_max_pct', 'cleaning_same_day_reminder_hour'];
 export async function saveSettingsAction(f: FormData) {
   const { actor } = await admin();
   await run(str(f, 'back') || '/admin/innstillinger', async () => {
