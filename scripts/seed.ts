@@ -8,6 +8,7 @@ import { qualifyReferralForBooking } from '../lib/domain/rewards';
 import { reconcileCleaningTasks, upsertBookingPreparation } from '../lib/domain/cleaning';
 import { applySnapshot } from '../lib/channels/sync';
 import { setMaxGuests, syncMaxGuests } from '../lib/domain/capacity';
+import { openConversation, postMessage, startConversation } from '../lib/domain/messages';
 
 /**
  * Test data for every role and workflow. Log in via /login → "Utviklerinnlogging" (DEV_LOGIN=1),
@@ -156,6 +157,13 @@ export async function seed() {
     await qualifyReferralForBooking(c, b!.id);
     await c.query(`UPDATE reward_credits SET vests_at = now() - interval '1 day', status='available'`);
   });
+
+  // Messages: Kari asked about her stay and got an answer; Ola's question is waiting for a reply
+  const adminU = await asMember(superAdmin);
+  const c1 = await startConversation(kariM, { subject: 'Ved og sen ankomst', body: 'Hei! Vi kommer ca. kl. 21. Er det ved på hytta, eller bør vi bestille vedsekk?', bookingId: b1.id }, { id: kari, type: 'member' });
+  await openConversation(adminU, c1);
+  await postMessage(adminU, c1, 'Hei Kari! Det står to sekker ved i boden, så det holder for et par kvelder. Nøkkelboksen fungerer hele døgnet – god tur!', { id: superAdmin, type: 'admin' });
+  await startConversation(olaM, { subject: 'Plass til seks?', body: 'Hei, vi er kanskje seks personer på bursdagen. Går det an å legge til én person i forespørselen?' }, { id: ola, type: 'member' });
 
   // Manual block (owner use)
   await db.query(`INSERT INTO availability_blocks (property_id, date_range, block_type, reason, created_by_user_id) VALUES ($1, daterange($2::date,$3::date,'[)'), 'manual_admin', 'Eiers bruk / vedlikehold', $4)`, [cabin, addDays(today, 40), addDays(today, 44), superAdmin]);

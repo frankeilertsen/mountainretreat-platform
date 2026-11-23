@@ -3,6 +3,7 @@ import { requireUser } from '@/lib/auth/current';
 import { one } from '@/lib/db';
 import { SideNav } from '@/components/SideNav';
 import { Logo } from '@/components/Logo';
+import { adminUnansweredCount } from '@/lib/domain/messages';
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const u = await requireUser('admin');
@@ -14,6 +15,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     (SELECT count(*) FROM cleaning_reports WHERE resolved_at IS NULL AND kind <> 'comment')::int AS reports,
     (SELECT count(*) FROM refunds WHERE status IN ('failed','pending'))::int AS refunds,
     (SELECT count(*) FROM long_term_inquiries WHERE status='new')::int AS inquiries`);
+  const unanswered = await adminUnansweredCount();
   return (
     <div className="admin-shell">
       <aside className="sidebar">
@@ -27,6 +29,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           { href: '/admin/kanaler', label: 'Kanaler og synk', badge: c?.sync, danger: true },
           { group: 'Medlemmer' },
           { href: '/admin/medlemmer', label: 'Medlemmer og ansatte', badge: c?.loyalty },
+          { href: '/admin/meldinger', label: 'Meldinger', badge: unanswered },
           { href: '/admin/bonus', label: 'Medlemsfordeler' },
           { href: '/admin/foresporsler', label: 'Fast leie – forespørsler', badge: c?.inquiries },
           { group: 'Økonomi' },

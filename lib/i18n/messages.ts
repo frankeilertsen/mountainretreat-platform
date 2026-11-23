@@ -2,6 +2,20 @@ import type { Lang } from './dict';
 
 /** English versions of the Norwegian messages guests can see (flash messages and validation errors). */
 const EXACT: Record<string, string> = {
+  'Meldingen er sendt.': 'Your message has been sent.',
+  'Svaret er sendt.': 'Your reply has been sent.',
+  'Skriv en melding.': 'Please write a message.',
+  'Skriv et emne.': 'Please enter a subject.',
+  'Meldingen er for lang (maks 5000 tegn).': 'The message is too long (max 5,000 characters).',
+  'Fant ikke samtalen.': 'Conversation not found.',
+  'Bookingen tilhører ikke dette medlemmet.': 'That booking does not belong to you.',
+  'Bekreftelseskoden mangler. Last siden på nytt og prøv igjen.': 'The verification code is missing. Reload the page and try again.',
+  'Bekreftelseskoden er utløpt. Skriv inn den nye koden.': 'The verification code has expired. Please enter the new code.',
+  'Skjemaet ble sendt for raskt. Prøv igjen.': 'The form was sent too quickly. Please try again.',
+  'Bekreftelseskoden er allerede brukt. Skriv inn den nye koden.': 'That verification code has already been used. Please enter the new code.',
+  'Feil bekreftelseskode. Prøv igjen med den nye koden.': 'Wrong verification code. Please try again with the new code.',
+  'Bekreft at du ikke er en robot.': 'Please confirm that you are not a robot.',
+  'Kunne ikke bekrefte skjemaet akkurat nå. Prøv igjen om litt.': 'We could not verify the form right now. Please try again shortly.',
   'Du er logget ut.': 'You have been logged out.',
   'Lenken er utløpt eller allerede brukt. Be om en ny.': 'The link has expired or has already been used. Please request a new one.',
   'Innloggingen feilet.': 'Login failed.',

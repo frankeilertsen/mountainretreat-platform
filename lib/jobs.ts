@@ -108,6 +108,7 @@ async function retentionPurge() {
     await c.query(`DELETE FROM login_tokens WHERE expires_at < now() - interval '7 days'`);
     await c.query(`DELETE FROM sessions WHERE expires_at < now() - interval '30 days'`);
     await c.query(`DELETE FROM rate_limits WHERE window_start < now() - interval '1 day'`);
+    await c.query(`DELETE FROM captcha_used WHERE used_at < now() - interval '1 day'`);
     await audit(c, SYSTEM, 'retention.purge', 'system', null, undefined, { audit: a.rowCount, notifications: n.rowCount });
     return { audit: a.rowCount, notifications: n.rowCount };
   });

@@ -3,7 +3,7 @@ import { fileURLToPath } from 'url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  serverExternalPackages: ['pg', 'node-ical'],
+  serverExternalPackages: ['pg', 'node-ical', 'svg-captcha'],
   webpack(config) { config.resolve.alias['@'] = __dirname; return config; },
   experimental: { serverActions: { bodySizeLimit: '12mb' } },
   async headers() {

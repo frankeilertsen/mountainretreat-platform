@@ -6,11 +6,13 @@ import { SideNav, NavItem } from '@/components/SideNav';
 import { Logo } from '@/components/Logo';
 import { getT } from '@/lib/i18n/lang';
 import { LangSwitch } from '@/components/LangSwitch';
+import { memberUnreadCount } from '@/lib/domain/messages';
 
 export default async function MemberLayout({ children }: { children: React.ReactNode }) {
   const u = await requireUser('request_booking');
   const { lang, t } = await getT();
   const N = t.nav;
+  const unread = await memberUnreadCount(u.id);
   const props = await q<{ slug: string; name: string }>(`SELECT slug, name FROM properties WHERE active ORDER BY name`);
   const items: NavItem[] = [
     { href: '/medlem', label: N.overview },
@@ -21,6 +23,7 @@ export default async function MemberLayout({ children }: { children: React.React
     { href: '/medlem/bookinger', label: N.bookings },
     { href: '/medlem/invitasjoner', label: can(u as any, 'invite') ? N.invite : N.invitations },
     { href: '/medlem/bonus', label: N.wallet },
+    { href: '/medlem/meldinger', label: N.messages, badge: unread },
     { href: '/medlem/profil', label: N.profile },
   ];
   if (isAdmin(u as any)) items.push({ group: N.admin }, { href: '/admin', label: N.toAdmin });

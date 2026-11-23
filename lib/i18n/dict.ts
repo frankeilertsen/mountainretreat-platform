@@ -35,6 +35,8 @@ const no = {
     durations: ['1–3 måneder', '3–6 måneder', '6–12 måneder', 'Over 12 måneder', 'Usikker'], persons: 'Antall personer', message: 'Melding',
     messagePh: 'Hvem er dere, hva trenger dere, eventuelle spørsmål …', consent: 'Jeg samtykker til at FKE Property AS lagrer opplysningene for å besvare henvendelsen',
     submit: 'Send forespørsel', thanksTitle: 'Takk for forespørselen!', thanksText: 'Vi har mottatt henvendelsen din og tar kontakt så snart vi kan. Du har også fått en bekreftelse på e-post.', backHome: 'Tilbake til forsiden',
+    captcha: 'Bekreft at du er et menneske', captchaHelp: 'Skriv inn bokstavene og tallene i bildet. Store eller små bokstaver spiller ingen rolle.', newCode: 'Ny kode', captchaAlt: 'Bekreftelseskode med bokstaver og tall',
+    captchaHelpAlt: 'Får du ikke til koden? Send oss en e-post på frank@mountainretreat.no.', sending: 'Sender …',
   },
   login: {
     eyebrow: 'Medlemsinnlogging', title: 'Logg inn', email: 'E-post', submit: 'Send innloggingslenke',
@@ -55,7 +57,7 @@ const no = {
     name: 'Fullt navn', email: 'E-post', phoneHelper: 'Mobil (for SMS-varsler)', phone: 'Mobil (valgfritt)', terms: 'Jeg godtar vilkårene og har lest', privacyLink: 'personvernerklæringen',
     marketing: 'Ja takk, gi meg beskjed om ledige perioder og nyheter (valgfritt).', createMember: 'Opprett konto', createHelper: 'Registrer meg',
   },
-  nav: { overview: 'Oversikt', benefits: 'Medlemsfordeler', properties: 'Boliger', myPage: 'Min side', bookings: 'Mine bookinger', invite: 'Inviter venner', invitations: 'Invitasjoner', wallet: 'Bonuslommebok', profile: 'Profil og personvern', admin: 'Administrasjon', toAdmin: 'Til admin', member: 'Medlem', tagline: 'Venner og familie' },
+  nav: { overview: 'Oversikt', benefits: 'Medlemsfordeler', properties: 'Boliger', myPage: 'Min side', bookings: 'Mine bookinger', invite: 'Inviter venner', invitations: 'Invitasjoner', wallet: 'Bonuslommebok', messages: 'Meldinger', profile: 'Profil og personvern', admin: 'Administrasjon', toAdmin: 'Til admin', member: 'Medlem', tagline: 'Venner og familie' },
   status: {
     pending_review: 'Venter på godkjenning', rejected: 'Avslått', awaiting_payment: 'Venter på betaling', expired: 'Utløpt', confirmed: 'Bekreftet', cancellation_requested: 'Kansellering forespurt',
     cancelled: 'Kansellert', completed: 'Fullført', pending: 'Venter', succeeded: 'Betalt', failed: 'Feilet', refunded: 'Refundert', partially_refunded: 'Delvis refundert',
@@ -150,11 +152,21 @@ const no = {
       'Vi behandler kun opplysningene som trengs for å administrere medlemskap og bookinger: navn, e-post, telefon (valgfritt), bookinghistorikk, betalingsstatus og vervebonus. Kortopplysninger håndteres av betalingsleverandøren (Stripe) og lagres aldri hos oss.',
       'Renholdere ser kun datoer, tider, antall gjester og praktiske instruksjoner – aldri navn, kontaktinfo eller priser.',
       'Data lagres i EU/EØS. Du kan når som helst laste ned dine data eller be om anonymisering fra profilsiden. Regnskapsdata oppbevares i henhold til bokføringsloven (5 år) under anonymisert ID.',
-      'Henvendelser om fast leie lagres for å kunne besvare dem, og slettes når de ikke lenger er nødvendige.',
+      'Henvendelser om fast leie lagres for å kunne besvare dem, og slettes når de ikke lenger er nødvendige. Skjemaet er beskyttet mot spam med en bekreftelseskode som lages på vår egen server.',
+      'Meldinger mellom deg og administrasjonen lagres som en samlet historikk, og er bare synlige for deg og administratorene. De er med i dataeksporten fra profilsiden.',
       'Behandlingsgrunnlag: avtale (GDPR art. 6 nr. 1 b). Spørsmål: post@mountainretreat.no',
     ],
   },
   cal: { busy: 'Opptatt', free: 'Ledig' },
+  msg: {
+    eyebrow: 'Kontakt oss', title: 'Meldinger', lead: 'Still spørsmål om opphold, bookinger eller noe annet. Vi svarer så snart vi kan, og du får beskjed på e-post når vi har svart.',
+    newTitle: 'Ny melding', subject: 'Emne', subjectPh: 'F.eks. Spørsmål om ved og parkering', booking: 'Gjelder booking (valgfritt)', noBooking: 'Ingen bestemt booking',
+    message: 'Melding', messagePh: 'Skriv meldingen din her …', send: 'Send melding', reply: 'Svar', replyPh: 'Skriv et svar …', sendReply: 'Send svar', sending: 'Sender …',
+    inbox: 'Dine samtaler', none: 'Ingen meldinger ennå. Send oss gjerne en melding hvis du lurer på noe.', unread: (n: number) => `${n} ulest${n === 1 ? '' : 'e'}`,
+    back: '← Alle meldinger', you: 'Deg', team: 'Mountain Retreat', closed: 'Samtalen er avsluttet. Skriver du et nytt svar, åpnes den igjen.', open: 'Åpen', closedBadge: 'Avsluttet',
+    about: 'Gjelder', count: (n: number) => `${n} melding${n === 1 ? '' : 'er'}`, sent: 'Meldingen er sendt.', askAbout: 'Spør oss om denne bookingen', waiting: 'Venter på svar', answered: 'Besvart',
+    enterHint: 'Ctrl/⌘ + Enter sender', autoUpdate: 'Oppdateres automatisk',
+  },
 };
 
 type Dict = typeof no;
@@ -190,6 +202,8 @@ const en: Dict = {
     durations: ['1–3 months', '3–6 months', '6–12 months', 'More than 12 months', 'Not sure'], persons: 'Number of people', message: 'Message',
     messagePh: 'Who you are, what you need, any questions …', consent: 'I consent to FKE Property AS storing this information in order to respond to my enquiry',
     submit: 'Send enquiry', thanksTitle: 'Thank you for your enquiry!', thanksText: 'We have received your enquiry and will get back to you as soon as we can. A confirmation has been sent to your email.', backHome: 'Back to the home page',
+    captcha: 'Confirm that you are human', captchaHelp: 'Type the letters and numbers shown in the picture. Upper or lower case does not matter.', newCode: 'New code', captchaAlt: 'Verification code with letters and numbers',
+    captchaHelpAlt: 'Having trouble with the code? Email us at frank@mountainretreat.no.', sending: 'Sending …',
   },
   login: {
     eyebrow: 'Member login', title: 'Log in', email: 'Email', submit: 'Send login link',
@@ -210,7 +224,7 @@ const en: Dict = {
     name: 'Full name', email: 'Email', phoneHelper: 'Mobile (for SMS alerts)', phone: 'Mobile (optional)', terms: 'I accept the terms and have read the', privacyLink: 'privacy policy',
     marketing: 'Yes please, let me know about available dates and news (optional).', createMember: 'Create account', createHelper: 'Register',
   },
-  nav: { overview: 'Overview', benefits: 'Member benefits', properties: 'Properties', myPage: 'My page', bookings: 'My bookings', invite: 'Invite friends', invitations: 'Invitations', wallet: 'Bonus wallet', profile: 'Profile & privacy', admin: 'Administration', toAdmin: 'Go to admin', member: 'Member', tagline: 'Friends & family' },
+  nav: { overview: 'Overview', benefits: 'Member benefits', properties: 'Properties', myPage: 'My page', bookings: 'My bookings', invite: 'Invite friends', invitations: 'Invitations', wallet: 'Bonus wallet', messages: 'Messages', profile: 'Profile & privacy', admin: 'Administration', toAdmin: 'Go to admin', member: 'Member', tagline: 'Friends & family' },
   status: {
     pending_review: 'Awaiting approval', rejected: 'Declined', awaiting_payment: 'Awaiting payment', expired: 'Expired', confirmed: 'Confirmed', cancellation_requested: 'Cancellation requested',
     cancelled: 'Cancelled', completed: 'Completed', pending: 'Pending', succeeded: 'Paid', failed: 'Failed', refunded: 'Refunded', partially_refunded: 'Partly refunded',
@@ -305,11 +319,21 @@ const en: Dict = {
       'We only process the information needed to manage memberships and bookings: name, email, phone (optional), booking history, payment status and referral bonuses. Card details are handled by the payment provider (Stripe) and are never stored by us.',
       'Cleaners only see dates, times, number of guests and practical instructions – never names, contact details or prices.',
       'Data is stored in the EU/EEA. You can download your data or request anonymisation from your profile page at any time. Accounting data is kept in accordance with the Norwegian Bookkeeping Act (5 years) under an anonymised ID.',
-      'Long-term rental enquiries are stored in order to respond to them and are deleted when no longer needed.',
+      'Long-term rental enquiries are stored in order to respond to them and are deleted when no longer needed. The form is protected against spam with a verification code generated on our own server.',
+      'Messages between you and the administration are stored as a single history and are visible only to you and the administrators. They are included in the data export on your profile page.',
       'Legal basis: contract (GDPR Art. 6(1)(b)). Questions: post@mountainretreat.no',
     ],
   },
   cal: { busy: 'Booked', free: 'Available' },
+  msg: {
+    eyebrow: 'Contact us', title: 'Messages', lead: 'Ask us about stays, bookings or anything else. We reply as soon as we can, and you will get an email when we have answered.',
+    newTitle: 'New message', subject: 'Subject', subjectPh: 'E.g. Question about firewood and parking', booking: 'Related booking (optional)', noBooking: 'No specific booking',
+    message: 'Message', messagePh: 'Write your message here …', send: 'Send message', reply: 'Reply', replyPh: 'Write a reply …', sendReply: 'Send reply', sending: 'Sending …',
+    inbox: 'Your conversations', none: 'No messages yet. Feel free to send us a message if you have any questions.', unread: (n: number) => `${n} unread`,
+    back: '← All messages', you: 'You', team: 'Mountain Retreat', closed: 'This conversation has been closed. Writing a new reply will reopen it.', open: 'Open', closedBadge: 'Closed',
+    about: 'Regarding', count: (n: number) => `${n} message${n === 1 ? '' : 's'}`, sent: 'Your message has been sent.', askAbout: 'Ask us about this booking', waiting: 'Awaiting reply', answered: 'Answered',
+    enterHint: 'Ctrl/⌘ + Enter sends', autoUpdate: 'Updates automatically',
+  },
 };
 
 export const dict = { no, en };

@@ -101,6 +101,7 @@ export default async function BookingDetail({ params, searchParams }: { params: 
                 {p.kid_number && p.status === 'pending' && <small>{T.kidLine(p.kid_number, fmtDate(p.due), bankAccount)}</small>}
                 {p.refunded_amount_ore > 0 && <small>{T.refunded(nok(p.refunded_amount_ore))}</small>}</li>))}</ul></div>
           )}
+          <Link href={`/medlem/meldinger?booking=${id}`} className="btn secondary">{t.msg.askAbout}</Link>
           {cancellable && (
             <div className="card flat">
               <h3>{T.cancelTitle}</h3>

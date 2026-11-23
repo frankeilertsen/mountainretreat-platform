@@ -35,7 +35,7 @@ export default async function AdminBooking({ params, searchParams }: { params: P
     <>
       <Link href="/admin/bookinger" className="muted">← Bookinger</Link>
       <div className="page-head row between" style={{ marginTop: 10 }}>
-        <div><span className="eyebrow">{b.reference}</span><h1 style={{ marginBottom: 0 }}>{b.member} · {b.property}</h1></div><Status s={b.status} />
+        <div><span className="eyebrow">{b.reference}</span><h1 style={{ marginBottom: 0 }}>{b.member} · {b.property}</h1></div><div className="row"><Link href={`/admin/meldinger/ny?medlem=${b.member_id}&booking=${b.id}`} className="btn secondary small">Send melding om bookingen</Link><Status s={b.status} /></div>
       </div>
       <Flash sp={sp} />
       <div className="grid g2" style={{ alignItems: 'start' }}>

@@ -5,11 +5,13 @@ import { getStr } from '../settings';
 import { audit } from '../audit';
 import { DomainError } from '../errors';
 import { fmtDate } from '../format';
+import { verifyChallenge } from '../captcha';
 
 export type LongTermInput = {
   name: string; email: string; phone?: string; propertyId?: string | null; moveIn?: string | null;
   duration?: string; persons?: number | null; message: string; consent: boolean; website?: string; // website = honeypot
   lang?: 'no' | 'en';
+  captcha?: { token?: string; answer?: string; turnstile?: string };
 };
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
@@ -23,9 +25,10 @@ export async function submitLongTermInquiry(i: LongTermInput, ip: string | null)
   if (message.length < 10) throw new DomainError('message', 'Fortell litt om hva du ser etter (minst 10 tegn).');
   if (!i.consent) throw new DomainError('consent', 'Du må samtykke til at vi lagrer henvendelsen.');
   if (i.moveIn && !/^\d{4}-\d{2}-\d{2}$/.test(i.moveIn)) throw new DomainError('date', 'Ugyldig dato.');
-  await rateLimit(`lt:ip:${ip ?? 'x'}`, 5, 3600);
-  await rateLimit(`lt:email:${email}`, 3, 86400);
   const db = getPool();
+  await rateLimit(`lt:ip:${ip ?? 'x'}`, 8, 3600);
+  await verifyChallenge(i.captcha ?? {}, ip, db);
+  await rateLimit(`lt:email:${email}`, 3, 86400);
   const prop = i.propertyId ? await one<{ id: string; name: string }>('SELECT id, name FROM properties WHERE id=$1 AND active', [i.propertyId], db) : null;
   const row = await one<{ id: string }>(
     `INSERT INTO long_term_inquiries (name, email, phone, property_id, move_in_date, duration, persons, message, ip_address)
