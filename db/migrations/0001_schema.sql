@@ -126,6 +126,7 @@ CREATE TABLE properties (
   cleaning_fee_ore  INTEGER NOT NULL DEFAULT 0 CHECK (cleaning_fee_ore >= 0),
   -- 'airbnb' (default): nightly prices follow the listing's Airbnb prices (external_nightly_rates)
   -- 'manual': nightly prices come from the season pricing below
+  airbnb_listing_url TEXT,                 -- public Airbnb listing (shown on the front page, 'Book via Airbnb')
   pricing_mode      TEXT NOT NULL DEFAULT 'airbnb' CHECK (pricing_mode IN ('airbnb','manual')),
   default_min_nights INTEGER NOT NULL DEFAULT 2 CHECK (default_min_nights >= 1),
   -- The nightly price covers this many guests; each extra guest (infants excluded) pays the extra-guest fee
@@ -669,6 +670,23 @@ CREATE TABLE notifications (
   created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX idx_notifications_queued ON notifications (created_at) WHERE status = 'queued';
+
+-- Enquiries about long-term rental from the public front page
+CREATE TABLE long_term_inquiries (
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name            TEXT NOT NULL,
+  email           TEXT NOT NULL,
+  phone           TEXT,
+  property_id     UUID REFERENCES properties(id),
+  move_in_date    DATE,
+  duration        TEXT,
+  persons         INTEGER,
+  message         TEXT NOT NULL,
+  status          TEXT NOT NULL DEFAULT 'new' CHECK (status IN ('new','contacted','closed')),
+  ip_address      INET,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX idx_long_term_inquiries_created ON long_term_inquiries (created_at DESC);
 
 CREATE TABLE job_runs (
   id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),

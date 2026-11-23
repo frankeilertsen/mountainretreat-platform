@@ -217,3 +217,17 @@ main { padding: 44px 0 90px; }
 .logo-label { font-size: .6rem; letter-spacing: .32em; text-transform: uppercase; color: var(--gold); font-weight: 500; }
 .sidebar .logo { padding: 4px 12px 24px; margin-bottom: 8px; border-bottom: 1px solid var(--line); width: 100%; }
 .hero-logo { width: min(520px, 82vw); height: auto; margin: 0 auto 36px; display: block; }
+/* Public front page */
+.front { min-height: 100vh; display: flex; flex-direction: column; padding: 0; }
+.front-inner { flex: 1; max-width: 1120px; width: 100%; margin: 0 auto; padding: 64px 24px 40px; text-align: center; }
+.front-title { font-size: clamp(2rem, 4.4vw, 3.2rem); font-weight: 300; margin-bottom: 48px; }
+.choices { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 22px; text-align: left; }
+.choice { display: flex; flex-direction: column; background: linear-gradient(180deg, var(--surface-2), var(--surface)); border: 1px solid var(--line); border-radius: var(--radius); padding: 30px 28px; position: relative; transition: border-color .2s, transform .2s; }
+.choice:hover { border-color: var(--gold-line); transform: translateY(-2px); }
+.choice.featured { border-color: var(--gold-line); box-shadow: 0 0 0 1px var(--gold-soft), var(--shadow); }
+.choice.featured::before { content: ""; position: absolute; left: 28px; right: 28px; top: 0; height: 1px; background: linear-gradient(90deg, transparent, var(--gold), transparent); }
+.choice h2 { font-size: 1.9rem; font-weight: 400; margin-bottom: 12px; }
+.choice p { color: var(--ink-2); flex: 1; }
+.choice-cta { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
+.front-foot { text-align: center; padding: 24px; border-top: 1px solid var(--line); }
+@media (max-width: 900px) { .choices { grid-template-columns: 1fr; } .front-inner { padding-top: 40px; } }

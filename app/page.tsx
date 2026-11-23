@@ -1,46 +1,51 @@
 import Link from 'next/link';
-import { getSession } from '@/lib/auth/current';
-import { homeFor } from '@/lib/auth/rbac';
-import { getSettings } from '@/lib/settings';
+import { q } from '@/lib/db';
 
-export default async function Landing() {
-  const s = await getSession();
-  const st = await getSettings();
+export const dynamic = 'force-dynamic';
+
+/** Public front page: the three ways to stay at Mountain Retreat. */
+export default async function FrontPage() {
+  const listings = await q<{ name: string; airbnb_listing_url: string }>(
+    `SELECT name, airbnb_listing_url FROM properties WHERE active AND airbnb_listing_url IS NOT NULL AND airbnb_listing_url <> '' ORDER BY name`);
   return (
-    <>
-      <header className="topbar" style={{ background: 'transparent', borderBottom: 0, position: 'absolute', width: '100%' }}>
-        <div className="container">
-          <span />
-          {s && s.aal >= 2 ? <Link className="btn secondary small" href={homeFor(s as any)}>Til min side</Link> : <Link className="btn secondary small" href="/login">Logg inn</Link>}
+    <main className="front">
+      <div className="front-inner">
+        <img src="/brand/logo-light.png" alt="Mountain Retreat – mountainretreat.no" className="hero-logo" />
+        <span className="eyebrow">Velkommen</span>
+        <div className="gold-rule" />
+        <h1 className="front-title">Hvordan vil du bo hos oss?</h1>
+
+        <div className="choices">
+          <section className="choice">
+            <span className="eyebrow">Ferieleie</span>
+            <h2>Book via Airbnb</h2>
+            <p>For alle gjester. Se ledige datoer, priser og omtaler, og book trygt gjennom Airbnb.</p>
+            <div className="choice-cta">
+              {listings.length === 0 && <span className="btn secondary" aria-disabled="true" style={{ opacity: .5, cursor: 'default' }}>Kommer snart</span>}
+              {listings.map(l => (
+                <a key={l.airbnb_listing_url} href={l.airbnb_listing_url} target="_blank" rel="noopener noreferrer" className="btn secondary">
+                  {listings.length > 1 ? l.name : 'Gå til Airbnb'} ↗
+                </a>
+              ))}
+            </div>
+          </section>
+
+          <section className="choice featured">
+            <span className="eyebrow">Kun for inviterte</span>
+            <h2>Venner og familie</h2>
+            <p>Medlemsportalen for inviterte. Ingen Airbnb-avgift, fast medlemsrabatt og lojalitetsrabatt som øker for hver booking.</p>
+            <div className="choice-cta"><Link href="/venner" className="btn">Gå videre</Link></div>
+          </section>
+
+          <section className="choice">
+            <span className="eyebrow">Langtid</span>
+            <h2>Fast leie</h2>
+            <p>Ønsker du å leie over lengre tid? Send oss en forespørsel, så tar vi kontakt for å avtale vilkår.</p>
+            <div className="choice-cta"><Link href="/fast-leie" className="btn secondary">Send forespørsel</Link></div>
+          </section>
         </div>
-      </header>
-      <section className="hero">
-        <div style={{ position: 'relative', zIndex: 1 }}>
-          <img src="/brand/logo-light.png" alt="Mountain Retreat – mountainretreat.no" className="hero-logo" />
-          <span className="eyebrow">Kun for inviterte</span>
-          <div className="gold-rule" /><h1>Et stille sted i fjellet, <em>for de nærmeste.</em></h1>
-          <p>Mountain Retreat er FKE Property AS sin private bookingportal for venner og familie. Medlemskap skjer kun gjennom invitasjon.</p>
-          <div className="row" style={{ justifyContent: 'center' }}>
-            <Link href="/login" className="btn">Logg inn</Link>
-            <a href="#om" className="btn ghost">Slik fungerer det</a>
-          </div>
-        </div>
-      </section>
-      <section id="om" className="container" style={{ padding: '80px 24px' }}>
-        <div className="grid g4">
-          {[
-            ['Invitasjon', 'Du blir medlem når noen du kjenner inviterer deg. Ingen åpen registrering.'],
-            ['Forespørsel', 'Velg datoer og send en forespørsel. Vi bekrefter, og du betaler trygt via kort.'],
-            ['Medlemspriser', `Ingen Airbnb-avgift (ca. ${st.airbnb_guest_fee_pct} %), ${st.member_base_discount_pct} % medlemsrabatt – og opptil ${st.member_loyalty_max_pct} % ekstra lojalitetsrabatt, +${st.member_loyalty_step_pct} % per booking.`],
-            ['Del gleden', 'Inviter andre når medlemskapet ditt er godkjent – dere får begge bonus etter det første oppholdet.'],
-          ].map(([t, d]) => (
-            <div key={t}><span className="eyebrow">{t}</span><p style={{ fontFamily: 'var(--serif)', fontSize: '1.45rem', lineHeight: 1.35, color: 'var(--ink-2)' }}>{d}</p></div>
-          ))}
-        </div>
-      </section>
-      <footer className="container" style={{ padding: '40px 24px', borderTop: '1px solid var(--line)' }}>
-        <small>© FKE Property AS · Ålesund · <Link href="/personvern">Personvern</Link></small>
-      </footer>
-    </>
+      </div>
+      <footer className="front-foot"><small>© FKE Property AS · mountainretreat.no · <Link href="/personvern">Personvern</Link></small></footer>
+    </main>
   );
 }

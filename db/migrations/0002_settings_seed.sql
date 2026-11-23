@@ -19,6 +19,8 @@ INSERT INTO platform_settings (key, value) VALUES
   ('short_turnaround_hours', '6'),
   ('invoice_bank_account', '0000.00.00000'),
   ('company_name', 'FKE Property AS'),
+  ('long_term_contact_email', 'frank@mountainretreat.no'), -- receives long-term rental enquiries
+  ('long_term_inquiry_retention_days', '730'),
   ('member_base_discount_pct', '10'),       -- standard member discount on top of the Airbnb price without fee
   ('airbnb_guest_fee_pct', '15'),           -- Airbnb's guest service fee that members avoid (used for comparison)
   ('referral_reward_max_unused', '10'),     -- max unused referral bonuses a member can hold before using them

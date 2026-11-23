@@ -43,6 +43,7 @@ async function Details({ p }: { p: any }) {
         <div className="field"><label>Adresse (vises for renholdere og bekreftede gjester)</label><input name="address" defaultValue={p.address ?? ''} /></div>
         <div className="field"><label>Kort beskrivelse</label><input name="short_description" defaultValue={p.short_description ?? ''} /></div>
         <div className="field"><label>Beskrivelse</label><textarea name="description" defaultValue={p.description ?? ''} rows={5} /></div>
+        <div className="field"><label>Airbnb-annonse (vises på forsiden under «Book via Airbnb»)</label><input name="airbnb_listing_url" type="url" placeholder="https://www.airbnb.no/rooms/…" defaultValue={p.airbnb_listing_url ?? ''} /></div>
         <div className="field"><label>Fasiliteter (kommaseparert)</label><input name="amenities" defaultValue={(p.amenities ?? []).join(', ')} /></div>
         <div className="field"><label>Husregler</label><textarea name="house_rules" defaultValue={p.house_rules ?? ''} /></div>
         <div className="fields">

@@ -6,13 +6,14 @@ import { Logo } from '@/components/Logo';
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const u = await requireUser('admin');
-  const c = await one<{ pending: number; cancel: number; loyalty: number; sync: number; reports: number; refunds: number }>(`SELECT
+  const c = await one<{ pending: number; cancel: number; loyalty: number; sync: number; reports: number; refunds: number; inquiries: number }>(`SELECT
     (SELECT count(*) FROM bookings WHERE status='pending_review')::int AS pending,
     (SELECT count(*) FROM bookings WHERE status='cancellation_requested')::int AS cancel,
     (SELECT count(*) FROM loyalty_applications WHERE status='pending')::int AS loyalty,
     (SELECT count(*) FROM channel_connections WHERE active AND (last_sync_status='failure' OR id IN (SELECT connection_id FROM external_calendar_events WHERE sync_state='conflict')))::int AS sync,
     (SELECT count(*) FROM cleaning_reports WHERE resolved_at IS NULL AND kind <> 'comment')::int AS reports,
-    (SELECT count(*) FROM refunds WHERE status IN ('failed','pending'))::int AS refunds`);
+    (SELECT count(*) FROM refunds WHERE status IN ('failed','pending'))::int AS refunds,
+    (SELECT count(*) FROM long_term_inquiries WHERE status='new')::int AS inquiries`);
   return (
     <div className="admin-shell">
       <aside className="sidebar">
@@ -27,6 +28,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           { group: 'Medlemmer' },
           { href: '/admin/medlemmer', label: 'Medlemmer og ansatte', badge: c?.loyalty },
           { href: '/admin/bonus', label: 'Medlemsfordeler' },
+          { href: '/admin/foresporsler', label: 'Fast leie – forespørsler', badge: c?.inquiries },
           { group: 'Økonomi' },
           { href: '/admin/betalinger', label: 'Betalinger', badge: c?.refunds, danger: true },
           { href: '/admin/rapporter', label: 'Rapporter' },

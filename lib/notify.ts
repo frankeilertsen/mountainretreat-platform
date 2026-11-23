@@ -29,15 +29,15 @@ export async function notifyAdmins(n: Omit<NotificationInput, 'to' | 'userId'>, 
   }
 }
 
-export interface ChannelSender { send(to: string, subject: string, text: string): Promise<void>; }
+export interface ChannelSender { send(to: string, subject: string, text: string, opts?: { replyTo?: string }): Promise<void>; }
 
 class ResendEmail implements ChannelSender {
   constructor(private apiKey: string, private from: string) {}
-  async send(to: string, subject: string, text: string) {
+  async send(to: string, subject: string, text: string, opts?: { replyTo?: string }) {
     const res = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: { Authorization: `Bearer ${this.apiKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from: this.from, to, subject, text, html: renderHtml(subject, text) }),
+      body: JSON.stringify({ from: this.from, to, subject, text, html: renderHtml(subject, text), ...(opts?.replyTo ? { reply_to: opts.replyTo } : {}) }),
     });
     if (!res.ok) throw new Error(`Resend ${res.status}: ${await res.text()}`);
   }
@@ -92,15 +92,15 @@ export function smsSender(): ChannelSender {
 /** Deliver queued notifications (e-mail and SMS). Push is structured but has no sender yet. */
 export async function deliverQueued(limit = 50): Promise<{ sent: number; failed: number }> {
   const db = getPool();
-  const rows = await q<{ id: string; to_address: string; subject: string; body: string; channel: string }>(
+  const rows = await q<{ id: string; to_address: string; subject: string; body: string; channel: string; payload: any }>(
     `UPDATE notifications SET attempts = attempts + 1
      WHERE id IN (SELECT id FROM notifications WHERE status = 'queued' AND attempts < 5 ORDER BY created_at LIMIT $1 FOR UPDATE SKIP LOCKED)
-     RETURNING id, to_address, subject, body, channel`, [limit], db);
+     RETURNING id, to_address, subject, body, channel, payload`, [limit], db);
   const email = emailSender(), sms = smsSender();
   let sent = 0, failed = 0;
   for (const r of rows) {
     try {
-      if (r.channel === 'email') await email.send(r.to_address, r.subject, r.body);
+      if (r.channel === 'email') await email.send(r.to_address, r.subject, r.body, { replyTo: r.payload?.replyTo });
       else if (r.channel === 'sms') await sms.send(r.to_address, r.subject, r.body);
       else throw new Error(`No sender configured for channel ${r.channel}`);
       await db.query(`UPDATE notifications SET status='sent', sent_at=now(), last_error=NULL WHERE id=$1`, [r.id]);

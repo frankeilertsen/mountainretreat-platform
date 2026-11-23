@@ -10,6 +10,8 @@ Privat, invitasjonsbasert bookingplattform med medlemsportal, administrasjon, re
 
 | Område | Innhold |
 |---|---|
+| **Forside** | `mountainretreat.no` åpner med logoen og tre valg: **Book via Airbnb** (lenke til Airbnb-annonsen, settes per bolig under Boliger → Detaljer; vises som «Kommer snart» til lenken er lagt inn), **Venner og familie** (går videre til `/venner`, inngangen til medlemsportalen) og **Fast leie** (`/fast-leie`, kontaktskjema). |
+| **Fast leie** | Skjema med navn, e-post, telefon, bolig, ønsket innflytting, varighet, antall personer og melding, samt samtykke. Forespørselen lagres, sendes på e-post til frank@mountainretreat.no (svar går direkte til avsender; adressen kan endres under Innstillinger), og avsender får bekreftelse. Beskyttet mot spam (skjult felt + rate limiting). Admin ser alle forespørsler under *Fast leie – forespørsler* og kan markere dem som kontaktet/avsluttet. |
 | **Innlogging** | Ingen åpen registrering. E-postlenke (magic link, 15 min, engangs) + obligatorisk TOTP med 10 gjenopprettingskoder. Øktgrenser i databasen (admin 12 t / 30 min inaktivitet, andre 24 t / 60 min). Låsing etter 5 feil TOTP, rate limiting på innlogging/invitasjoner. |
 | **Invitasjoner og medlemskap** | Personlig engangslenke (hash lagret), knyttet til inviterende. Hele vervetreet spores. Medlemmer invitert av admin kan invitere; medlemmer invitert av medlemmer må søke og godkjennes. Admin kan invitere, trekke tilbake, suspendere, tilbakekalle (kansellerer aktive bookinger + refunderer), nullstille tofaktor og logge ut alle økter. Duplikater hindres (unik e-post uten hensyn til store/små bokstaver, én aktiv invitasjon per adresse, ingen selvinvitasjon). |
 | **Prising** | Hver bolig velger **Følg Airbnb-prisene** (standard) eller **egne priser** (sesongpriser). Ved Airbnb-prising er nattprisen den samme som på Airbnb; sesongperiodene brukes da bare for regler (min. netter, hel periode, byttedag). Airbnb tilbyr ikke priser via iCal eller åpent API, så prisene legges inn fra Airbnb-kalenderen (periode med hverdag/helg-pris eller lim inn linjer), og kan synkes automatisk når en channel manager kobles til. Datoer uten pris kan ikke bookes og vises i rødt for admin. |
@@ -74,7 +76,7 @@ Fullt skjema: `db/migrations/0001_schema.sql` (+ standardinnstillinger i `0002`)
 
 ## 5. Testresultater
 
-`npm test` – **65 tester, 9 filer, alle grønne** (mot ekte PostgreSQL):
+`npm test` – **67 tester, 10 filer, alle grønne** (mot ekte PostgreSQL):
 - `pricing` (11): ekstra gjester (per opphold/natt, med i Airbnb-sammenligningen), Airbnb-prising (nattpris, rabatter, sammenligning inkl. avgift, manglende pris, min. netter), spesifikasjonens eksempel (14 175 kr), min/maks netter, hel periode, byttedag, uprisede datoer, tillegg, vaskefritak
 - `booking` (13): hele flyten, prislåsing, 2 og 20 samtidige godkjenninger → én vinner, idempotent webhook-replay, holdutløp + automatisk refusjon av sen betaling, kanselleringsvilkår + automatisk godkjenning, dobbeltinnsending, tilgang
 - `rewards` (11): tak på ubrukte vervebonuser, én bonus per part selv ved gjentatte/samtidige utløsere, kun første opphold, prosent med tak, minstebeløp, selvverving, suspendert verver, FIFO + tilbakeføring, 100 % bonusdekning, justering/tilbaketrekking/hovedbok, ende til ende
@@ -83,6 +85,7 @@ Fullt skjema: `db/migrations/0001_schema.sql` (+ standardinnstillinger i `0002`)
 - `beds` (5): eksempelet fra oppgaven (3 gjester → dobbel + nedre køye, øvre og sovesofa ubrukt), barn, sovesofa sist, barneseng, romkapasitet
 - `discount` (3): standard + 1 % per booking med tak, kansellerte teller ikke, varsel ved økning, personlig overstyring
 - `cleaning-notify` (2): renholder registrerer seg (mobil påkrevd) og knyttes til bolig; ny booking gir e-post + SMS etter egne valg, uten gjestenavn; påminnelse samme dag sendes én gang
+- `inquiry` (2): fast leie-forespørsel lagres, sendes til riktig adresse med svar-til avsender og bekreftes; validering, honeypot og rate limiting
 - `channels` (7): parsing, import/avlysning, konflikt, speiling, feil sletter ikke data, eksport uten ekko, ærlig kapabilitetsstatus
 
 I tillegg: produksjonsbygg OK, alle sider testet for alle roller, og nettleserflyt ende til ende (forespørsel → godkjenning → testbetaling → bekreftet → invitasjon).
