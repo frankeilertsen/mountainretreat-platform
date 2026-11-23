@@ -2,16 +2,23 @@
 import { run, str } from '@/lib/actions';
 import { assertUser, clientIp } from '@/lib/auth/current';
 import { actorFor } from '@/lib/audit';
-import { updatePresentation, uploadPresentation } from '@/lib/domain/presentations';
+import { startDirectUpload, updatePresentation, uploadPresentation } from '@/lib/domain/presentations';
 
 async function admin() { const u = await assertUser('admin'); return { u, actor: actorFor(u, await clientIp()) }; }
 
 export async function uploadPresentationAction(f: FormData) {
   const { u, actor } = await admin();
   await run('/admin/presentasjoner', async () => {
-    await uploadPresentation(u as any, { title: str(f, 'title'), file: f.get('file') as File, propertyId: str(f, 'propertyId') || null, makeDefault: !!f.get('makeDefault') }, actor);
+    const file = f.get('file');
+    await uploadPresentation(u as any, { title: str(f, 'title'), file: file instanceof File && file.size > 0 ? file : null, uploadedKey: str(f, 'uploadedKey') || undefined, originalName: str(f, 'originalName'), propertyId: str(f, 'propertyId') || null, makeDefault: !!f.get('makeDefault') }, actor);
     return 'Presentasjonen er lastet opp.';
   });
+}
+
+/** Direct upload (Supabase): returns a one-time upload link, or null when the file should go through the form. */
+export async function startPresentationUploadAction(): Promise<{ key: string; uploadUrl: string } | null> {
+  const { u } = await admin();
+  return startDirectUpload(u as any);
 }
 
 export async function updatePresentationAction(f: FormData) {

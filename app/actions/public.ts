@@ -1,6 +1,6 @@
 'use server';
 import { redirect } from 'next/navigation';
-import { str, int } from '@/lib/actions';
+import { str, int, flushNotificationsSoon } from '@/lib/actions';
 import { clientIp } from '@/lib/auth/current';
 import { submitLongTermInquiry } from '@/lib/domain/inquiries';
 import { issueChallenge, type Challenge } from '@/lib/captcha';
@@ -12,6 +12,7 @@ export type LeaseFormState = { error?: string; values?: Record<string, string>; 
 /** Long-term enquiry. On error the form is shown again with what the visitor typed and a new verification code. */
 export async function longTermInquiryAction(prev: LeaseFormState, f: FormData): Promise<LeaseFormState> {
   const ip = await clientIp();
+  flushNotificationsSoon();
   const lang = str(f, 'lang') === 'en' ? 'en' : 'no';
   try {
     await submitLongTermInquiry({

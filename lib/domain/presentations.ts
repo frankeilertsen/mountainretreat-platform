@@ -1,10 +1,9 @@
 import crypto from 'crypto';
-import fs from 'fs/promises';
-import path from 'path';
 import { Db, getPool, one, q, tx } from '../db';
 import { audit, Actor } from '../audit';
 import { DomainError, forbidden } from '../errors';
 import { can, UserLike } from '../auth/rbac';
+import { deleteObject, getObject, putObject, signedDownloadUrl, signedUploadUrl, storageBackend } from '../storage';
 
 /**
  * PDF presentations (pictures, information about the place and the member benefits) that an inviter can attach to an invitation.
@@ -15,7 +14,6 @@ export const MAX_ATTACH_BYTES = 15 * 1024 * 1024; // larger files are sent as a 
 
 export type Presentation = { id: string; title: string; original_filename: string; size_bytes: number; property_id: string | null; property_name: string | null; is_default: boolean; active: boolean; created_at: string; uploaded_by: string; times_sent: number };
 
-const storageDir = () => path.resolve(process.env.STORAGE_DIR || './storage');
 
 export function isPdf(buf: Buffer): boolean {
   // "%PDF-" at the start (allow a few bytes of leading junk, as the PDF spec does) and an EOF marker near the end
@@ -29,18 +27,41 @@ export function safeFilename(name: string): string {
   return base + '.pdf';
 }
 
-export async function uploadPresentation(u: UserLike, input: { title: string; file: File; propertyId?: string | null; makeDefault?: boolean }, actor: Actor): Promise<string> {
+/** Step 1 of a direct upload (Supabase): a fresh key + one-time upload link for the browser. Null when files go through the app. */
+export async function startDirectUpload(u: UserLike): Promise<{ key: string; uploadUrl: string } | null> {
+  if (!can(u, 'admin')) throw forbidden();
+  if (storageBackend() !== 'supabase') return null;
+  const key = `presentations/${crypto.randomUUID()}.pdf`;
+  return { key, uploadUrl: (await signedUploadUrl(key))! };
+}
+
+/**
+ * Upload a presentation. Either `file` (sent through the app, max ~4 MB on Vercel) or `uploadedKey`
+ * (the browser already sent it straight to storage with startDirectUpload) – the file is checked the same way in both cases.
+ */
+export async function uploadPresentation(u: UserLike, input: { title: string; file?: File | null; uploadedKey?: string; originalName?: string; propertyId?: string | null; makeDefault?: boolean }, actor: Actor): Promise<string> {
   if (!can(u, 'admin')) throw forbidden();
   const title = input.title.trim().slice(0, 120);
-  if (title.length < 2) throw new DomainError('title', 'Gi presentasjonen en tittel.');
-  const f = input.file;
-  if (!f || typeof f === 'string' || f.size <= 0) throw new DomainError('file', 'Velg en PDF-fil.');
-  if (f.size > MAX_PDF_BYTES) throw new DomainError('file', 'PDF-filen må være under 20 MB.');
-  const buf = Buffer.from(await f.arrayBuffer());
-  if (!isPdf(buf)) throw new DomainError('file', 'Filen er ikke en gyldig PDF.');
-  const key = `presentations/${crypto.randomUUID()}.pdf`;
-  await fs.mkdir(path.join(storageDir(), 'presentations'), { recursive: true });
-  await fs.writeFile(path.join(storageDir(), key), buf, { mode: 0o640 });
+  let key: string, buf: Buffer | null, fileName: string;
+  if (input.uploadedKey) {
+    if (!/^presentations\/[0-9a-f-]{36}\.pdf$/.test(input.uploadedKey)) throw new DomainError('file', 'Ugyldig opplasting.');
+    key = input.uploadedKey;
+    buf = await getObject(key);
+    if (!buf) throw new DomainError('file', 'Fant ikke den opplastede filen. Prøv igjen.');
+    fileName = input.originalName || title;
+  } else {
+    const f = input.file;
+    if (!f || typeof f === 'string' || f.size <= 0) throw new DomainError('file', 'Velg en PDF-fil.');
+    if (f.size > MAX_PDF_BYTES) throw new DomainError('file', 'PDF-filen må være under 20 MB.');
+    buf = Buffer.from(await f.arrayBuffer());
+    key = `presentations/${crypto.randomUUID()}.pdf`;
+    fileName = f.name || title;
+  }
+  const reject = async (msg: string) => { if (input.uploadedKey) await deleteObject(key); throw new DomainError('file', msg); };
+  if (title.length < 2) await reject('Gi presentasjonen en tittel.');
+  if (buf.length > MAX_PDF_BYTES) await reject('PDF-filen må være under 20 MB.');
+  if (!isPdf(buf)) await reject('Filen er ikke en gyldig PDF.');
+  if (!input.uploadedKey) await putObject(key, buf, 'application/pdf');
   const sha = crypto.createHash('sha256').update(buf).digest('hex');
   try {
     return await tx(async c => {
@@ -54,11 +75,11 @@ export async function uploadPresentation(u: UserLike, input: { title: string; fi
       const row = (await one<{ id: string }>(
         `INSERT INTO presentations (title, original_filename, storage_key, size_bytes, sha256, property_id, is_default, uploaded_by_user_id)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`,
-        [title, safeFilename(f.name || title), key, buf.length, sha, input.propertyId || null, makeDefault, u.id], c))!;
+        [title, safeFilename(fileName), key, buf.length, sha, input.propertyId || null, makeDefault, u.id], c))!;
       await audit(c, actor, 'presentation.uploaded', 'presentation', row.id, undefined, { title, size: buf.length, default: makeDefault });
       return row.id;
     });
-  } catch (e) { await fs.unlink(path.join(storageDir(), key)).catch(() => {}); throw e; }
+  } catch (e) { await deleteObject(key); throw e; }
 }
 
 export async function updatePresentation(u: UserLike, id: string, change: { title?: string; active?: boolean; makeDefault?: boolean; propertyId?: string | null }, actor: Actor) {
@@ -96,9 +117,19 @@ export async function readPresentation(id: string, opts: { includeInactive?: boo
   const p = await one<{ storage_key: string; original_filename: string; title: string; active: boolean; size_bytes: number }>(
     `SELECT storage_key, original_filename, title, active, size_bytes FROM presentations WHERE id=$1`, [id]);
   if (!p || (!p.active && !opts.includeInactive)) return null;
-  const file = path.resolve(storageDir(), p.storage_key);
-  if (!file.startsWith(storageDir() + path.sep)) return null;
-  try { return { ...p, data: await fs.readFile(file) }; } catch { return null; }
+  const data = await getObject(p.storage_key);
+  return data ? { ...p, data } : null;
+}
+
+/** For serving: on Supabase a 60-second signed link (files over 4.5 MB can't pass through a Vercel function), otherwise the bytes. */
+export async function presentationForResponse(id: string, opts: { includeInactive?: boolean; download?: boolean } = {}): Promise<Response | null> {
+  if (!/^[0-9a-f-]{36}$/i.test(id)) return null;
+  const p = await one<{ storage_key: string; original_filename: string; active: boolean }>(`SELECT storage_key, original_filename, active FROM presentations WHERE id=$1`, [id]);
+  if (!p || (!p.active && !opts.includeInactive)) return null;
+  const signed = await signedDownloadUrl(p.storage_key, { seconds: 60, downloadAs: opts.download ? p.original_filename : undefined });
+  if (signed) return new Response(null, { status: 302, headers: { Location: signed, 'Cache-Control': 'no-store' } });
+  const full = await readPresentation(id, { includeInactive: true });
+  return full ? pdfResponse(full, opts.download) : null;
 }
 
 export function pdfResponse(p: { data: Buffer; original_filename: string }, download = false) {

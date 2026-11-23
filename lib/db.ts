@@ -5,12 +5,36 @@ declare global { // reuse pool across hot reloads in dev
   var __pgPool: Pool | undefined;
 }
 
+/**
+ * Connection settings.
+ * - Supabase (and other hosted Postgres): TLS is used when the URL asks for it (sslmode=require/verify-full) or DATABASE_SSL=1.
+ *   With DATABASE_CA_CERT (the CA certificate from Supabase → Database settings → SSL) the server certificate is verified;
+ *   without it the connection is still encrypted but the certificate isn't checked.
+ * - On Vercel each function instance keeps a small pool (default 3) and talks to Supabase's transaction pooler (port 6543).
+ */
+export function poolConfig(url = process.env.DATABASE_URL ?? '') {
+  let connectionString = url, wantsSsl = process.env.DATABASE_SSL === '1';
+  try {
+    const u = new URL(url);
+    const mode = u.searchParams.get('sslmode');
+    if (mode && mode !== 'disable') wantsSsl = true;
+    // pg would let sslmode in the URL override the explicit ssl object below, so take it out
+    u.searchParams.delete('sslmode'); u.searchParams.delete('sslrootcert'); u.searchParams.delete('uselibpqcompat');
+    connectionString = u.toString();
+  } catch { /* not a URL – leave as is */ }
+  const ca = process.env.DATABASE_CA_CERT?.replace(/\\n/g, '\n');
+  return {
+    connectionString,
+    ssl: wantsSsl ? (ca ? { ca, rejectUnauthorized: true } : { rejectUnauthorized: false }) : undefined,
+    max: Number(process.env.PG_POOL_MAX || (process.env.VERCEL ? 3 : 10)),
+    idleTimeoutMillis: process.env.VERCEL ? 10_000 : 30_000,
+    connectionTimeoutMillis: 10_000,
+  };
+}
+
 export function getPool(): Pool {
   if (!global.__pgPool) {
-    global.__pgPool = new Pool({
-      connectionString: process.env.DATABASE_URL,
-      max: Number(process.env.PG_POOL_MAX || 10),
-    });
+    global.__pgPool = new Pool(poolConfig());
   }
   return global.__pgPool;
 }

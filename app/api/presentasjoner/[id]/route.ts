@@ -1,6 +1,6 @@
 import { getSession } from '@/lib/auth/current';
 import { can, isAdmin } from '@/lib/auth/rbac';
-import { pdfResponse, readPresentation } from '@/lib/domain/presentations';
+import { presentationForResponse } from '@/lib/domain/presentations';
 
 export const dynamic = 'force-dynamic';
 
@@ -10,7 +10,6 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   const s = await getSession();
   if (!s || s.aal < 2) return new Response('Unauthorized', { status: 401 });
   if (!can(s as any, 'request_booking')) return new Response('Forbidden', { status: 403 });
-  const p = await readPresentation(id, { includeInactive: isAdmin(s as any) });
-  if (!p) return new Response('Not found', { status: 404 });
-  return pdfResponse(p, new URL(req.url).searchParams.has('last-ned'));
+  const res = await presentationForResponse(id, { includeInactive: isAdmin(s as any), download: new URL(req.url).searchParams.has('last-ned') });
+  return res ?? new Response('Not found', { status: 404 });
 }

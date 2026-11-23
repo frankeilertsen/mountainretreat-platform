@@ -1,7 +1,14 @@
 import 'server-only';
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
+import { after } from 'next/server';
 import { DomainError } from './errors';
+import { deliverQueued } from './notify';
+
+/** Send queued e-mail/SMS right after the response instead of waiting for the next scheduled run (login links arrive in seconds). */
+export function flushNotificationsSoon() {
+  try { after(() => deliverQueued(25).then(() => undefined, e => console.error('[notify flush]', e))); } catch { /* outside a request */ }
+}
 
 /**
  * Wraps a server action: runs it, then redirects back with a flash message.
@@ -9,6 +16,7 @@ import { DomainError } from './errors';
  */
 export async function run(back: string, fn: () => Promise<string | void | { redirect: string; ok?: string }>): Promise<never> {
   let target = back, msg: string | null = null, err: string | null = null;
+  flushNotificationsSoon();
   try {
     const r = await fn();
     if (typeof r === 'string') msg = r;

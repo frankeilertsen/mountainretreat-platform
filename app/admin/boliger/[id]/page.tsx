@@ -6,6 +6,7 @@ import { BED_LABELS } from '@/lib/domain/beds';
 import { sleepingPlaces, BED_SIZES } from '@/lib/domain/capacity';
 import { Flash } from '@/components/ui';
 import * as A from '../../../actions/properties';
+import { ImageInput } from '@/components/forms/ImageInput';
 
 export const dynamic = 'force-dynamic';
 const TABS: [string, string][] = [['', 'Detaljer'], ['rom', 'Rom og senger'], ['priser', 'Priser og regler']];
@@ -75,7 +76,7 @@ async function Details({ p }: { p: any }) {
             <form action={A.deletePhotoAction}><input type="hidden" name="id" value={ph.id} /><input type="hidden" name="propertyId" value={p.id} /><button className="btn ghost small">Fjern</button></form></div>))}</div>
         <form action={A.uploadPhotoAction} style={{ marginTop: 12 }}>
           <input type="hidden" name="entity" value="property" /><input type="hidden" name="entityId" value={p.id} /><input type="hidden" name="propertyId" value={p.id} />
-          <input type="file" name="photo" accept="image/jpeg,image/png,image/webp" required /><button className="btn secondary small" style={{ marginTop: 8 }}>Last opp</button>
+          <ImageInput name="photo" accept="image/jpeg,image/png,image/webp" required /><button className="btn secondary small" style={{ marginTop: 8 }}>Last opp</button>
         </form>
         <small className="muted">JPEG/PNG/WebP, maks 10 MB. Første bilde brukes som forsidebilde.</small>
       </div>
@@ -111,7 +112,7 @@ async function Rooms({ pid }: { pid: string }) {
             <div>
               {r.photo_id ? <img src={`/api/photos/${r.photo_id}`} alt={r.name} style={{ width: '100%', maxHeight: 180, objectFit: 'cover', borderRadius: 8 }} /> : <p className="muted">Ingen bilde av rommet.</p>}
               <form action={A.uploadPhotoAction} className="row" style={{ marginTop: 8 }}><input type="hidden" name="entity" value="room" /><input type="hidden" name="entityId" value={r.id} /><input type="hidden" name="propertyId" value={pid} />
-                <input type="file" name="photo" accept="image/*" required style={{ flex: 1 }} /><button className="btn ghost small">Last opp</button></form>
+                <ImageInput name="photo" required style={{ flex: 1 }} /><button className="btn ghost small">Last opp</button></form>
             </div>
           </div>
           <table style={{ marginTop: 14 }}><thead><tr><th>Seng</th><th>Type</th><th>Plasser</th><th>Prioritet</th><th>Størrelse (cm)</th><th>Kun barn</th><th></th></tr></thead><tbody>

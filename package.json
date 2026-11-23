@@ -11,7 +11,8 @@
     "db:reset": "tsx scripts/migrate.ts --reset && tsx scripts/seed.ts",
     "jobs": "tsx scripts/run-jobs.ts",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "supabase:sql": "tsx scripts/supabase-sql.ts"
   },
   "keywords": [],
   "author": "",

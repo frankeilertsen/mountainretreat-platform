@@ -1,6 +1,4 @@
 import { PoolClient } from 'pg';
-import fs from 'fs/promises';
-import path from 'path';
 import crypto from 'crypto';
 import { Db, getPool, one, q, tx } from '../db';
 import { DomainError, forbidden } from '../errors';
@@ -9,6 +7,7 @@ import { appUrl, enqueue, notifyAdmins } from '../notify';
 import { addDays, fmtDate, todayOslo } from '../format';
 import { allocateBeds, Allocation, BedInput, roomSupplies } from './beds';
 import { isAdmin, UserLike } from '../auth/rbac';
+import { putObject } from '../storage';
 
 // ------------------------------------------------------------------ stay preparation
 export async function upsertBookingPreparation(c: PoolClient, bookingId: string, propertyId: string, g: { adults: number; children: number; infants: number }) {
@@ -298,9 +297,7 @@ export async function savePhoto(entityType: 'cleaning_task' | 'cleaning_report' 
   const mime = sniffImage(buf);
   if (!mime) throw new DomainError('bad_file', 'Kun JPEG, PNG eller WebP er tillatt.');
   const key = `${entityType}/${crypto.randomUUID()}.${mime.split('/')[1]}`;
-  const dir = process.env.STORAGE_DIR || './storage';
-  await fs.mkdir(path.join(dir, entityType), { recursive: true });
-  await fs.writeFile(path.join(dir, key), buf, { mode: 0o640 });
+  await putObject(key, buf, mime);
   const row = await one<{ id: string }>(`INSERT INTO photos (entity_type, entity_id, storage_key, mime_type, size_bytes, uploaded_by_user_id) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`,
     [entityType, entityId, key, mime, buf.length, user.id]);
   await audit(null, actor, 'photo.uploaded', entityType, entityId, undefined, { photo: row!.id });

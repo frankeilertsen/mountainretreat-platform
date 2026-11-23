@@ -2,9 +2,11 @@ import './load-env';
 import fs from 'fs';
 import path from 'path';
 import { Client } from 'pg';
+import { poolConfig } from '../lib/db';
 
 export async function migrate(databaseUrl: string, reset = false) {
-  const client = new Client({ connectionString: databaseUrl });
+  const { connectionString, ssl } = poolConfig(databaseUrl);
+  const client = new Client({ connectionString, ssl });
   await client.connect();
   try {
     if (reset) {

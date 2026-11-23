@@ -7,6 +7,7 @@ import { fmtDate, fmtDateTime, fmtTime } from '@/lib/format';
 import { Flash, Status } from '@/components/ui';
 import { RoomPlan } from '@/components/RoomPlan';
 import { startTaskAction, completeTaskAction, roomDoneAction, reportAction, taskPhotoAction } from '../../../actions/cleaning';
+import { ImageInput } from '@/components/forms/ImageInput';
 
 export const dynamic = 'force-dynamic';
 
@@ -68,14 +69,14 @@ export default async function TaskPage({ params, searchParams }: { params: Promi
           <input type="hidden" name="taskId" value={id} />
           <div className="field"><label>Type</label><select name="kind"><option value="damage">Skade</option><option value="missing_item">Noe mangler</option><option value="issue">Annet avvik</option><option value="comment">Kommentar</option></select></div>
           <div className="field"><label>Beskrivelse</label><textarea name="description" required placeholder="Hva, hvor?" /></div>
-          <div className="field"><label>Bilde (valgfritt)</label><input type="file" name="photo" accept="image/*" capture="environment" /></div>
+          <div className="field"><label>Bilde (valgfritt)</label><ImageInput name="photo" capture="environment" /></div>
           <button className="btn block">Send</button>
         </form>
       </details>
 
       <h2 style={{ marginTop: 28 }}>Bilder</h2>
       <div className="row">{photos.map(p => <img key={p.id} src={`/api/photos/${p.id}`} alt="" style={{ width: 96, height: 76, objectFit: 'cover', borderRadius: 8 }} />)}</div>
-      <form action={taskPhotoAction} className="row" style={{ marginTop: 10 }}><input type="hidden" name="taskId" value={id} /><input type="file" name="photo" accept="image/*" capture="environment" required style={{ flex: 1 }} /><button className="btn ghost small">Last opp</button></form>
+      <form action={taskPhotoAction} className="row" style={{ marginTop: 10 }}><input type="hidden" name="taskId" value={id} /><ImageInput name="photo" capture="environment" required style={{ flex: 1 }} /><button className="btn ghost small">Last opp</button></form>
 
       {open && (
         <div className="sticky-actions">
