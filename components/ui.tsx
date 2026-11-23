@@ -1,11 +1,13 @@
 import Link from 'next/link';
 import { nok } from '@/lib/format';
+import { translateMessage } from '@/lib/i18n/messages';
+import { dict, type Lang } from '@/lib/i18n/dict';
 
-export function Flash({ sp }: { sp: Record<string, string | string[] | undefined> }) {
+export function Flash({ sp, lang = 'no' }: { sp: Record<string, string | string[] | undefined>; lang?: Lang }) {
   const ok = typeof sp.ok === 'string' ? sp.ok : null;
   const err = typeof sp.feil === 'string' ? sp.feil : null;
   if (!ok && !err) return null;
-  return <div className={`flash ${err ? 'err' : 'ok'}`} role="status">{err ?? ok}</div>;
+  return <div className={`flash ${err ? 'err' : 'ok'}`} role="status">{translateMessage((err ?? ok)!, lang)}</div>;
 }
 
 const STATUS: Record<string, [string, string]> = {
@@ -20,9 +22,10 @@ const STATUS: Record<string, [string, string]> = {
   sent: ['Sendt', 'b-info'], paid: ['Betalt', 'b-ok'], overdue: ['Forfalt', 'b-danger'],
   echo: ['Speilet', ''], conflict: ['KONFLIKT', 'b-danger'], removed: ['Fjernet', ''],
 };
-export function Status({ s }: { s: string | null | undefined }) {
+export function Status({ s, lang = 'no' }: { s: string | null | undefined; lang?: Lang }) {
   if (!s) return null;
-  const [label, cls] = STATUS[s] ?? [s, ''];
+  const [nbLabel, cls] = STATUS[s] ?? [s, ''];
+  const label = lang === 'en' ? (dict.en.status[s] ?? nbLabel) : nbLabel;
   return <span className={`badge ${cls}`}>{label}</span>;
 }
 

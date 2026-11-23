@@ -99,7 +99,7 @@ export async function updateProfileAction(f: FormData) {
 /** GDPR right to erasure: strips personal data, keeps financial records under a pseudonymous id. */
 export async function anonymizeAction(f: FormData) {
   const u = await assertUser();
-  if (str(f, 'confirm') !== 'SLETT') redirect('/medlem/profil?feil=' + encodeURIComponent('Skriv SLETT for å bekrefte.'));
+  if (!['SLETT', 'DELETE'].includes(str(f, 'confirm').trim().toUpperCase())) redirect('/medlem/profil?feil=' + encodeURIComponent('Skriv SLETT for å bekrefte.'));
   const active = await one(`SELECT 1 FROM bookings WHERE member_id=$1 AND status IN ('pending_review','awaiting_payment','confirmed','cancellation_requested')`, [u.id]);
   if (active) redirect('/medlem/profil?feil=' + encodeURIComponent('Du har aktive bookinger. Kanseller dem eller vent til oppholdet er over.'));
   await tx(async c => {

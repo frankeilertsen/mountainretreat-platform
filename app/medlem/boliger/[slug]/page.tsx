@@ -5,12 +5,17 @@ import { blocksForRange } from '@/lib/domain/availability';
 import { quoteFor, Quote } from '@/lib/domain/pricing';
 import { rewardBalance } from '@/lib/domain/rewards';
 import { memberDiscount } from '@/lib/domain/memberDiscount';
-import { addDays, fmtDate, fmtTime, nok, todayOslo } from '@/lib/format';
+import { addDays, fmtTime, todayOslo } from '@/lib/format';
+import { getT } from '@/lib/i18n/lang';
+import { fmtDateL, nokL } from '@/lib/i18n/format';
+import { translateMessage } from '@/lib/i18n/messages';
 import { DomainError } from '@/lib/errors';
 import { Flash, PropertyMedia } from '@/components/ui';
 import { MonthCalendar } from '@/components/MonthCalendar';
 import { SavingsBreakdown } from '@/components/Savings';
 import { BED_LABELS } from '@/lib/domain/beds';
+
+const BED_LABELS_EN: Record<string, string> = { double: 'Double bed', single: 'Single bed', bunk_lower: 'Bunk bed (lower)', bunk_upper: 'Bunk bed (upper)', sofa_bed: 'Sofa bed', extra_mattress: 'Extra mattress', cot: 'Cot' };
 import { requestBookingAction } from '../../../actions/member';
 import crypto from 'crypto';
 
@@ -20,6 +25,10 @@ export default async function PropertyPage({ params, searchParams }: { params: P
   const { slug } = await params;
   const sp = await searchParams;
   const u = await requireUser('request_booking');
+  const { lang, t } = await getT();
+  const T = t.property;
+  const nok = (o: number) => nokL(o, lang), fmtDate = (d: string, w?: boolean) => fmtDateL(d, lang, w);
+  const bedLabel = (k: string) => lang === 'en' ? (BED_LABELS_EN[k] ?? k) : (BED_LABELS[k] ?? k);
   const p = await one(`SELECT id, name, address, description, pricing_mode, included_guests, extra_guest_fee_ore, extra_guest_fee_basis, extra_guest_fee_includes, amenities, house_rules, max_guests, to_char(check_in_time,'HH24:MI') AS cin, to_char(check_out_time,'HH24:MI') AS cout, cleaning_fee_ore,
      (SELECT ph.id FROM photos ph WHERE ph.entity_type='property' AND ph.entity_id=properties.id ORDER BY ph.created_at LIMIT 1) AS photo_id
      FROM properties WHERE slug=$1 AND active`, [slug]);
@@ -41,11 +50,11 @@ export default async function PropertyPage({ params, searchParams }: { params: P
   let quote: Quote | null = null, quoteErr: string | null = null;
   if (fra && til) {
     try {
-      if (blocks.some(b => b.start < til && b.end > fra)) throw new DomainError('unavailable', 'Noen av datoene er opptatt. Velg andre datoer.');
+      if (blocks.some(b => b.start < til && b.end > fra)) throw new DomainError('unavailable', T.datesBusy);
       quote = await quoteFor(p.id, u.id, fra, til, adults + children, selected);
-    } catch (e) { quoteErr = e instanceof DomainError ? e.message : 'Kunne ikke beregne pris.'; }
+    } catch (e) { quoteErr = e instanceof DomainError ? translateMessage(e.message, lang) : T.quoteFailed; }
   }
-  const PT: Record<string, string> = { flat: 'per opphold', per_night: 'per natt', per_unit: 'per stk/sett', per_guest: 'per gjest' };
+  const PT = T.priceTypes;
 
   return (
     <>
@@ -58,67 +67,67 @@ export default async function PropertyPage({ params, searchParams }: { params: P
             <p>{p.description}</p>
             <div className="row" style={{ gap: 6 }}>{(p.amenities as string[]).map(a => <span key={a} className="badge">{a}</span>)}</div>
           </div>
-          <dl className="dl"><dt>Gjester</dt><dd>Opptil {p.max_guests} personer</dd>{sleeping.length > 0 && <><dt>Soverom</dt><dd>{sleeping.map(s => <div key={s.room}>{s.room}: <span className="muted">{s.beds.split(',').map(x => { const [t, w] = x.split('|'); return `${BED_LABELS[t] ?? t}${w ? ` ${w} cm` : ''}`; }).join(', ')}</span></div>)}</dd></>}<dt>Innsjekk</dt><dd>fra kl. {p.cin}</dd><dt>Utsjekk</dt><dd>innen kl. {p.cout}</dd><dt>Sluttrengjøring</dt><dd>{nok(p.cleaning_fee_ore)}</dd><dt>Inkludert</dt><dd>Prisen gjelder for {p.included_guests} personer</dd>{p.extra_guest_fee_ore > 0 && <><dt>Ekstra person</dt><dd>{nok(p.extra_guest_fee_ore)} per person {p.extra_guest_fee_basis === 'per_night' ? 'per natt' : 'per opphold'}{p.extra_guest_fee_includes ? <><br /><small className="muted">{p.extra_guest_fee_includes}</small></> : null}</dd></>}</dl>
-          {p.house_rules && <p className="muted"><strong>Husregler:</strong> {p.house_rules}</p>}
+          <dl className="dl"><dt>{T.guests}</dt><dd>{T.upTo(p.max_guests)}</dd>{sleeping.length > 0 && <><dt>{T.bedrooms}</dt><dd>{sleeping.map(s => <div key={s.room}>{s.room}: <span className="muted">{s.beds.split(',').map(x => { const [t, w] = x.split('|'); return `${bedLabel(t)}${w ? ` ${w} cm` : ''}`; }).join(', ')}</span></div>)}</dd></>}<dt>{T.checkIn}</dt><dd>{T.from(p.cin)}</dd><dt>{T.checkOut}</dt><dd>{T.by(p.cout)}</dd><dt>{T.cleaning}</dt><dd>{nok(p.cleaning_fee_ore)}</dd><dt>{T.included}</dt><dd>{T.priceFor(p.included_guests)}</dd>{p.extra_guest_fee_ore > 0 && <><dt>{T.extraPerson}</dt><dd>{nok(p.extra_guest_fee_ore)} {T.perPerson(p.extra_guest_fee_basis)}{p.extra_guest_fee_includes ? <><br /><small className="muted">{p.extra_guest_fee_includes}</small></> : null}</dd></>}</dl>
+          {p.house_rules && <p className="muted"><strong>{T.houseRules}</strong> {p.house_rules}</p>}
           <div className="card flat">
-            <h3>Priser</h3>
+            <h3>{T.prices}</h3>
             {p.pricing_mode === 'airbnb' ? (
               rateStats?.min ? <>
-                <div className="row between"><span>Airbnb-pris de neste 3 mnd</span><span>fra {nok(rateStats.min)} <small>/ natt</small></span></div>
-                <div className="row between" style={{ color: 'var(--gold-2)' }}><span>Din pris</span><span>fra {nok(rateStats.min * (1 - disc.totalPct / 100))} <small>/ natt</small></span></div>
-                <small className="muted">Prisene følger Airbnb. Du slipper Airbnbs serviceavgift på ca. {airbnbFee} %, og får {disc.totalPct} % medlemsrabatt{disc.loyaltyPct ? ` (inkl. ${disc.loyaltyPct} % lojalitet)` : ''} i tillegg. <a href="/medlem/fordeler">Slik regnes prisen →</a></small>
-              </> : <p className="muted">Prisene for de neste månedene er ikke lagt inn ennå.</p>
+                <div className="row between"><span>{T.airbnb3m}</span><span>{T.fromP} {nok(rateStats.min)} <small>{t.common.perNight}</small></span></div>
+                <div className="row between" style={{ color: 'var(--gold-2)' }}><span>{T.yourPrice}</span><span>{T.fromP} {nok(rateStats.min * (1 - disc.totalPct / 100))} <small>{t.common.perNight}</small></span></div>
+                <small className="muted">{T.followsAirbnb(airbnbFee, disc.totalPct, disc.loyaltyPct)} <a href="/medlem/fordeler">{T.howCalc}</a></small>
+              </> : <p className="muted">{T.notEntered}</p>
             ) : <>
-              {seasons.map(s => <div key={s.name} className="row between"><span><i style={{ display: 'inline-block', width: 10, height: 10, borderRadius: 3, background: s.color ?? '#ccc', marginRight: 8 }} />{s.name} <small>· min. {s.min_nights} netter</small></span><span><small className="muted" style={{ textDecoration: 'line-through', marginRight: 8 }}>{nok(s.price_per_night_ore)}</small>{nok(s.price_per_night_ore * (1 - disc.totalPct / 100))} <small>/ natt</small></span></div>)}
-              <small className="muted">Din medlemsrabatt på <strong style={{ color: 'var(--gold-2)' }}>{disc.totalPct} %</strong> er trukket fra{disc.atMax ? '' : ` – neste booking gir ${disc.nextTotalPct} %`}.</small>
+              {seasons.map(s => <div key={s.name} className="row between"><span><i style={{ display: 'inline-block', width: 10, height: 10, borderRadius: 3, background: s.color ?? '#ccc', marginRight: 8 }} />{s.name} <small>· {T.minNights(s.min_nights)}</small></span><span><small className="muted" style={{ textDecoration: 'line-through', marginRight: 8 }}>{nok(s.price_per_night_ore)}</small>{nok(s.price_per_night_ore * (1 - disc.totalPct / 100))} <small>{t.common.perNight}</small></span></div>)}
+              <small className="muted">{T.discountApplied(disc.totalPct, disc.atMax ? null : disc.nextTotalPct)}</small>
             </>}
           </div>
         </div>
 
         <div className="card" style={{ position: 'sticky', top: 84 }}>
-          <h2>Send forespørsel</h2>
-          <Flash sp={sp} />
+          <h2>{T.request}</h2>
+          <Flash sp={sp} lang={lang} />
           <form method="get">
             <div className="fields">
-              <div><label>Innsjekk</label><input type="date" name="fra" min={today} defaultValue={fra} required /></div>
-              <div><label>Utsjekk</label><input type="date" name="til" min={addDays(today, 1)} defaultValue={til} required /></div>
+              <div><label>{T.checkInDate}</label><input type="date" name="fra" min={today} defaultValue={fra} required /></div>
+              <div><label>{T.checkOutDate}</label><input type="date" name="til" min={addDays(today, 1)} defaultValue={til} required /></div>
             </div>
             <div className="fields" style={{ marginTop: 14 }}>
-              <div><label>Voksne</label><input type="number" name="voksne" min={1} max={p.max_guests} defaultValue={adults} /></div>
-              <div><label>Barn (2–17)</label><input type="number" name="barn" min={0} max={p.max_guests} defaultValue={children} /></div>
-              <div><label>Spedbarn</label><input type="number" name="sped" min={0} max={4} defaultValue={infants} /></div>
+              <div><label>{T.adults}</label><input type="number" name="voksne" min={1} max={p.max_guests} defaultValue={adults} /></div>
+              <div><label>{T.children}</label><input type="number" name="barn" min={0} max={p.max_guests} defaultValue={children} /></div>
+              <div><label>{T.infants}</label><input type="number" name="sped" min={0} max={4} defaultValue={infants} /></div>
             </div>
-            {addOns.length > 0 && <div style={{ marginTop: 14 }}><label>Tillegg</label>
+            {addOns.length > 0 && <div style={{ marginTop: 14 }}><label>{T.addOns}</label>
               {addOns.map(a => (
                 <div key={a.id} className="row" style={{ marginBottom: 6 }}>
-                  <label className="check" style={{ margin: 0, flex: 1 }}><input type="checkbox" name={'a_' + a.id} defaultChecked={a.mandatory || !!sp['a_' + a.id]} disabled={a.mandatory} /> <span>{a.name} <small className="muted">{nok(a.unit_price_ore)} {PT[a.price_type]}{a.mandatory ? ' · obligatorisk' : ''}</small>{a.description && <><br /><small className="muted">{a.description}</small></>}</span></label>
+                  <label className="check" style={{ margin: 0, flex: 1 }}><input type="checkbox" name={'a_' + a.id} defaultChecked={a.mandatory || !!sp['a_' + a.id]} disabled={a.mandatory} /> <span>{a.name} <small className="muted">{nok(a.unit_price_ore)} {PT[a.price_type]}{a.mandatory ? ` · ${T.mandatory}` : ''}</small>{a.description && <><br /><small className="muted">{a.description}</small></>}</span></label>
                   {a.price_type === 'per_unit' && <input type="number" name={'q_' + a.id} min={1} max={20} defaultValue={sp['q_' + a.id] ?? 1} style={{ width: 70 }} />}
                 </div>))}
             </div>}
-            <button className="btn secondary block" style={{ marginTop: 10 }}>Beregn pris</button>
+            <button className="btn secondary block" style={{ marginTop: 10 }}>{T.calc}</button>
           </form>
 
           {quoteErr && <div className="flash err" style={{ marginTop: 16 }}>{quoteErr}</div>}
           {quote && (
             <form action={requestBookingAction} style={{ marginTop: 20 }}>
-              <SavingsBreakdown quote={quote} rewardOre={bal.available > 0 ? Math.min(bal.available, quote.subtotal_ore) : 0} rewardEstimated />
-              <p className="muted" style={{ fontSize: '.82rem' }}>{fmtDate(fra!, true)} – {fmtDate(til!, true)}. Endelig pris låses når forespørselen godkjennes.</p>
+              <SavingsBreakdown quote={quote} rewardOre={bal.available > 0 ? Math.min(bal.available, quote.subtotal_ore) : 0} rewardEstimated lang={lang} />
+              <p className="muted" style={{ fontSize: '.82rem' }}>{fmtDate(fra!, true)} – {fmtDate(til!, true)}. {T.lockNote}</p>
               <input type="hidden" name="propertyId" value={p.id} /><input type="hidden" name="slug" value={slug} />
               <input type="hidden" name="fra" value={fra} /><input type="hidden" name="til" value={til} />
               <input type="hidden" name="voksne" value={adults} /><input type="hidden" name="barn" value={children} /><input type="hidden" name="sped" value={infants} />
               <input type="hidden" name="addons" value={JSON.stringify(selected)} />
               <input type="hidden" name="idem" value={crypto.randomUUID()} />
-              {bal.available > 0 && <label className="check field"><input type="checkbox" name="useRewards" defaultChecked /> Bruk bonus ({nok(Math.min(bal.available, quote.subtotal_ore))} av {nok(bal.available)})</label>}
-              <div className="field"><label>Kommentar / spesielle ønsker</label><textarea name="requests" maxLength={2000} placeholder="F.eks. forventet ankomsttid, barneseng, allergier…" /></div>
-              <button className="btn block">Send forespørsel</button>
+              {bal.available > 0 && <label className="check field"><input type="checkbox" name="useRewards" defaultChecked /> {T.useBonus(nok(Math.min(bal.available, quote.subtotal_ore)), nok(bal.available))}</label>}
+              <div className="field"><label>{T.comment}</label><textarea name="requests" maxLength={2000} placeholder={T.commentPh} /></div>
+              <button className="btn block">{T.request}</button>
             </form>
           )}
         </div>
       </div>
       <hr className="divider" />
-      <div className="row between"><h2>Tilgjengelighet</h2><div className="legend"><span><i style={{ background: 'var(--surface-2)', border: '1px solid var(--line-2)' }} />Ledig</span><span><i style={{ background: '#121210', border: '1px solid #2c2b26' }} />Opptatt</span></div></div>
-      <MonthCalendar blocks={blocks} months={6} selStart={fra} selEnd={til} />
-      <p className="muted" style={{ marginTop: 12, fontSize: '.85rem' }}>Innsjekk fra kl. {fmtTime(p.cin)}. Kalenderen oppdateres fortløpende fra alle kanaler.</p>
+      <div className="row between"><h2>{T.availability}</h2><div className="legend"><span><i style={{ background: 'var(--surface-2)', border: '1px solid var(--line-2)' }} />{T.free}</span><span><i style={{ background: '#121210', border: '1px solid #2c2b26' }} />{T.busy}</span></div></div>
+      <MonthCalendar blocks={blocks} months={6} selStart={fra} selEnd={til} lang={lang} />
+      <p className="muted" style={{ marginTop: 12, fontSize: '.85rem' }}>{T.calNote(fmtTime(p.cin))}</p>
     </>
   );
 }

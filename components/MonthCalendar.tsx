@@ -1,10 +1,11 @@
 import { addDays, todayOslo } from '@/lib/format';
+import type { Lang } from '@/lib/i18n/dict';
+import { dowShort, monthName } from '@/lib/i18n/format';
 
 type Block = { start: string; end: string };
-const MONTHS = ['Januar','Februar','Mars','April','Mai','Juni','Juli','August','September','Oktober','November','Desember'];
 
 /** Read-only availability: a night is busy if any block covers [date, date+1). Shows nothing about who/why. */
-export function MonthCalendar({ blocks, months = 3, from, selStart, selEnd }: { blocks: Block[]; months?: number; from?: string; selStart?: string; selEnd?: string }) {
+export function MonthCalendar({ blocks, months = 3, from, selStart, selEnd, lang = 'no' }: { blocks: Block[]; months?: number; from?: string; selStart?: string; selEnd?: string; lang?: Lang }) {
   const today = todayOslo();
   const first = (from ?? today).slice(0, 8) + '01';
   const busy = (d: string) => blocks.some(b => b.start <= d && b.end > d);
@@ -21,12 +22,12 @@ export function MonthCalendar({ blocks, months = 3, from, selStart, selEnd }: { 
       const iso = addDays(firstIso, dd - 1);
       const sel = selStart && selEnd && iso >= selStart && iso < selEnd;
       const cls = ['day', iso < today ? 'past' : '', busy(iso) ? 'busy' : '', sel ? 'sel' : ''].join(' ');
-      cells.push(<div key={iso} className={cls} title={busy(iso) ? 'Opptatt' : 'Ledig'}>{dd}</div>);
+      cells.push(<div key={iso} className={cls} title={busy(iso) ? (lang === 'en' ? 'Booked' : 'Opptatt') : (lang === 'en' ? 'Available' : 'Ledig')}>{dd}</div>);
     }
     out.push(
       <div key={firstIso} className="cal-month">
-        <h4>{MONTHS[mo]} {y}</h4>
-        <div className="cal">{['Ma','Ti','On','To','Fr','Lø','Sø'].map(d => <div key={d} className="dow">{d}</div>)}{cells}</div>
+        <h4>{monthName(mo, lang)} {y}</h4>
+        <div className="cal">{dowShort(lang).map(d => <div key={d} className="dow">{d}</div>)}{cells}</div>
       </div>
     );
   }

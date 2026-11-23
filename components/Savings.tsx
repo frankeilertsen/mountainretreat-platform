@@ -1,11 +1,14 @@
-import { nok } from '@/lib/format';
+import { dict, type Lang } from '@/lib/i18n/dict';
+import { nokL } from '@/lib/i18n/format';
 import type { Quote } from '@/lib/domain/pricing';
 
 /**
  * Shows the member exactly how their price is built and what they save compared to booking the same stay on Airbnb.
  * Works for both live quotes and stored (locked) quotes from older bookings.
  */
-export function SavingsBreakdown({ quote, rewardOre = 0, rewardEstimated = false, compact = false }: { quote: Quote; rewardOre?: number; rewardEstimated?: boolean; compact?: boolean }) {
+export function SavingsBreakdown({ quote, rewardOre = 0, rewardEstimated = false, compact = false, lang = 'no' }: { quote: Quote; rewardOre?: number; rewardEstimated?: boolean; compact?: boolean; lang?: Lang }) {
+  const S = dict[lang].savings;
+  const nok = (o: number) => nokL(o, lang);
   const q = quote as Partial<Quote> & Quote;
   const ordinaryStay = q.stay_ore + (q.member_discount_ore ?? 0);
   const fee = q.airbnb_fee_saved_ore ?? 0;
@@ -21,26 +24,26 @@ export function SavingsBreakdown({ quote, rewardOre = 0, rewardEstimated = false
   return (
     <div className="price-lines">
       {fee > 0 && <>
-        <Sub>Samme opphold på Airbnb</Sub>
-        <Row l={`${q.nights} netter`} v={nok(ordinaryStay)} />
-        <Row l="Sluttrengjøring" v={nok(q.cleaning_fee_ore)} />
-        {q.extra_guest_fee_ore > 0 && <Row l={`Ekstra gjester (${q.extra_guests})`} v={nok(q.extra_guest_fee_ore)} />}
-        <Row l={`Airbnbs serviceavgift (${q.airbnb_fee_pct} %)`} v={nok(fee)} />
-        <Row strong l="Totalt på Airbnb" v={nok(comparison)} />
-        <Sub>Din pris som medlem</Sub>
+        <Sub>{S.sameOnAirbnb}</Sub>
+        <Row l={S.nights(q.nights)} v={nok(ordinaryStay)} />
+        <Row l={S.cleaning} v={nok(q.cleaning_fee_ore)} />
+        {q.extra_guest_fee_ore > 0 && <Row l={S.extraGuests(q.extra_guests)} v={nok(q.extra_guest_fee_ore)} />}
+        <Row l={S.airbnbFee(q.airbnb_fee_pct)} v={nok(fee)} />
+        <Row strong l={S.totalAirbnb} v={nok(comparison)} />
+        <Sub>{S.yourPriceAsMember}</Sub>
       </>}
-      <Row l={<>{q.nights} netter{q.pricing_mode === 'airbnb' ? ' til Airbnb-pris' : ', ordinær pris'}</>} v={nok(ordinaryStay)} />
-      {base > 0 && <Row gold l={`Medlemsrabatt${basePct != null ? ` ${basePct} %` : ''}`} v={`−${nok(base)}`} />}
-      {loyalty > 0 && <Row gold l={`Lojalitetsrabatt${loyaltyPct != null ? ` ${loyaltyPct} %` : ''}`} v={`−${nok(loyalty)}`} />}
-      <Row l="Sluttrengjøring" v={nok(q.cleaning_fee_ore)} />
-      {q.extra_guest_fee_ore > 0 && <Row l={<>Ekstra gjester <small className="muted">({q.extra_guests} × {nok(q.extra_guest_unit_ore)}{q.extra_guest_basis === 'per_night' ? ` × ${q.nights} netter` : ''}, over {q.included_guests} pers.)</small></>} v={nok(q.extra_guest_fee_ore)} />}
-      {fee > 0 && <Row gold l="Ingen serviceavgift" v="0 kr" />}
+      <Row l={q.pricing_mode === 'airbnb' ? S.nightsAirbnb(q.nights) : S.nightsOrdinary(q.nights)} v={nok(ordinaryStay)} />
+      {base > 0 && <Row gold l={S.memberDisc(basePct)} v={`−${nok(base)}`} />}
+      {loyalty > 0 && <Row gold l={S.loyaltyDisc(loyaltyPct)} v={`−${nok(loyalty)}`} />}
+      <Row l={S.cleaning} v={nok(q.cleaning_fee_ore)} />
+      {q.extra_guest_fee_ore > 0 && <Row l={<>{S.extraGuests(q.extra_guests)} <small className="muted">{S.extraGuestsDetail(q.extra_guests, nok(q.extra_guest_unit_ore), q.extra_guest_basis === 'per_night' ? q.nights : null, q.included_guests)}</small></>} v={nok(q.extra_guest_fee_ore)} />}
+      {fee > 0 && <Row gold l={S.noFee} v={nok(0)} />}
       {!compact && q.add_ons?.map(a => <Row key={a.id} l={`${a.name}${a.quantity > 1 ? ` × ${a.quantity}` : ''}`} v={nok(a.total_ore)} />)}
-      {rewardOre > 0 && <Row gold l={`Vervebonus${rewardEstimated ? ' (trekkes ved godkjenning)' : ''}`} v={`−${nok(rewardOre)}`} />}
-      <div className="row price-total"><span>Din pris</span><span>{nok(q.subtotal_ore - rewardOre)}</span></div>
+      {rewardOre > 0 && <Row gold l={`${S.bonus}${rewardEstimated ? S.bonusEstimated : ''}`} v={`−${nok(rewardOre)}`} />}
+      <div className="row price-total"><span>{S.yourPrice}</span><span>{nok(q.subtotal_ore - rewardOre)}</span></div>
       {saved > 0 && (
         <div className="note" style={{ marginTop: 12 }}>
-          Du sparer <strong style={{ color: 'var(--gold-2)' }}>{nok(saved)}</strong> ({savedPct} %) sammenlignet med å booke samme opphold på Airbnb{fee > 0 ? ` – ${nok(fee)} i avgift, ${nok(base + loyalty)} i rabatter${rewardOre ? ` og ${nok(rewardOre)} i bonus` : ''}` : ''}.
+          {S.youSave(nok(saved), savedPct)}{fee > 0 ? S.breakdown(nok(fee), nok(base + loyalty), rewardOre ? nok(rewardOre) : null) : ''}.
         </div>
       )}
     </div>

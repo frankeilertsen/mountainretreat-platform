@@ -1,3 +1,5 @@
+import { getT } from '@/lib/i18n/lang';
+import { LangSwitch } from '@/components/LangSwitch';
 import { Logo } from '@/components/Logo';
 import Link from 'next/link';
 import { Flash } from '@/components/ui';
@@ -9,25 +11,27 @@ export const dynamic = 'force-dynamic';
 
 export default async function Login({ searchParams }: { searchParams: Promise<Record<string, string>> }) {
   const sp = await searchParams;
+  const { lang, t } = await getT();
   const devUsers = process.env.DEV_LOGIN === '1' && process.env.NODE_ENV !== 'production'
     ? await q<{ id: string; name: string; email: string; system_role: string }>(`SELECT id, name, email, system_role FROM users WHERE status='active' ORDER BY system_role, name LIMIT 20`)
     : [];
   return (
-    <div className="narrow">
+    <div className="narrow" style={{ position: 'relative' }}>
+      <LangSwitch lang={lang} className="lang-corner" />
       <div style={{ textAlign: 'center' }}><Logo width={240} /></div>
       <div className="card" style={{ marginTop: 28 }}>
-        <span className="eyebrow">Medlemsinnlogging</span>
-        <h1>Logg inn</h1>
-        <Flash sp={sp} />
+        <span className="eyebrow">{t.login.eyebrow}</span>
+        <h1>{t.login.title}</h1>
+        <Flash sp={sp} lang={lang} />
         {sp.sendt ? (
-          <p>Hvis adressen er registrert hos oss, har vi sendt en innloggingslenke. Den er gyldig i 15 minutter.</p>
+          <p>{t.login.sent}</p>
         ) : (
           <form action={loginAction}>
-            <div className="field"><label htmlFor="email">E-post</label><input id="email" name="email" type="email" required autoComplete="email" autoFocus /></div>
-            <button className="btn block">Send innloggingslenke</button>
+            <div className="field"><label htmlFor="email">{t.login.email}</label><input id="email" name="email" type="email" required autoComplete="email" autoFocus /></div>
+            <button className="btn block">{t.login.submit}</button>
           </form>
         )}
-        <p className="muted" style={{ marginTop: 16, fontSize: '.85rem' }}>Ingen passord. Du får en lenke på e-post, og bekrefter med koden fra autentiseringsappen din. Ikke medlem? Medlemskap skjer kun via invitasjon.</p>
+        <p className="muted" style={{ marginTop: 16, fontSize: '.85rem' }}>{t.login.help}</p>
       </div>
       {devUsers.length > 0 && (
         <div className="card flat" style={{ marginTop: 20, borderStyle: 'dashed' }}>

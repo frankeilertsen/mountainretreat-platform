@@ -1,6 +1,7 @@
 import { Db, getPool, q } from '../db';
 import { getSettings } from '../settings';
 import { nok } from '../format';
+import { nokL } from '../i18n/format';
 
 export type InviteRow = {
   id: string; invitee_email: string; invitee_name: string | null; status: string; created_at: string; member_name: string | null;
@@ -34,11 +35,12 @@ export const STAGE_LABEL: Record<InviteRow['stage'], [string, string]> = {
 };
 
 /** Human description of the current referral reward (from admin settings). */
-export async function rewardTerms(db: Db = getPool()) {
+export async function rewardTerms(db: Db = getPool(), lang: 'no' | 'en' = 'no') {
   const s = await getSettings(db);
+  const money = (o: number) => lang === 'en' ? nokL(o, 'en') : nok(o);
   if (s.referral_reward_type === 'percentage') {
-    const t = `${s.referral_reward_percentage} % av det første oppholdet (maks ${nok(Number(s.referral_reward_max_ore))})`;
+    const t = lang === 'en' ? `${s.referral_reward_percentage} % of the first stay (max ${money(Number(s.referral_reward_max_ore))})` : `${s.referral_reward_percentage} % av det første oppholdet (maks ${nok(Number(s.referral_reward_max_ore))})`;
     return { referrer: t, referred: t, vestingDays: Number(s.referral_reward_vesting_days) };
   }
-  return { referrer: nok(Number(s.referral_reward_referrer_ore)), referred: nok(Number(s.referral_reward_referred_ore)), vestingDays: Number(s.referral_reward_vesting_days) };
+  return { referrer: money(Number(s.referral_reward_referrer_ore)), referred: money(Number(s.referral_reward_referred_ore)), vestingDays: Number(s.referral_reward_vesting_days) };
 }

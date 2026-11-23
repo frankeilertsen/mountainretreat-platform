@@ -9,6 +9,7 @@ import { fmtDate } from '../format';
 export type LongTermInput = {
   name: string; email: string; phone?: string; propertyId?: string | null; moveIn?: string | null;
   duration?: string; persons?: number | null; message: string; consent: boolean; website?: string; // website = honeypot
+  lang?: 'no' | 'en';
 };
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
@@ -35,9 +36,12 @@ export async function submitLongTermInquiry(i: LongTermInput, ip: string | null)
   await enqueue({ to, type: 'long_term_inquiry', subject: `Forespørsel om fast leie fra ${name}`, payload: { replyTo: email },
     body: [`Ny forespørsel om fast leie via mountainretreat.no`, '', `Navn: ${name}`, `E-post: ${email}`, `Telefon: ${i.phone?.trim() || '–'}`,
       `Bolig: ${prop?.name ?? 'Ikke spesifisert'}`, `Ønsket innflytting: ${i.moveIn ? fmtDate(i.moveIn) : '–'}`, `Varighet: ${i.duration?.trim() || '–'}`,
-      `Antall personer: ${i.persons || '–'}`, '', 'Melding:', message, '', `Svar direkte på denne e-posten for å kontakte ${name}.`, `Alle forespørsler: ${appUrl('/admin/foresporsler')}`].join('\n') }, db);
-  await enqueue({ to: email, type: 'long_term_inquiry_receipt', subject: 'Vi har mottatt forespørselen din – Mountain Retreat',
-    body: `Hei ${name}!\n\nTakk for at du tok kontakt om fast leie. Vi har mottatt forespørselen og svarer deg så snart vi kan.\n\nVennlig hilsen\nMountain Retreat / FKE Property AS` }, db);
+      `Antall personer: ${i.persons || '–'}`, `Språk: ${i.lang === 'en' ? 'engelsk' : 'norsk'}`, '', 'Melding:', message, '', `Svar direkte på denne e-posten for å kontakte ${name}.`, `Alle forespørsler: ${appUrl('/admin/foresporsler')}`].join('\n') }, db);
+  await enqueue(i.lang === 'en'
+    ? { to: email, type: 'long_term_inquiry_receipt', subject: 'We have received your enquiry – Mountain Retreat',
+        body: `Hi ${name}!\n\nThank you for getting in touch about a long-term rental. We have received your enquiry and will reply as soon as we can.\n\nKind regards\nMountain Retreat / FKE Property AS` }
+    : { to: email, type: 'long_term_inquiry_receipt', subject: 'Vi har mottatt forespørselen din – Mountain Retreat',
+        body: `Hei ${name}!\n\nTakk for at du tok kontakt om fast leie. Vi har mottatt forespørselen og svarer deg så snart vi kan.\n\nVennlig hilsen\nMountain Retreat / FKE Property AS` }, db);
   await audit(db, { id: null, type: 'anonymous', ip }, 'inquiry.long_term_received', 'long_term_inquiry', row!.id);
   return { id: row!.id };
 }

@@ -1,6 +1,8 @@
 import { requireUser } from '@/lib/auth/current';
 import { one } from '@/lib/db';
 import { Flash } from '@/components/ui';
+import { getT } from '@/lib/i18n/lang';
+import { LangSwitch } from '@/components/LangSwitch';
 import { updateProfileAction, anonymizeAction } from '../../actions/member';
 
 export const dynamic = 'force-dynamic';
@@ -9,28 +11,31 @@ export const metadata = { title: 'Profil' };
 export default async function Profile({ searchParams }: { searchParams: Promise<Record<string, string>> }) {
   const sp = await searchParams;
   const u = await requireUser();
+  const { lang, t } = await getT();
+  const T = t.profile;
   const extra = await one<{ marketing_consent: boolean; referral_code: string | null }>('SELECT marketing_consent, referral_code FROM users WHERE id=$1', [u.id]);
   return (
     <>
-      <div className="page-head"><h1>Profil</h1></div>
-      <Flash sp={sp} />
+      <div className="page-head"><h1>{T.title}</h1></div>
+      <Flash sp={sp} lang={lang} />
       <div className="grid g2" style={{ alignItems: 'start' }}>
         <div className="card">
           <form action={updateProfileAction}>
-            <div className="field"><label>Navn</label><input name="name" defaultValue={u.name} required /></div>
-            <div className="field"><label>E-post</label><input value={u.email} disabled /><small className="muted">Kontakt administrator for å endre e-post.</small></div>
-            <div className="field"><label>Mobil</label><input name="phone" defaultValue={u.phone ?? ''} /></div>
-            <label className="check field"><input type="checkbox" name="marketing" defaultChecked={extra?.marketing_consent} /> Ja takk til nyheter og ledige perioder</label>
-            <button className="btn">Lagre</button>
+            <div className="field"><label>{T.name}</label><input name="name" defaultValue={u.name} required /></div>
+            <div className="field"><label>{T.email}</label><input value={u.email} disabled /><small className="muted">{T.emailNote}</small></div>
+            <div className="field"><label>{T.phone}</label><input name="phone" defaultValue={u.phone ?? ''} /></div>
+            <label className="check field"><input type="checkbox" name="marketing" defaultChecked={extra?.marketing_consent} /> {T.marketing}</label>
+            <button className="btn">{t.common.save}</button>
           </form>
         </div>
         <div className="stack">
-          <div className="card flat"><h3>Sikkerhet</h3><p className="muted">Innlogging med e-postlenke og tofaktor. Mistet telefonen? Bruk en gjenopprettingskode, eller kontakt administrator.</p>
-            <form action="/logout" method="post"><button className="btn ghost small">Logg ut</button></form></div>
-          <div className="card flat"><h3>Dine data</h3><p className="muted">Last ned alt vi har lagret om deg (bookinger, betalinger, bonus, invitasjoner).</p><a className="btn ghost small" href="/api/medlem/eksport">Last ned (JSON)</a></div>
+          <div className="card flat"><h3>{T.language}</h3><LangSwitch lang={lang} /></div>
+          <div className="card flat"><h3>{T.security}</h3><p className="muted">{T.securityText}</p>
+            <form action="/logout" method="post"><button className="btn ghost small">{t.common.logout}</button></form></div>
+          <div className="card flat"><h3>{T.data}</h3><p className="muted">{T.dataText}</p><a className="btn ghost small" href="/api/medlem/eksport">{T.download}</a></div>
           <div className="card flat" style={{ borderColor: 'var(--danger-soft)' }}>
-            <h3>Slett konto</h3><p className="muted">Navn, e-post og telefon fjernes. Regnskapsopplysninger beholdes anonymisert i 5 år (bokføringsloven).</p>
-            <form action={anonymizeAction} className="row"><input name="confirm" placeholder="Skriv SLETT" style={{ maxWidth: 160 }} /><button className="btn danger small">Anonymiser konto</button></form>
+            <h3>{T.del}</h3><p className="muted">{T.delText}</p>
+            <form action={anonymizeAction} className="row"><input name="confirm" placeholder={T.delPh} style={{ maxWidth: 160 }} /><button className="btn danger small">{T.delCta}</button></form>
           </div>
         </div>
       </div>

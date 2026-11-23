@@ -5,9 +5,9 @@ import { memberDiscount } from './memberDiscount';
 import { invitationsWithOutcome, rewardTerms } from './memberOverview';
 import type { BenefitData } from '@/components/Benefits';
 
-export async function loadBenefits(userId: string): Promise<BenefitData & { invites: Awaited<ReturnType<typeof invitationsWithOutcome>> }> {
+export async function loadBenefits(userId: string, lang: 'no' | 'en' = 'no'): Promise<BenefitData & { invites: Awaited<ReturnType<typeof invitationsWithOutcome>> }> {
   const [disc, bal, invites, terms, fee, maxUnused, unused] = await Promise.all([
-    memberDiscount(userId), rewardBalance(userId), invitationsWithOutcome(userId), rewardTerms(),
+    memberDiscount(userId), rewardBalance(userId), invitationsWithOutcome(userId), rewardTerms(getPool(), lang),
     getNum('airbnb_guest_fee_pct', 15), getNum('referral_reward_max_unused', 10),
     one<{ n: number }>(`SELECT count(*)::int AS n FROM reward_credits WHERE user_id=$1 AND source='referral' AND status IN ('pending_vest','available')`, [userId], getPool()),
   ]);

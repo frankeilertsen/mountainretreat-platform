@@ -1,0 +1,74 @@
+import type { Lang } from './dict';
+
+/** English versions of the Norwegian messages guests can see (flash messages and validation errors). */
+const EXACT: Record<string, string> = {
+  'Du er logget ut.': 'You have been logged out.',
+  'Lenken er utløpt eller allerede brukt. Be om en ny.': 'The link has expired or has already been used. Please request a new one.',
+  'Innloggingen feilet.': 'Login failed.',
+  'For mange forsøk. Vent litt og prøv igjen.': 'Too many attempts. Please wait a moment and try again.',
+  'Feil kode. Prøv igjen.': 'Incorrect code. Please try again.',
+  'Kontoen er midlertidig låst etter for mange feil forsøk. Prøv igjen om 15 minutter.': 'The account is temporarily locked after too many failed attempts. Please try again in 15 minutes.',
+  'Du må godta vilkårene.': 'You must accept the terms.',
+  'Skriv inn fullt navn.': 'Please enter your full name.',
+  'Invitasjonen finnes ikke.': 'The invitation does not exist.',
+  'Denne invitasjonen er allerede brukt.': 'This invitation has already been used.',
+  'Invitasjonen er trukket tilbake.': 'The invitation has been withdrawn.',
+  'Invitasjonen er utløpt. Be personen som inviterte deg om en ny.': 'The invitation has expired. Please ask the person who invited you for a new one.',
+  'Det finnes allerede en konto for denne e-postadressen.': 'An account already exists for this email address.',
+  'Mobilnummer er påkrevd for renholdere (brukes til varsler).': 'A mobile number is required for cleaners (used for alerts).',
+  'Forespørselen er sendt. Du får beskjed når den er behandlet.': 'Your request has been sent. We will let you know once it has been reviewed.',
+  'Datoene er ikke ledige.': 'The dates are not available.',
+  'Disse datoene ble nettopp tatt. Velg andre datoer.': 'These dates were just taken. Please choose other dates.',
+  'Noen av datoene er ikke åpne for booking.': 'Some of the dates are not open for booking.',
+  'Pris er ikke tilgjengelig for noen av datoene ennå. Velg andre datoer eller kontakt oss.': 'Prices are not yet available for some of the dates. Please choose other dates or contact us.',
+  'Innreise kan ikke være tilbake i tid.': 'Check-in cannot be in the past.',
+  'Minst én voksen må være med.': 'At least one adult must be included.',
+  'Utreise må være etter innreise.': 'Check-out must be after check-in.',
+  'Maksimalt 60 netter per booking.': 'A maximum of 60 nights per booking.',
+  'Ugyldige datoer.': 'Invalid dates.',
+  'Bookingen er kansellert.': 'The booking has been cancelled.',
+  'Kanselleringen er sendt til godkjenning.': 'Your cancellation has been sent for approval.',
+  'Faktura er sendt til e-posten din.': 'The invoice has been sent to your email.',
+  'Fristen for betaling er utløpt.': 'The payment deadline has passed.',
+  'Kunne ikke starte betalingen. Prøv igjen om litt.': 'Could not start the payment. Please try again shortly.',
+  'Betalingsløsningen er ikke satt opp ennå.': 'The payment solution has not been set up yet.',
+  'Denne betalingsmåten er ikke tilgjengelig.': 'This payment method is not available.',
+  'Lagret.': 'Saved.',
+  'Profilen er oppdatert.': 'Your profile has been updated.',
+  'Invitasjonen er sendt.': 'The invitation has been sent.',
+  'Søknaden er sendt.': 'Your application has been sent.',
+  'Ugyldig e-postadresse.': 'Invalid email address.',
+  'Denne personen er allerede medlem.': 'This person is already a member.',
+  'Du kan ikke invitere deg selv.': 'You cannot invite yourself.',
+  'Denne personen har allerede en aktiv invitasjon.': 'This person already has an active invitation.',
+  'Du kan invitere andre når medlemskapet ditt er godkjent for invitasjoner.': 'You can invite others once your membership has been approved for invitations.',
+  'Du har allerede en søknad til behandling.': 'You already have an application under review.',
+  'Du kan søke igjen tre måneder etter forrige avslag.': 'You can apply again three months after the previous decision.',
+  'Endringer må gjøres senest 7 dager før ankomst. Kontakt oss.': 'Changes must be made at least 7 days before arrival. Please contact us.',
+  'Flere gjester enn bestilt kan påvirke prisen. Kontakt oss, så oppdaterer vi bookingen.': 'More guests than booked may change the price. Please contact us and we will update the booking.',
+  'Skriv inn navnet ditt.': 'Please enter your name.',
+  'Fortell litt om hva du ser etter (minst 10 tegn).': 'Please tell us a little about what you are looking for (at least 10 characters).',
+  'Du må samtykke til at vi lagrer henvendelsen.': 'You must consent to us storing your enquiry.',
+  'Ugyldig dato.': 'Invalid date.',
+  'Skriv SLETT for å bekrefte.': 'Type DELETE to confirm.',
+  'Du har aktive bookinger. Kanseller dem eller vent til oppholdet er over.': 'You have active bookings. Cancel them or wait until the stay is over.',
+  'Betalingen ble avvist (test).': 'The payment was declined (test).',
+  'Du har ikke tilgang til dette.': 'You do not have access to this.',
+  'Du må logge inn på nytt.': 'Please log in again.',
+  'Noe gikk galt. Prøv igjen, eller kontakt administrator.': 'Something went wrong. Please try again or contact the administrator.',
+};
+const PATTERNS: [RegExp, (m: RegExpMatchArray) => string][] = [
+  [/^Minimum (\d+) netter(?: i (.+))?\.$/, m => `Minimum ${m[1]} nights${m[2] ? ` in ${m[2]}` : ''}.`],
+  [/^Maksimum (\d+) netter(?: i (.+))?\.$/, m => `Maximum ${m[1]} nights${m[2] ? ` in ${m[2]}` : ''}.`],
+  [/^Maks (\d+) gjester i denne boligen\.$/, m => `A maximum of ${m[1]} guests at this property.`],
+  [/^(.+) må bookes som hel periode \((.+)\)\.$/, m => `${m[1]} must be booked as a full period (${m[2]}).`],
+  [/^I perioden (.+) er byttedag (.+)\.$/, m => `During ${m[1]} the changeover day is ${({ mandag: 'Monday', tirsdag: 'Tuesday', onsdag: 'Wednesday', torsdag: 'Thursday', fredag: 'Friday', lørdag: 'Saturday', søndag: 'Sunday' } as Record<string, string>)[m[2]] ?? m[2]}.`],
+  [/^1–(\d+) gjester\.$/, m => `1–${m[1]} guests.`],
+];
+
+export function translateMessage(msg: string, lang: Lang): string {
+  if (lang === 'no') return msg;
+  if (EXACT[msg]) return EXACT[msg];
+  for (const [re, fn] of PATTERNS) { const m = msg.match(re); if (m) return fn(m); }
+  return msg;
+}
