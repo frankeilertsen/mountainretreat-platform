@@ -72,6 +72,7 @@ const EXACT: Record<string, string> = {
   'Noe gikk galt. Prøv igjen, eller kontakt administrator.': 'Something went wrong. Please try again or contact the administrator.',
 };
 const PATTERNS: [RegExp, (m: RegExpMatchArray) => string][] = [
+  [/^Du kan sende maks (\d+) invitasjoner per uke\.(?: Du kan sende flere fra (\d+)\.(\d+)\. kl\. (\d+:\d+)\.)?$/, m => `You can send at most ${m[1]} invitations per week.${m[2] ? ` You can send more from ${m[2]}/${m[3]} at ${m[4]}.` : ''}`],
   [/^Minimum (\d+) netter(?: i (.+))?\.$/, m => `Minimum ${m[1]} nights${m[2] ? ` in ${m[2]}` : ''}.`],
   [/^Maksimum (\d+) netter(?: i (.+))?\.$/, m => `Maximum ${m[1]} nights${m[2] ? ` in ${m[2]}` : ''}.`],
   [/^Maks (\d+) gjester i denne boligen\.$/, m => `A maximum of ${m[1]} guests at this property.`],

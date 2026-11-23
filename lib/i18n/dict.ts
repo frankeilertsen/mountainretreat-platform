@@ -129,6 +129,7 @@ const no = {
   invites: {
     eyebrow: 'Venner og familie', title: 'Inviter', lead: (a: string, b: string) => `Når noen du inviterer fullfører sitt første opphold, får du ${a} og vedkommende ${b} i bonus til neste booking. Kun det første oppholdet gir bonus.`,
     send: 'Send invitasjon', name: 'Navn', email: 'E-post', linkNote: (d: string) => `Lenken er personlig, kan brukes én gang og utløper etter ${d} dager.`,
+    quota: (left: number, limit: number) => `Du kan sende ${left} invitasjon${left === 1 ? '' : 'er'} til denne uken (maks ${limit} per 7 dager). Du kan invitere så mange du vil over tid – du og hver person du inviterer får bonus når vedkommende har fullført sitt første opphold.`,
     attach: 'Legg ved presentasjon (PDF)', noAttach: 'Ikke legg ved', attachHelp: 'Sendes som vedlegg i e-posten og kan åpnes fra invitasjonen.', preview: 'Se presentasjonen', language: 'Språk i invitasjonen',
     includes: 'Invitasjonen forteller om medlemsfordelene og har lenke for å opprette konto.',
     pendingTitle: 'Søknaden behandles', pendingText: 'Du får beskjed når du kan invitere andre.', wantTitle: 'Vil du invitere andre?',
@@ -300,6 +301,7 @@ const en: Dict = {
   invites: {
     eyebrow: 'Friends & family', title: 'Invite', lead: (a: string, b: string) => `When someone you invite completes their first stay, you receive ${a} and they receive ${b} as a bonus towards your next booking. Only the first stay earns a bonus.`,
     send: 'Send invitation', name: 'Name', email: 'Email', linkNote: (d: string) => `The link is personal, can be used once and expires after ${d} days.`,
+    quota: (left: number, limit: number) => `You can send ${left} more invitation${left === 1 ? '' : 's'} this week (max ${limit} per 7 days). You can invite as many people as you like over time – you and each person you invite receive a bonus once they have completed their first stay.`,
     attach: 'Attach presentation (PDF)', noAttach: 'Do not attach', attachHelp: 'Sent as an attachment in the email and can be opened from the invitation.', preview: 'View presentation', language: 'Invitation language',
     includes: 'The invitation describes the member benefits and includes a link to create an account.',
     pendingTitle: 'Your application is being reviewed', pendingText: 'We will let you know when you can invite others.', wantTitle: 'Would you like to invite others?',

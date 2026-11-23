@@ -23,11 +23,16 @@ export async function createInvitation(inviter: UserLike & { email: string; name
   const email = input.email.trim().toLowerCase();
   if (!EMAIL_RE.test(email)) throw new DomainError('bad_email', 'Ugyldig e-postadresse.');
   if (email === inviter.email.toLowerCase()) throw new DomainError('self_invite', 'Du kan ikke invitere deg selv.');
-  await rateLimit(`invite:${inviter.id}`, isAdmin(inviter) ? 200 : 10, 86400);
+  if (isAdmin(inviter)) await rateLimit(`invite:${inviter.id}`, 200, 86400);
 
   const token = randomToken();
   const days = await getNum('invitation_validity_days', 10);
   return tx(async c => {
+    if (!isAdmin(inviter)) {
+      // Serialise this member's invitations so two at once can't slip past the weekly limit
+      await c.query(`SELECT pg_advisory_xact_lock(hashtext('invite:' || $1))`, [inviter.id]);
+      await checkWeeklyInviteLimit(inviter.id, c);
+    }
     const existing = await one('SELECT id FROM users WHERE lower(email) = $1', [email], c);
     if (existing) throw new DomainError('already_member', 'Denne personen er allerede medlem.');
     // Expire stale pending invites for this address so a fresh one can be issued
@@ -67,6 +72,24 @@ export async function createInvitation(inviter: UserLike & { email: string; name
     await audit(c, actor, 'invitation.sent', 'invitation', inv!.id, undefined, { email, presentation: pres?.id ?? null, lang });
     return { invitationId: inv!.id, link };
   });
+}
+
+/** Members can invite as many people as they like, but at most N per rolling 7 days (setting invitation_weekly_limit, default 50). */
+export async function invitationQuota(userId: string, db: Db = getPool()): Promise<{ limit: number; used: number; remaining: number; nextFreeAt: string | null }> {
+  const limit = await getNum('invitation_weekly_limit', 50, db);
+  const r = await one<{ used: number; oldest: string | null }>(
+    `SELECT count(*)::int AS used, min(created_at) AS oldest FROM invitations WHERE inviter_user_id=$1 AND role='member' AND created_at > now() - interval '7 days'`, [userId], db);
+  const used = r?.used ?? 0;
+  const nextFreeAt = used >= limit && r?.oldest ? new Date(new Date(r.oldest).getTime() + 7 * 86400_000).toISOString() : null;
+  return { limit, used, remaining: Math.max(0, limit - used), nextFreeAt };
+}
+async function checkWeeklyInviteLimit(userId: string, db: Db) {
+  const qta = await invitationQuota(userId, db);
+  if (qta.limit > 0 && qta.used >= qta.limit) {
+    const p = qta.nextFreeAt ? Object.fromEntries(new Intl.DateTimeFormat('nb-NO', { timeZone: 'Europe/Oslo', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
+      .formatToParts(new Date(qta.nextFreeAt)).map(x => [x.type, x.value])) : null;
+    throw new DomainError('invite_limit', `Du kan sende maks ${qta.limit} invitasjoner per uke.${p ? ` Du kan sende flere fra ${p.day}.${p.month}. kl. ${p.hour}:${p.minute}.` : ''}`);
+  }
 }
 
 export async function getInvitationByToken(token: string) {

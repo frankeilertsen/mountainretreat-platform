@@ -1,6 +1,7 @@
 import { requireUser } from '@/lib/auth/current';
 import { can } from '@/lib/auth/rbac';
 import { invitationsWithOutcome, rewardTerms, STAGE_LABEL } from '@/lib/domain/memberOverview';
+import { invitationQuota } from '@/lib/domain/invitations';
 import { getPool } from '@/lib/db';
 import { listPresentations } from '@/lib/domain/presentations';
 import { InviteExtras } from '@/components/InviteExtras';
@@ -23,6 +24,7 @@ export default async function Invitations({ searchParams }: { searchParams: Prom
   const s = await getSettings();
   const terms = await rewardTerms(getPool(), lang);
   const presentations = await listPresentations({ activeOnly: true });
+  const quota = await invitationQuota(u.id);
   const earned = list.reduce((sum, i) => sum + (i.reward_ore ?? 0), 0);
   const mayInvite = can(u as any, 'invite');
   return (
@@ -40,6 +42,7 @@ export default async function Invitations({ searchParams }: { searchParams: Prom
               <InviteExtras presentations={presentations} labels={T} lang={lang} />
               <button className="btn">{T.send}</button>
               <p className="muted" style={{ fontSize: '.82rem', marginTop: 12 }}>{T.includes} {T.linkNote(String(s.invitation_validity_days))}</p>
+              <p className="muted" style={{ fontSize: '.82rem' }}>{T.quota(quota.remaining, quota.limit)}</p>
             </form>
           ) : u.loyalty_status === 'applied' ? (
             <><h3>{T.pendingTitle}</h3><p className="muted">{T.pendingText}</p></>

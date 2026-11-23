@@ -40,17 +40,18 @@ export default async function RewardsAdmin({ searchParams }: { searchParams: Pro
         </form>
         <form action={saveSettingsAction} className="card">
           <h3>Vervebonus</h3><input type="hidden" name="back" value="/admin/bonus" />
-          <p className="muted" style={{ fontSize: '.88rem' }}>Begge parter får bonus når det inviterte medlemmet fullfører sitt første opphold. Endringer gjelder for nye bonuser.</p>
+          <p className="muted" style={{ fontSize: '.88rem' }}>Den som inviterer og den som blir invitert får hver sin bonus når den inviterte fullfører sitt <strong>første</strong> opphold. Hver invitert person gir bonus bare én gang, men et medlem kan invitere mange og få bonus for hver av dem. Endringer gjelder for nye bonuser.</p>
           <div className="field"><label>Type</label><select name="referral_reward_type" defaultValue={s.referral_reward_type}><option value="fixed">Fast beløp</option><option value="percentage">Prosent av første opphold</option></select></div>
           <div className="fields">
-            <div><label>Vervet (kr, fast)</label><input name="referral_reward_referrer_ore" defaultValue={Number(s.referral_reward_referrer_ore) / 100} /></div>
-            <div><label>Ny (kr, fast)</label><input name="referral_reward_referred_ore" defaultValue={Number(s.referral_reward_referred_ore) / 100} /></div>
+            <div><label>Den som inviterer (kr)</label><input name="referral_reward_referrer_ore" defaultValue={Number(s.referral_reward_referrer_ore) / 100} /></div>
+            <div><label>Den inviterte (kr)</label><input name="referral_reward_referred_ore" defaultValue={Number(s.referral_reward_referred_ore) / 100} /></div>
             <div><label>Prosent</label><input name="referral_reward_percentage" defaultValue={s.referral_reward_percentage} /></div>
             <div><label>Maks (kr, prosent)</label><input name="referral_reward_max_ore" defaultValue={Number(s.referral_reward_max_ore) / 100} /></div>
             <div><label>Min. oppholdsverdi (kr)</label><input name="referral_min_qualifying_amount_ore" defaultValue={Number(s.referral_min_qualifying_amount_ore) / 100} /></div>
             <div><label>Opptjening (dager)</label><input name="referral_reward_vesting_days" defaultValue={s.referral_reward_vesting_days} /></div>
             <div><label>Gyldighet (dager)</label><input name="referral_reward_validity_days" defaultValue={s.referral_reward_validity_days} /></div>
             <div><label>Maks ubrukte bonuser</label><input name="referral_reward_max_unused" defaultValue={s.referral_reward_max_unused} /></div>
+            <div><label>Maks invitasjoner per uke</label><input name="invitation_weekly_limit" defaultValue={s.invitation_weekly_limit ?? '50'} /></div>
           </div>
           <button className="btn" style={{ marginTop: 12 }}>Lagre regler</button>
         </form>
