@@ -106,7 +106,7 @@ I tillegg: produksjonsbygg OK, alle sider testet for alle roller, og nettleserfl
 - Bilder lagres på lokal disk; trenger skylagring på serverløs plattform.
 - Personlig iCal-feed for renholdere (fra spesifikasjonen) er ikke laget.
 - Endring av datoer på en eksisterende booking gjøres ved å kansellere og sende ny forespørsel.
-- Innhold som admin skriver inn (boligbeskrivelser, romnavn, fasiliteter, husregler, tillegg) vises på det språket det er skrevet på – det finnes ikke egne engelske felt ennå. Admin- og renholdsportalen er kun på norsk, og e-post/SMS til medlemmer sendes foreløpig på norsk.
+- Innhold som admin skriver inn (boligbeskrivelser, romnavn, fasiliteter, husregler, tillegg) vises på det språket det er skrevet på – det finnes ikke egne engelske felt ennå. Admin- og renholdsportalen er kun på norsk. E-post om meldinger og bekreftelsen ved fast leie sendes på valgt språk; øvrige e-poster/SMS til medlemmer sendes foreløpig på norsk.
 - Sideoppdateringer er serverrendret. Meldingssidene henter nye meldinger automatisk hvert 15.–30. sekund (ikke sanntid); renholdere må laste siden på nytt.
 - Meldinger støtter ikke vedlegg/bilder ennå, og det sendes ikke SMS-varsel om meldinger.
 - Den innebygde bekreftelseskoden er et bilde og har ingen lydversjon; derfor står e-postadressen ved feltet som alternativ. Turnstile har bedre tilgjengelighet hvis det er viktig.
