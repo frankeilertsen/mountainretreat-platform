@@ -40,7 +40,7 @@ Mørk, eksklusiv profil: sort/antrasitt bakgrunn, gull/beige detaljer, Cormorant
 
 ## 2. Databasestruktur
 
-Fullt skjema: `db/migrations/0001_schema.sql` (+ standardinnstillinger i `0002`). Beløp i øre (heltall).
+Fullt skjema: `db/migrations/0001_schema.sql` (+ standardinnstillinger i `0002`, bekreftelseskode, språkvalg og meldinger i `0003`). Beløp i øre (heltall).
 
 - **Identitet:** `users`, `login_tokens`, `sessions`, `rate_limits`
 - **Medlemskap/verving:** `invitations`, `loyalty_applications`, `referrals`
@@ -51,7 +51,8 @@ Fullt skjema: `db/migrations/0001_schema.sql` (+ standardinnstillinger i `0002`)
 - **Betaling:** `payment_method_settings`, `payments`, `invoices`, `refunds`, `webhook_events`
 - **Bonus:** `reward_credits`, `reward_redemptions`, `reward_transactions`
 - **Renhold:** `helper_property_assignments`, `cleaning_tasks`, `cleaning_reports`, `photos`
-- **Drift:** `platform_settings`, `audit_log`, `notifications`, `job_runs`
+- **Meldinger:** `conversations`, `messages` (kan ikke endres/slettes)
+- **Drift:** `platform_settings`, `audit_log`, `notifications`, `job_runs`, `captcha_used`
 
 ## 3. Integrasjoner som virker (implementert og testet)
 
