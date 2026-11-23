@@ -1,7 +1,6 @@
 import Link from 'next/link';
 import { getSession } from '@/lib/auth/current';
 import { homeFor } from '@/lib/auth/rbac';
-import { getSettings } from '@/lib/settings';
 import { getT } from '@/lib/i18n/lang';
 import { LangSwitch } from '@/components/LangSwitch';
 
@@ -10,7 +9,6 @@ export const dynamic = 'force-dynamic';
 
 export default async function Landing() {
   const s = await getSession();
-  const st = await getSettings();
   const { lang, t } = await getT();
   const T = t.ff;
   return (
@@ -38,7 +36,7 @@ export default async function Landing() {
       </section>
       <section id="om" className="container" style={{ padding: '80px 24px' }}>
         <div className="grid g4">
-          {T.steps(st.airbnb_guest_fee_pct, st.member_base_discount_pct, st.member_loyalty_max_pct, st.member_loyalty_step_pct).map(([h, d]) => (
+          {T.steps.map(([h, d]) => (
             <div key={h}><span className="eyebrow">{h}</span><p style={{ fontFamily: 'var(--serif)', fontSize: '1.45rem', lineHeight: 1.35, color: 'var(--ink-2)' }}>{d}</p></div>
           ))}
         </div>

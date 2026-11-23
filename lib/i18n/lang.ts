@@ -12,6 +12,11 @@ export async function getLang(): Promise<Lang> {
   return /^(nb|nn|no)\b/.test(al) || al === '' ? 'no' : 'en';
 }
 
+/** The language the visitor has chosen with the flags, or null if they haven't chosen. */
+export async function chosenLang(): Promise<Lang | null> {
+  const c = (await cookies()).get(LANG_COOKIE)?.value;
+  return c === 'no' || c === 'en' ? c : null;
+}
 export async function getT() {
   const lang = await getLang();
   return { lang, t: dict[lang] };

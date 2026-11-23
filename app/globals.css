@@ -263,3 +263,13 @@ main { padding: 44px 0 90px; }
 .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--gold); margin-right: 8px; vertical-align: middle; }
 @media (max-width: 720px) { .bubble { max-width: 92%; } }
 .split-2-1 { grid-template-columns: minmax(0,2fr) minmax(0,1fr); } @media (max-width: 960px) { .split-2-1 { grid-template-columns: 1fr; } }
+
+/* Invitation page: benefits and presentation */
+.invite-benefits { margin: 22px 0 6px; padding: 22px 0 0; border-top: 1px solid var(--line); }
+.invite-benefits .ib { padding: 14px 16px; border: 1px solid var(--line-2); border-radius: 12px; background: var(--surface-2); }
+.invite-benefits .ib strong { color: var(--gold-2); font-weight: 500; }
+.invite-benefits .ib p { margin: 6px 0 0; font-size: .9rem; line-height: 1.5; }
+.pres-link { display: flex; gap: 14px; align-items: center; margin-top: 16px; padding: 14px 16px; border: 1px solid var(--gold-line); border-radius: 12px; text-decoration: none; color: inherit; background: var(--gold-soft); }
+.pres-link:hover { border-color: var(--gold); }
+.pdf-ico { flex: none; width: 42px; height: 50px; border-radius: 6px; display: grid; place-items: center; font-size: .7rem; font-weight: 600; letter-spacing: .08em; color: #1a1814; background: var(--gold); }
+.ib-grid { display: grid; gap: 12px; grid-template-columns: repeat(2, minmax(0, 1fr)); } @media (max-width: 640px) { .ib-grid { grid-template-columns: 1fr; } }

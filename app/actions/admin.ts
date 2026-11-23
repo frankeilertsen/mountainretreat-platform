@@ -97,7 +97,7 @@ export async function togglePaymentMethodAction(f: FormData) {
 // ------------------------------------------------ members
 export async function adminInviteAction(f: FormData) {
   const { u, actor } = await admin();
-  await run('/admin/medlemmer', async () => { const r = await createInvitation(u, { email: str(f, 'email'), name: str(f, 'name') }, actor); return `Invitasjon sendt. Lenke: ${r.link}`; });
+  await run('/admin/medlemmer', async () => { const r = await createInvitation(u, { email: str(f, 'email'), name: str(f, 'name'), presentationId: (v => v === 'none' ? null : /^[0-9a-f-]{36}$/i.test(v) ? v : undefined)(str(f, 'presentationId')), lang: str(f, 'lang') === 'en' ? 'en' : 'no' }, actor); return `Invitasjon sendt. Lenke: ${r.link}`; });
 }
 export async function adminRevokeInviteAction(f: FormData) {
   const { u, actor } = await admin();

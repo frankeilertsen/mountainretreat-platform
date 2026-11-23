@@ -70,7 +70,7 @@ export async function updateMyPreparationAction(f: FormData) {
 export async function inviteAction(f: FormData) {
   const u = await assertUser('invite');
   await run('/medlem/invitasjoner', async () => {
-    await createInvitation(u, { email: str(f, 'email'), name: str(f, 'name') }, actorFor(u, await clientIp()));
+    await createInvitation(u, { email: str(f, 'email'), name: str(f, 'name'), presentationId: (v => v === 'none' ? null : /^[0-9a-f-]{36}$/i.test(v) ? v : undefined)(str(f, 'presentationId')), lang: str(f, 'lang') === 'en' ? 'en' : 'no' }, actorFor(u, await clientIp()));
     return 'Invitasjonen er sendt.';
   });
 }

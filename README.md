@@ -29,6 +29,8 @@ Privat, invitasjonsbasert bookingplattform med medlemsportal, administrasjon, re
 | **Admin** | Oversikt med godkjenningskø, KPI-er, belegg, ankomster, synk- og renholdsstatus · sentral kalender (alle boliger × dager × kanaler) · bookinger · boliger · kanaler · medlemmer/ansatte/vervetre · bonus · betalinger/fakturaer/refusjoner · renhold · rapporter · innstillinger (alle frister og regler) · revisjonslogg. |
 | **Renholdsportal** | Egen rolle, mobil først. Admin inviterer renholderen, som registrerer seg selv med navn, mobil (påkrevd) og e-post og blir knyttet til boligen. Varsler på e-post og SMS (kan slås av/på i egen profil): ny booking/ny vask, tildelt, flyttet, avlyst, endret info om neste gjester, dagen før og påminnelse samme morgen (klokkeslett i innstillinger). I dag (utsjekk/innsjekk), dag/uke/måned, kort snutid uthevet, adresse, tider, antall gjester ut og inn, frist, instrukser. Start/ferdig, merk hvert rom ferdig, rapporter skade/mangel/avvik med bilde, kommentarer, bildeopplasting. Ser **ingen** navn, kontaktinfo, priser, betalinger eller verving. Ser kun tildelte oppgaver med mindre admin gir utvidet tilgang. |
 | **Sengeoppsett** | Rom med bilde, etasje, maks personer og sengeinstruks; senger med type (dobbel, enkel, køye nedre/øvre, sovesofa, ekstramadrass, barneseng), plasser, mål, prioritet og «kun barn». Fordelingen bruker romoppsett og kapasitet per seng – ikke gjester ÷ senger. Viser per rom hvilke senger som skal redes, hvilke som står ubrukt, og antall sengesett/dyner/puter/håndklær. Admin kan overstyre per booking. Hytta er lagt inn etter plantegningene (5 rom, 8 plasser + barneseng/madrass). |
+| **Presentasjoner (PDF) og invitasjoner** | Admin laster opp PDF-presentasjoner (bilder, informasjon og medlemsfordeler) under *Medlemmer → Presentasjoner (PDF)*: tittel, valgfri bolig, standard, skjul/aktiver, forhåndsvisning og hvor mange invitasjoner den er brukt i. Kun ekte PDF-er under 20 MB godtas (sjekkes på filinnhold). På invitasjonsskjemaet (admin og medlemmer) velges hvilken presentasjon som skal legges ved (standard er forhåndsvalgt, eller «Ikke legg ved») og språket i invitasjonen. PDF-en sendes som vedlegg i e-posten (filer over 15 MB sendes som lenke) og kan åpnes fra invitasjonssiden. Invitasjonen (e-post og side) beskriver medlemsfordelene med gjeldende satser fra innstillingene. Innloggede medlemmer finner aktive presentasjoner under *Medlemsfordeler*. Filene lagres utenfor den offentlige mappen og vises bare for administratorer, innloggede medlemmer og den som har en gyldig invitasjonslenke. |
+| **Synlighet av fordeler** | Medlemsfordelene (rabatter, avgift, bonus) vises **ikke** på de offentlige sidene (forsiden og venner-siden). De vises bare i invitasjonen og i medlemsportalen etter innlogging. |
 | **Meldinger** | Medlemmene har en innboks under *Meldinger* i medlemsportalen: de kan starte en samtale (emne, valgfri booking, melding), svare og se hele historikken. Fra en booking kan de trykke «Spør oss om denne bookingen». Admin har en felles innboks under *Medlemmer → Meldinger* med filtre (Venter på svar / Åpne / Avsluttede / Alle), søk i navn, emne, tekst og bookingref., medlemsinfo ved siden av samtalen, og kan avslutte og åpne samtaler igjen. Admin kan også starte en samtale fra medlemssiden eller bookingsiden. Antall uleste vises i menyen på begge sider, og sidene oppdateres automatisk (hvert 15.–30. sek) mens de er åpne. Varsling på e-post: administratorene når et medlem skriver, medlemmet når admin svarer (på medlemmets valgte språk, med lenke). Det sendes bare én e-post til meldingene er lest, så flere meldinger etter hverandre gir ikke mange e-poster. Historikken kan ikke endres eller slettes (låst i databasen), samtaler er bare synlige for medlemmet selv og administratorene, og meldingene er med i dataeksporten. |
 | **Varsler** | Outbox-tabell (sendes kun hvis endringen committes), dedupe-nøkler, e-post via Resend. Kanalfeltet (`email/sms/push`) er klart for SMS/push. Dekker alle hendelser i spesifikasjonen. |
 | **Sikkerhet/GDPR** | All autorisasjon server-side (én tilgangsmatrise, `lib/auth/rbac.ts`), append-only revisjonslogg håndhevet med trigger, ingen harde slettinger av forretningsdata, bildeopplasting validert på filsignatur og servert kun til autoriserte, sikkerhetsheadere, dataeksport (JSON) og anonymisering, oppbevaringsjobb. |
@@ -40,7 +42,7 @@ Mørk, eksklusiv profil: sort/antrasitt bakgrunn, gull/beige detaljer, Cormorant
 
 ## 2. Databasestruktur
 
-Fullt skjema: `db/migrations/0001_schema.sql` (+ standardinnstillinger i `0002`, bekreftelseskode, språkvalg og meldinger i `0003`). Beløp i øre (heltall).
+Fullt skjema: `db/migrations/0001_schema.sql` (+ standardinnstillinger i `0002`, bekreftelseskode, språkvalg og meldinger i `0003`, presentasjoner i `0004`). Beløp i øre (heltall).
 
 - **Identitet:** `users`, `login_tokens`, `sessions`, `rate_limits`
 - **Medlemskap/verving:** `invitations`, `loyalty_applications`, `referrals`
@@ -52,6 +54,7 @@ Fullt skjema: `db/migrations/0001_schema.sql` (+ standardinnstillinger i `0002`,
 - **Bonus:** `reward_credits`, `reward_redemptions`, `reward_transactions`
 - **Renhold:** `helper_property_assignments`, `cleaning_tasks`, `cleaning_reports`, `photos`
 - **Meldinger:** `conversations`, `messages` (kan ikke endres/slettes)
+- **Presentasjoner:** `presentations` (+ `invitations.presentation_id`, `invitations.lang`)
 - **Drift:** `platform_settings`, `audit_log`, `notifications`, `job_runs`, `captcha_used`
 
 ## 3. Integrasjoner som virker (implementert og testet)
@@ -80,7 +83,7 @@ Fullt skjema: `db/migrations/0001_schema.sql` (+ standardinnstillinger i `0002`,
 
 ## 5. Testresultater
 
-`npm test` – **71 tester, 11 filer, alle grønne** (mot ekte PostgreSQL):
+`npm test` – **74 tester, 12 filer, alle grønne** (mot ekte PostgreSQL):
 - `pricing` (11): ekstra gjester (per opphold/natt, med i Airbnb-sammenligningen), Airbnb-prising (nattpris, rabatter, sammenligning inkl. avgift, manglende pris, min. netter), spesifikasjonens eksempel (14 175 kr), min/maks netter, hel periode, byttedag, uprisede datoer, tillegg, vaskefritak
 - `booking` (13): hele flyten, prislåsing, 2 og 20 samtidige godkjenninger → én vinner, idempotent webhook-replay, holdutløp + automatisk refusjon av sen betaling, kanselleringsvilkår + automatisk godkjenning, dobbeltinnsending, tilgang
 - `rewards` (11): tak på ubrukte vervebonuser, én bonus per part selv ved gjentatte/samtidige utløsere, kun første opphold, prosent med tak, minstebeløp, selvverving, suspendert verver, FIFO + tilbakeføring, 100 % bonusdekning, justering/tilbaketrekking/hovedbok, ende til ende
@@ -91,6 +94,7 @@ Fullt skjema: `db/migrations/0001_schema.sql` (+ standardinnstillinger i `0002`,
 - `cleaning-notify` (2): renholder registrerer seg (mobil påkrevd) og knyttes til bolig; ny booking gir e-post + SMS etter egne valg, uten gjestenavn; påminnelse samme dag sendes én gang
 - `inquiry` (3): fast leie-forespørsel lagres, sendes til riktig adresse med svar-til avsender og bekreftes; validering, honeypot og rate limiting; bekreftelseskode (mangler, feil, brukt før, for rask, utløpt, forfalsket signatur, store/små bokstaver og mellomrom)
 - `messages` (3): medlem spør → admin varsles én gang til det er lest → admin svarer → medlemmet varsles på sitt språk, uleste-tellere; andre medlemmer og renholdere har ikke tilgang; historikken kan ikke endres/slettes; avslutt/åpne igjen (medlemssvar åpner); admin starter samtale; validering og rate limiting
+- `presentations` (3): kun admin laster opp, kun ekte PDF under 20 MB, standard og skjul; invitasjons-e-post beskriver fordelene, legger ved valgt PDF og følger valgt språk (norsk/engelsk); skjult presentasjon kan ikke legges ved; vedlegget lastes ved utsending; medlemmer kan legge ved
 - `channels` (7): parsing, import/avlysning, konflikt, speiling, feil sletter ikke data, eksport uten ekko, ærlig kapabilitetsstatus
 
 I tillegg: produksjonsbygg OK, alle sider testet for alle roller, og nettleserflyt ende til ende (forespørsel → godkjenning → testbetaling → bekreftet → invitasjon).
@@ -108,6 +112,7 @@ I tillegg: produksjonsbygg OK, alle sider testet for alle roller, og nettleserfl
 - Endring av datoer på en eksisterende booking gjøres ved å kansellere og sende ny forespørsel.
 - Innhold som admin skriver inn (boligbeskrivelser, romnavn, fasiliteter, husregler, tillegg) vises på det språket det er skrevet på – det finnes ikke egne engelske felt ennå. Admin- og renholdsportalen er kun på norsk. E-post om meldinger og bekreftelsen ved fast leie sendes på valgt språk; øvrige e-poster/SMS til medlemmer sendes foreløpig på norsk.
 - Sideoppdateringer er serverrendret. Meldingssidene henter nye meldinger automatisk hvert 15.–30. sekund (ikke sanntid); renholdere må laste siden på nytt.
+- PDF-presentasjoner byttes ved å laste opp en ny og skjule den gamle (ingen versjonering). Fordelene i invitasjonen er standardtekster med satsene fra innstillingene – selve teksten endres i `lib/domain/inviteBenefits.ts`.
 - Meldinger støtter ikke vedlegg/bilder ennå, og det sendes ikke SMS-varsel om meldinger.
 - Den innebygde bekreftelseskoden er et bilde og har ingen lydversjon; derfor står e-postadressen ved feltet som alternativ. Turnstile har bedre tilgjengelighet hvis det er viktig.
 

@@ -15,19 +15,19 @@ const no = {
     welcome: 'Velkommen', title: 'Hvordan vil du bo hos oss?',
     airbnbEyebrow: 'Ferieleie', airbnbTitle: 'Book via Airbnb', airbnbText: 'For alle gjester. Se ledige datoer, priser og omtaler, og book trygt gjennom Airbnb.',
     airbnbCta: 'Gå til Airbnb', soon: 'Kommer snart',
-    ffEyebrow: 'Kun for inviterte', ffTitle: 'Venner og familie', ffText: 'Medlemsportalen for inviterte. Ingen Airbnb-avgift, fast medlemsrabatt og lojalitetsrabatt som øker for hver booking.', ffCta: 'Gå videre',
+    ffEyebrow: 'Kun for inviterte', ffTitle: 'Venner og familie', ffText: 'Den private bookingportalen for venner og familie. Har du fått en invitasjon, eller er du allerede medlem, går du videre her.', ffCta: 'Gå videre',
     ltEyebrow: 'Langtid', ltTitle: 'Fast leie', ltText: 'Ønsker du å leie over lengre tid? Send oss en forespørsel, så tar vi kontakt for å avtale vilkår.', ltCta: 'Send forespørsel',
   },
   ff: {
     eyebrow: 'Kun for inviterte', title1: 'Et stille sted i fjellet,', title2: 'for de nærmeste.',
     lead: 'Mountain Retreat er FKE Property AS sin private bookingportal for venner og familie. Medlemskap skjer kun gjennom invitasjon.',
     how: 'Slik fungerer det', toMyPage: 'Til min side',
-    steps: (fee: string, base: string, max: string, step: string): [string, string][] => [
+    steps: [
       ['Invitasjon', 'Du blir medlem når noen du kjenner inviterer deg. Ingen åpen registrering.'],
+      ['Konto', 'Du oppretter kontoen fra lenken i invitasjonen og logger inn med e-post og tofaktor.'],
       ['Forespørsel', 'Velg datoer og send en forespørsel. Vi bekrefter, og du betaler trygt via kort.'],
-      ['Medlemspriser', `Ingen Airbnb-avgift (ca. ${fee} %), ${base} % medlemsrabatt – og opptil ${max} % ekstra lojalitetsrabatt, +${step} % per booking.`],
-      ['Del gleden', 'Inviter andre når medlemskapet ditt er godkjent – dere får begge bonus etter det første oppholdet.'],
-    ],
+      ['Medlemskap', 'Hva medlemskapet gir deg står i invitasjonen og på din side når du har logget inn.'],
+    ] as [string, string][],
   },
   lease: {
     eyebrow: 'Langtid', title: 'Fast leie', lead: 'Ønsker du å leie hos oss over lengre tid? Fortell oss litt om behovet ditt, så kontakter vi deg for å avtale vilkår og visning.',
@@ -55,7 +55,8 @@ const no = {
     memberText: (e: string) => `Opprett kontoen din for ${e}. Deretter setter du opp tofaktor med en autentiseringsapp.`,
     helperText: (p: string | null, e: string) => `Registrer deg som renholder${p ? ` for ${p}` : ''}. Du får varsel på e-post og SMS om nye bookinger og påminnelse samme dag som det skal vaskes. Innlogging skjer med ${e} og en kode fra en autentiseringsapp.`,
     name: 'Fullt navn', email: 'E-post', phoneHelper: 'Mobil (for SMS-varsler)', phone: 'Mobil (valgfritt)', terms: 'Jeg godtar vilkårene og har lest', privacyLink: 'personvernerklæringen',
-    marketing: 'Ja takk, gi meg beskjed om ledige perioder og nyheter (valgfritt).', createMember: 'Opprett konto', createHelper: 'Registrer meg',
+    marketing: 'Ja takk, gi meg beskjed om ledige perioder og nyheter (valgfritt).', createMember: 'Opprett konto',
+    benefitsTitle: 'Dette får du som medlem', presentation: 'Se presentasjonen', presentationText: 'Bilder og mer informasjon om stedet (PDF).', createTitle: 'Opprett konto', createHelper: 'Registrer meg',
   },
   nav: { overview: 'Oversikt', benefits: 'Medlemsfordeler', properties: 'Boliger', myPage: 'Min side', bookings: 'Mine bookinger', invite: 'Inviter venner', invitations: 'Invitasjoner', wallet: 'Bonuslommebok', messages: 'Meldinger', profile: 'Profil og personvern', admin: 'Administrasjon', toAdmin: 'Til admin', member: 'Medlem', tagline: 'Venner og familie' },
   status: {
@@ -76,6 +77,7 @@ const no = {
     loyalty: 'Lojalitetsrabatt', loyaltyMax: 'Maks oppnådd – takk for at du kommer tilbake!', loyaltyNext: (step: number, next: number) => `Starter på 0 %, +${step} % per booking. Neste: ${next} %.`,
     referral: 'Vervebonus', referralText: (pending: string | null, unused: number, max: number, r: string) => `${pending ? `${pending} på vei · ` : ''}${unused}/${max} ubrukte bonuser. Du får ${r} per venn som fullfører sitt første opphold.`, invite: 'Inviter →',
     pageEyebrow: 'Medlemsfordeler', pageTitle: 'Hva du sparer som medlem',
+    presTitle: 'Presentasjon', presText: 'Bilder og informasjon om stedet – fin å dele når du inviterer noen. Du kan også legge den ved invitasjonen.', open: 'Åpne', download: 'Last ned',
     pageLead: 'Prisene på Mountain Retreat tar utgangspunkt i det samme oppholdet på Airbnb. Som medlem slipper du Airbnbs serviceavgift, du får en fast medlemsrabatt, rabatten øker for hver booking, og du kan bruke vervebonus i tillegg.',
     calcEyebrow: 'Slik regnes prisen', calcTitle: (n: number, p: string) => `Eksempel: ${n} netter à ${p} + vask`,
     onAirbnb: 'På Airbnb', withUs: 'Hos oss', nightsCleaning: (n: number) => `${n} netter + vask`, serviceFee: (p: number) => `Serviceavgift (≈ ${p} %)`, totalAirbnb: 'Totalt på Airbnb',
@@ -127,6 +129,8 @@ const no = {
   invites: {
     eyebrow: 'Venner og familie', title: 'Inviter', lead: (a: string, b: string) => `Når noen du inviterer fullfører sitt første opphold, får du ${a} og vedkommende ${b} i bonus til neste booking. Kun det første oppholdet gir bonus.`,
     send: 'Send invitasjon', name: 'Navn', email: 'E-post', linkNote: (d: string) => `Lenken er personlig, kan brukes én gang og utløper etter ${d} dager.`,
+    attach: 'Legg ved presentasjon (PDF)', noAttach: 'Ikke legg ved', attachHelp: 'Sendes som vedlegg i e-posten og kan åpnes fra invitasjonen.', preview: 'Se presentasjonen', language: 'Språk i invitasjonen',
+    includes: 'Invitasjonen forteller om medlemsfordelene og har lenke for å opprette konto.',
     pendingTitle: 'Søknaden behandles', pendingText: 'Du får beskjed når du kan invitere andre.', wantTitle: 'Vil du invitere andre?',
     wantText: 'Medlemmer som selv er invitert av et annet medlem må få medlemskapet godkjent for invitasjoner.', apply: 'Søk om å kunne invitere',
     yours: 'Dine invitasjoner', earned: (a: string) => `Opptjent: ${a}`, none: 'Du har ikke invitert noen ennå.',
@@ -182,19 +186,19 @@ const en: Dict = {
     welcome: 'Welcome', title: 'How would you like to stay with us?',
     airbnbEyebrow: 'Holiday rental', airbnbTitle: 'Book via Airbnb', airbnbText: 'For all guests. See available dates, prices and reviews, and book securely through Airbnb.',
     airbnbCta: 'Go to Airbnb', soon: 'Coming soon',
-    ffEyebrow: 'By invitation only', ffTitle: 'Friends & family', ffText: 'The members’ portal for invited guests. No Airbnb fee, a fixed member discount and a loyalty discount that grows with every booking.', ffCta: 'Continue',
+    ffEyebrow: 'By invitation only', ffTitle: 'Friends & family', ffText: 'The private booking portal for friends and family. If you have received an invitation or are already a member, continue here.', ffCta: 'Continue',
     ltEyebrow: 'Long term', ltTitle: 'Long-term rental', ltText: 'Looking to rent for a longer period? Send us an enquiry and we will get in touch to agree on terms.', ltCta: 'Send enquiry',
   },
   ff: {
     eyebrow: 'By invitation only', title1: 'A quiet place in the mountains,', title2: 'for those closest to us.',
     lead: 'Mountain Retreat is FKE Property AS’s private booking portal for friends and family. Membership is by invitation only.',
     how: 'How it works', toMyPage: 'My page',
-    steps: (fee: string, base: string, max: string, step: string): [string, string][] => [
+    steps: [
       ['Invitation', 'You become a member when someone you know invites you. There is no open registration.'],
+      ['Account', 'You create your account from the link in your invitation and sign in with email and two-factor authentication.'],
       ['Request', 'Choose your dates and send a request. We confirm it, and you pay securely by card.'],
-      ['Member prices', `No Airbnb fee (approx. ${fee} %), ${base} % member discount – and up to ${max} % extra loyalty discount, +${step} % per booking.`],
-      ['Share the joy', 'Invite others once your membership is approved – you both receive a bonus after their first stay.'],
-    ],
+      ['Membership', 'What membership gives you is described in your invitation and on your page once you have signed in.'],
+    ] as [string, string][],
   },
   lease: {
     eyebrow: 'Long term', title: 'Long-term rental', lead: 'Would you like to rent from us for a longer period? Tell us a little about your needs and we will contact you to agree on terms and a viewing.',
@@ -223,6 +227,7 @@ const en: Dict = {
     helperText: (p: string | null, e: string) => `Register as a cleaner${p ? ` for ${p}` : ''}. You will receive email and SMS alerts about new bookings and a reminder on cleaning days. You log in with ${e} and a code from an authenticator app.`,
     name: 'Full name', email: 'Email', phoneHelper: 'Mobile (for SMS alerts)', phone: 'Mobile (optional)', terms: 'I accept the terms and have read the', privacyLink: 'privacy policy',
     marketing: 'Yes please, let me know about available dates and news (optional).', createMember: 'Create account', createHelper: 'Register',
+    benefitsTitle: 'What you get as a member', presentation: 'View the presentation', presentationText: 'Pictures and more information about the place (PDF).', createTitle: 'Create your account',
   },
   nav: { overview: 'Overview', benefits: 'Member benefits', properties: 'Properties', myPage: 'My page', bookings: 'My bookings', invite: 'Invite friends', invitations: 'Invitations', wallet: 'Bonus wallet', messages: 'Messages', profile: 'Profile & privacy', admin: 'Administration', toAdmin: 'Go to admin', member: 'Member', tagline: 'Friends & family' },
   status: {
@@ -243,6 +248,7 @@ const en: Dict = {
     loyalty: 'Loyalty discount', loyaltyMax: 'Maximum reached – thank you for coming back!', loyaltyNext: (step: number, next: number) => `Starts at 0 %, +${step} % per booking. Next: ${next} %.`,
     referral: 'Referral bonus', referralText: (pending: string | null, unused: number, max: number, r: string) => `${pending ? `${pending} on its way · ` : ''}${unused}/${max} unused bonuses. You get ${r} per friend who completes their first stay.`, invite: 'Invite →',
     pageEyebrow: 'Member benefits', pageTitle: 'What you save as a member',
+    presTitle: 'Presentation', presText: 'Pictures and information about the place – nice to share when you invite someone. You can also attach it to your invitation.', open: 'Open', download: 'Download',
     pageLead: 'Prices at Mountain Retreat are based on the same stay on Airbnb. As a member you avoid Airbnb’s service fee, receive a fixed member discount, earn a discount that grows with every booking, and can use referral bonuses on top.',
     calcEyebrow: 'How the price is calculated', calcTitle: (n: number, p: string) => `Example: ${n} nights at ${p} + cleaning`,
     onAirbnb: 'On Airbnb', withUs: 'With us', nightsCleaning: (n: number) => `${n} nights + cleaning`, serviceFee: (p: number) => `Service fee (≈ ${p} %)`, totalAirbnb: 'Total on Airbnb',
@@ -294,6 +300,8 @@ const en: Dict = {
   invites: {
     eyebrow: 'Friends & family', title: 'Invite', lead: (a: string, b: string) => `When someone you invite completes their first stay, you receive ${a} and they receive ${b} as a bonus towards your next booking. Only the first stay earns a bonus.`,
     send: 'Send invitation', name: 'Name', email: 'Email', linkNote: (d: string) => `The link is personal, can be used once and expires after ${d} days.`,
+    attach: 'Attach presentation (PDF)', noAttach: 'Do not attach', attachHelp: 'Sent as an attachment in the email and can be opened from the invitation.', preview: 'View presentation', language: 'Invitation language',
+    includes: 'The invitation describes the member benefits and includes a link to create an account.',
     pendingTitle: 'Your application is being reviewed', pendingText: 'We will let you know when you can invite others.', wantTitle: 'Would you like to invite others?',
     wantText: 'Members who were themselves invited by another member need their membership approved before they can invite.', apply: 'Apply to invite others',
     yours: 'Your invitations', earned: (a: string) => `Earned: ${a}`, none: 'You haven’t invited anyone yet.',

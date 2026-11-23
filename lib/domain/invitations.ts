@@ -8,10 +8,16 @@ import { can, isAdmin, UserLike } from '../auth/rbac';
 import { getNum } from '../settings';
 import { createSession } from '../auth/sessions';
 import { rateLimit } from '../ratelimit';
+import { inviteBenefits } from './inviteBenefits';
+import { MAX_ATTACH_BYTES } from './presentations';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
-export async function createInvitation(inviter: UserLike & { email: string; name: string }, input: { email: string; name?: string },
+/**
+ * presentationId: a presentation id, null = no attachment, undefined = the default presentation (if any).
+ * lang: language of the e-mail and the invitation page (the invitee can still switch).
+ */
+export async function createInvitation(inviter: UserLike & { email: string; name: string }, input: { email: string; name?: string; presentationId?: string | null; lang?: 'no' | 'en' },
   actor: Actor): Promise<{ invitationId: string; link: string }> {
   if (!can(inviter, 'invite')) throw forbidden('Du kan invitere andre når medlemskapet ditt er godkjent for invitasjoner.');
   const email = input.email.trim().toLowerCase();
@@ -26,27 +32,47 @@ export async function createInvitation(inviter: UserLike & { email: string; name
     if (existing) throw new DomainError('already_member', 'Denne personen er allerede medlem.');
     // Expire stale pending invites for this address so a fresh one can be issued
     await c.query(`UPDATE invitations SET status='expired' WHERE lower(invitee_email)=$1 AND status='pending' AND expires_at < now()`, [email]);
+    const lang = input.lang === 'en' ? 'en' : 'no';
+    let pres: { id: string; title: string; size_bytes: number } | null = null;
+    if (input.presentationId === undefined) pres = await one(`SELECT id, title, size_bytes FROM presentations WHERE is_default AND active`, [], c);
+    else if (input.presentationId) {
+      pres = await one(`SELECT id, title, size_bytes FROM presentations WHERE id=$1 AND active`, [input.presentationId], c);
+      if (!pres) throw new DomainError('presentation', 'Presentasjonen finnes ikke lenger. Velg en annen.');
+    }
     let inv: { id: string } | null;
     try {
       inv = await one<{ id: string }>(
-        `INSERT INTO invitations (inviter_user_id, invitee_email, invitee_name, token_hash, expires_at)
-         VALUES ($1,$2,$3,$4, now() + make_interval(days => $5)) RETURNING id`,
-        [inviter.id, email, input.name?.trim() || null, hashToken(token), days], c);
+        `INSERT INTO invitations (inviter_user_id, invitee_email, invitee_name, token_hash, expires_at, presentation_id, lang)
+         VALUES ($1,$2,$3,$4, now() + make_interval(days => $5), $6, $7) RETURNING id`,
+        [inviter.id, email, input.name?.trim() || null, hashToken(token), days, pres?.id ?? null, lang], c);
     } catch (e) {
       if (isPgError(e, PG_UNIQUE_VIOLATION)) throw new DomainError('pending_exists', 'Denne personen har allerede en aktiv invitasjon.');
       throw e;
     }
     const link = appUrl('/invitasjon/' + token);
-    await enqueue({ to: email, type: 'invitation', subject: `${inviter.name} har invitert deg til Mountain Retreat`,
-      body: `Hei${input.name ? ' ' + input.name : ''}!\n\n${inviter.name} har invitert deg til Mountain Retreat – en privat bookingportal for venner og familie.\n\nOpprett kontoen din her (gyldig i ${days} dager):\n${link}` }, c);
-    await audit(c, actor, 'invitation.sent', 'invitation', inv!.id, undefined, { email });
+    const benefits = (await inviteBenefits(lang, c)).map(b => `• ${b.title}: ${b.text}`).join('\n');
+    const pdfLink = pres ? appUrl(`/invitasjon/${token}/presentasjon`) : null;
+    const attached = !!pres && pres.size_bytes <= MAX_ATTACH_BYTES;
+    const hi = input.name?.trim() ? ' ' + input.name.trim() : '';
+    const body = lang === 'en'
+      ? `Hi${hi}!\n\n${inviter.name} has invited you to Mountain Retreat – a private booking portal for friends and family.\n\nAs a member you get:\n${benefits}\n\n`
+        + (pres ? `${attached ? 'The attached presentation' : 'The presentation'} has pictures and more information about the place${attached ? '' : `: ${pdfLink}`}.\n\n` : '')
+        + `Create your account here (valid for ${days} days):\n${link}`
+      : `Hei${hi}!\n\n${inviter.name} har invitert deg til Mountain Retreat – en privat bookingportal for venner og familie.\n\nSom medlem får du:\n${benefits}\n\n`
+        + (pres ? `${attached ? 'I presentasjonen som er lagt ved' : 'I presentasjonen'} finner du bilder og mer informasjon om stedet${attached ? '' : `: ${pdfLink}`}.\n\n` : '')
+        + `Opprett kontoen din her (gyldig i ${days} dager):\n${link}`;
+    await enqueue({ to: email, type: 'invitation',
+      subject: lang === 'en' ? `${inviter.name} has invited you to Mountain Retreat` : `${inviter.name} har invitert deg til Mountain Retreat`,
+      body, payload: attached ? { attachPresentationId: pres!.id } : undefined }, c);
+    await audit(c, actor, 'invitation.sent', 'invitation', inv!.id, undefined, { email, presentation: pres?.id ?? null, lang });
     return { invitationId: inv!.id, link };
   });
 }
 
 export async function getInvitationByToken(token: string) {
-  return one<{ id: string; invitee_email: string; invitee_name: string | null; status: string; expires_at: string; inviter_name: string; role: string; property_name: string | null }>(
-    `SELECT i.id, i.invitee_email, i.invitee_name, i.status, i.expires_at, u.name AS inviter_name, i.role, (SELECT name FROM properties WHERE id=i.property_id) AS property_name
+  return one<{ id: string; invitee_email: string; invitee_name: string | null; status: string; expires_at: string; inviter_name: string; role: string; property_name: string | null; presentation_id: string | null; presentation_title: string | null; lang: 'no' | 'en' }>(
+    `SELECT i.id, i.invitee_email, i.invitee_name, i.status, i.expires_at, u.name AS inviter_name, i.role, (SELECT name FROM properties WHERE id=i.property_id) AS property_name,
+       i.presentation_id, (SELECT title FROM presentations WHERE id=i.presentation_id AND active) AS presentation_title, i.lang
      FROM invitations i JOIN users u ON u.id = i.inviter_user_id WHERE i.token_hash = $1`, [hashToken(token)]);
 }
 

@@ -4,6 +4,7 @@ import { loadBenefits } from '@/lib/domain/benefits';
 import { BenefitCards } from '@/components/Benefits';
 import { getT } from '@/lib/i18n/lang';
 import { nokL } from '@/lib/i18n/format';
+import { listPresentations } from '@/lib/domain/presentations';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Medlemsfordeler' };
@@ -14,6 +15,7 @@ export default async function Benefits() {
   const B = t.benefits;
   const nok = (o: number) => nokL(o, lang);
   const b = await loadBenefits(u.id, lang);
+  const presentations = await listPresentations({ activeOnly: true });
   const { disc, terms } = b;
   // Worked example: 3 nights at 2 000 kr + 1 200 kr cleaning
   const nightly = 200000, nights = 3, cleaning = 120000;
@@ -72,6 +74,16 @@ export default async function Benefits() {
           </div>
         </div>
       </div>
+      {presentations.length > 0 && (
+        <div className="card" style={{ marginTop: 24 }}>
+          <span className="eyebrow">{B.presTitle}</span>
+          <p className="muted">{B.presText}</p>
+          {presentations.map(p => (
+            <div key={p.id} className="row between" style={{ padding: '10px 0', borderTop: '1px solid var(--line)' }}>
+              <span><span className="pdf-ico" style={{ display: 'inline-grid', width: 32, height: 38, marginRight: 12, verticalAlign: 'middle' }}>PDF</span>{p.title}{p.property_name ? <small className="muted"> · {p.property_name}</small> : null}</span>
+              <span className="row"><a className="btn ghost small" href={`/api/presentasjoner/${p.id}`} target="_blank" rel="noopener">{B.open}</a><a className="btn secondary small" href={`/api/presentasjoner/${p.id}?last-ned`}>{B.download}</a></span>
+            </div>))}
+        </div>)}
     </>
   );
 }

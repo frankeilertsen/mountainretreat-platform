@@ -29,22 +29,25 @@ export async function notifyAdmins(n: Omit<NotificationInput, 'to' | 'userId'>, 
   }
 }
 
-export interface ChannelSender { send(to: string, subject: string, text: string, opts?: { replyTo?: string }): Promise<void>; }
+export type Attachment = { filename: string; content: Buffer };
+export interface ChannelSender { send(to: string, subject: string, text: string, opts?: { replyTo?: string; attachments?: Attachment[] }): Promise<void>; }
 
 class ResendEmail implements ChannelSender {
   constructor(private apiKey: string, private from: string) {}
-  async send(to: string, subject: string, text: string, opts?: { replyTo?: string }) {
+  async send(to: string, subject: string, text: string, opts?: { replyTo?: string; attachments?: Attachment[] }) {
+    const attachments = opts?.attachments?.map(a => ({ filename: a.filename, content: a.content.toString('base64') }));
     const res = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: { Authorization: `Bearer ${this.apiKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from: this.from, to, subject, text, html: renderHtml(subject, text), ...(opts?.replyTo ? { reply_to: opts.replyTo } : {}) }),
+      body: JSON.stringify({ from: this.from, to, subject, text, html: renderHtml(subject, text), ...(opts?.replyTo ? { reply_to: opts.replyTo } : {}), ...(attachments?.length ? { attachments } : {}) }),
     });
     if (!res.ok) throw new Error(`Resend ${res.status}: ${await res.text()}`);
   }
 }
 class LogOnlyEmail implements ChannelSender {
-  async send(to: string, subject: string, text: string) {
-    console.log(`\n[email:dev] to=${to}\nsubject: ${subject}\n${text}\n`);
+  async send(to: string, subject: string, text: string, opts?: { attachments?: Attachment[] }) {
+    const att = opts?.attachments?.map(a => `\n[vedlegg: ${a.filename}, ${Math.round(a.content.length / 1024)} KB]`).join('') ?? '';
+    console.log(`\n[email:dev] to=${to}\nsubject: ${subject}\n${text}${att}\n`);
   }
 }
 
@@ -100,7 +103,7 @@ export async function deliverQueued(limit = 50): Promise<{ sent: number; failed:
   let sent = 0, failed = 0;
   for (const r of rows) {
     try {
-      if (r.channel === 'email') await email.send(r.to_address, r.subject, r.body, { replyTo: r.payload?.replyTo });
+      if (r.channel === 'email') await email.send(r.to_address, r.subject, r.body, { replyTo: r.payload?.replyTo, attachments: await loadAttachments(r.payload) });
       else if (r.channel === 'sms') await sms.send(r.to_address, r.subject, r.body);
       else throw new Error(`No sender configured for channel ${r.channel}`);
       await db.query(`UPDATE notifications SET status='sent', sent_at=now(), last_error=NULL WHERE id=$1`, [r.id]);
@@ -112,6 +115,14 @@ export async function deliverQueued(limit = 50): Promise<{ sent: number; failed:
     }
   }
   return { sent, failed };
+}
+
+/** Attachments referenced from a notification payload (loaded at send time, so files are not copied into the queue). */
+async function loadAttachments(payload: any): Promise<Attachment[] | undefined> {
+  if (!payload?.attachPresentationId) return undefined;
+  const { readPresentation } = await import('./domain/presentations');
+  const p = await readPresentation(payload.attachPresentationId, { includeInactive: true });
+  return p ? [{ filename: p.original_filename, content: p.data }] : undefined; // missing file: the e-mail still goes out (the link on the invitation page remains)
 }
 
 export function appUrl(path = ''): string {

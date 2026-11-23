@@ -4,6 +4,8 @@ import { fmtDate } from '@/lib/format';
 import { getSession } from '@/lib/auth/current';
 import { Flash, Status } from '@/components/ui';
 import { getSettings } from '@/lib/settings';
+import { listPresentations } from '@/lib/domain/presentations';
+import { InviteExtras } from '@/components/InviteExtras';
 import { adminInviteAction, adminRevokeInviteAction, createStaffAction, inviteHelperAction } from '../../actions/admin';
 
 export const dynamic = 'force-dynamic';
@@ -12,6 +14,7 @@ const ROLE: Record<string, string> = { super_admin: 'Super-admin', admin: 'Eiend
 
 export default async function Members({ searchParams }: { searchParams: Promise<Record<string, string>> }) {
   const sp = await searchParams;
+  const presentations = await listPresentations({ activeOnly: true });
   const me = await getSession();
   const users = await q(`SELECT u.id, u.name, u.email, u.system_role, u.status, u.invite_tier, u.loyalty_status, u.created_at, u.last_login_at, iu.name AS inviter, u.member_discount_override_pct::float AS override,
       (SELECT count(*) FROM bookings b WHERE b.member_id=u.id AND b.status IN ('confirmed','completed','cancellation_requested'))::int AS stays,
@@ -41,7 +44,10 @@ export default async function Members({ searchParams }: { searchParams: Promise<
       <div className="grid g3" style={{ alignItems: 'start' }}>
         <div className="card">
           <h3>Inviter medlem</h3>
-          <form action={adminInviteAction}><div className="field"><label>Navn</label><input name="name" /></div><div className="field"><label>E-post</label><input type="email" name="email" required /></div><button className="btn">Send invitasjon</button></form>
+          <form action={adminInviteAction}><div className="field"><label>Navn</label><input name="name" /></div><div className="field"><label>E-post</label><input type="email" name="email" required /></div>
+            <InviteExtras presentations={presentations} lang="no" labels={{ attach: 'Legg ved presentasjon (PDF)', noAttach: 'Ikke legg ved', attachHelp: 'Sendes som vedlegg i e-posten og kan åpnes fra invitasjonen.', preview: 'Se presentasjonen', language: 'Språk i invitasjonen' }} />
+            <button className="btn">Send invitasjon</button>
+            <p className="muted" style={{ fontSize: '.82rem', marginTop: 10 }}>Presentasjonene lastes opp under <a href="/admin/presentasjoner">Presentasjoner (PDF)</a>.</p></form>
           {invites.length > 0 && <><h4 style={{ marginTop: 20 }}>Ventende invitasjoner</h4><ul className="list">{invites.map(i => (
             <li key={i.id} className="row between"><span>{i.invitee_name ?? i.invitee_email}<br /><small>{i.role === 'helper' ? 'Renholder · ' : ''}fra {i.inviter} · utløper {fmtDate(i.expires_at)}</small></span>
               <form action={adminRevokeInviteAction}><input type="hidden" name="id" value={i.id} /><button className="btn ghost small">Trekk</button></form></li>))}</ul></>}

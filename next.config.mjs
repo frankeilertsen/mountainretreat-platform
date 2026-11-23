@@ -5,7 +5,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const nextConfig = {
   serverExternalPackages: ['pg', 'node-ical', 'svg-captcha'],
   webpack(config) { config.resolve.alias['@'] = __dirname; return config; },
-  experimental: { serverActions: { bodySizeLimit: '12mb' } },
+  experimental: { serverActions: { bodySizeLimit: '22mb' } },
   async headers() {
     return [{
       source: '/(.*)',
