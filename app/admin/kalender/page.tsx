@@ -16,8 +16,9 @@ export default async function CentralCalendar({ searchParams }: { searchParams: 
   const to = addDays(from, days);
   const props = await q<{ id: string; name: string }>(`SELECT id, name FROM properties WHERE active ORDER BY name`);
   const blocks = await q(`SELECT ab.id, ab.property_id, ab.block_type, to_char(lower(ab.date_range),'YYYY-MM-DD') AS start, to_char(upper(ab.date_range),'YYYY-MM-DD') AS "end", ab.reference_id, ab.reason,
-      cc.display_name AS channel, b.status AS booking_status, b.reference, u.name AS member
+      cc.display_name AS channel, ee.block_kind, b.status AS booking_status, b.reference, u.name AS member
     FROM availability_blocks ab LEFT JOIN channel_connections cc ON cc.id=ab.source_connection_id
+    LEFT JOIN external_calendar_events ee ON ab.block_type='external_sync' AND ee.id=ab.reference_id
     LEFT JOIN bookings b ON ab.block_type='platform_booking' AND b.id=ab.reference_id LEFT JOIN users u ON u.id=b.member_id
     WHERE ab.date_range && daterange($1::date,$2::date) ORDER BY lower(ab.date_range)`, [from, to]);
   const conflicts = await q(`SELECT e.property_id, to_char(e.start_date,'YYYY-MM-DD') AS start, to_char(e.end_date,'YYYY-MM-DD') AS "end", cc.display_name FROM external_calendar_events e JOIN channel_connections cc ON cc.id=e.connection_id WHERE e.sync_state='conflict' AND daterange(e.start_date,e.end_date) && daterange($1::date,$2::date)`, [from, to]);
@@ -37,8 +38,8 @@ export default async function CentralCalendar({ searchParams }: { searchParams: 
   const dayCls = (d: string) => `${isoWeekday(d) >= 6 ? 'wknd' : ''} ${d === today ? 'today' : ''} ${d.endsWith('-01') && d !== from ? 'mstart' : ''}`;
   const manual = blocks.filter(b => b.block_type === 'manual_admin' && b.end >= today);
 
-  const labelFor = (b: any) => b.block_type === 'platform_booking' ? `${b.member ?? ''}` : b.block_type === 'external_sync' ? (b.channel ?? 'Ekstern') : (b.reason ?? 'Sperret');
-  const clsFor = (b: any) => b.block_type === 'platform_booking' ? (b.booking_status === 'awaiting_payment' ? 'blk-hold' : 'blk-platform_booking') : `blk-${b.block_type}`;
+  const labelFor = (b: any) => b.block_type === 'platform_booking' ? `${b.member ?? ''}` : b.block_type === 'external_sync' ? (b.block_kind === 'owner_block' ? `Stengt i ${b.channel ?? 'kanal'}` : (b.channel ?? 'Ekstern')) : (b.reason ?? 'Sperret');
+  const clsFor = (b: any) => b.block_type === 'platform_booking' ? (b.booking_status === 'awaiting_payment' ? 'blk-hold' : 'blk-platform_booking') : b.block_type === 'external_sync' && b.block_kind === 'owner_block' ? 'blk-closed' : `blk-${b.block_type}`;
   return (
     <>
       <div className="page-head row between">
@@ -56,7 +57,7 @@ export default async function CentralCalendar({ searchParams }: { searchParams: 
       <Flash sp={sp} />
       <div className="legend" style={{ marginBottom: 12 }}>
         <span><i style={{ background: 'var(--gold)' }} />Bekreftet (Mountain Retreat)</span><span><i style={{ background: '#8a7448' }} />Venter betaling</span>
-        <span><i style={{ background: '#6f8a9b' }} />Ekstern kanal</span><span><i style={{ background: '#4a4740' }} />Manuell sperring</span><span><i style={{ background: 'var(--danger)' }} />Konflikt</span>
+        <span><i style={{ background: '#6f8a9b' }} />Booking i ekstern kanal</span><span><i className="lg-closed" />Stengt i kanal (ikke booking)</span><span><i style={{ background: '#4a4740' }} />Manuell sperring</span><span><i style={{ background: 'var(--danger)' }} />Konflikt</span>
         <span><i style={{ background: 'transparent', border: '1px dashed var(--gold)' }} />Forespørsel (holder ikke datoer)</span>
       </div>
       <div className="mcal">

@@ -20,7 +20,7 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
     q(`SELECT la.id, u.name, u.email, la.created_at, iu.name AS inviter FROM loyalty_applications la JOIN users u ON u.id=la.applicant_user_id LEFT JOIN users iu ON iu.id=u.invited_by_user_id WHERE la.status='pending' ORDER BY la.created_at`),
     q(`SELECT * FROM (
          SELECT 'booking' AS kind, b.id, to_char(b.start_date,'YYYY-MM-DD') AS start, to_char(b.end_date,'YYYY-MM-DD') AS "end", p.name AS property, u.name AS who, b.status, 'mountainretreat.no' AS channel FROM bookings b JOIN properties p ON p.id=b.property_id JOIN users u ON u.id=b.member_id WHERE b.status IN ('confirmed','awaiting_payment') AND b.start_date BETWEEN $1 AND $2
-         UNION ALL SELECT 'external', e.id, to_char(e.start_date,'YYYY-MM-DD'), to_char(e.end_date,'YYYY-MM-DD'), p.name, '–', e.sync_state, cc.display_name FROM external_calendar_events e JOIN properties p ON p.id=e.property_id JOIN channel_connections cc ON cc.id=e.connection_id WHERE e.sync_state IN ('active','conflict') AND e.start_date BETWEEN $1 AND $2
+         UNION ALL SELECT 'external', e.id, to_char(e.start_date,'YYYY-MM-DD'), to_char(e.end_date,'YYYY-MM-DD'), p.name, '–', e.sync_state, cc.display_name FROM external_calendar_events e JOIN properties p ON p.id=e.property_id JOIN channel_connections cc ON cc.id=e.connection_id WHERE e.sync_state IN ('active','conflict') AND e.block_kind <> 'owner_block' AND e.start_date BETWEEN $1 AND $2
        ) x ORDER BY start LIMIT 12`, [today, in30]),
     one(`SELECT (SELECT count(*) FROM bookings WHERE status='awaiting_payment')::int AS awaiting,
                 (SELECT count(*) FROM bookings WHERE status='confirmed' AND start_date >= current_date)::int AS confirmed,

@@ -17,6 +17,20 @@ export function adapterFor(conn: { integration_mode: string; channel: string }):
   return directApiAdapter;
 }
 
+/**
+ * What an iCal event from a channel is. Airbnb exports two kinds of events in the same feed:
+ *  - "Reserved"                → a real guest reservation (needs cleaning)
+ *  - "Airbnb (Not available)"  → dates closed in Airbnb: owner blocks, advance notice ("no same-day check-in"),
+ *                                preparation time, or dates outside the booking window. Not a stay – no cleaning.
+ * Booking.com uses "CLOSED - Not available", Vrbo "Blocked". Unknown summaries are treated as stays to stay safe.
+ */
+export function classifyEvent(summary: string | null | undefined): 'reservation' | 'owner_block' | 'unknown' {
+  const s = (summary ?? '').toLowerCase();
+  if (/not available|unavailable|blocked|closed|ikke tilgjengelig|sperret/.test(s)) return 'owner_block';
+  if (/reserved|reservation|booking|booked|reservert/.test(s)) return 'reservation';
+  return 'unknown';
+}
+
 type Conn = { id: string; property_id: string; channel: string; display_name: string; integration_mode: string; ical_url: string | null; config: any };
 
 /**
@@ -56,7 +70,7 @@ export async function applySnapshot(conn: Conn, events: ExternalEvent[], db?: Db
         await c.query(`UPDATE external_calendar_events SET start_date=$2, end_date=$3, raw_summary=$4, last_seen_at=now(), sync_state='active' WHERE id=$1`, [ex.id, ev.start, ev.end, ev.summary]);
         eventId = ex.id;
       } else {
-        const kind = /not available|blocked|closed/i.test(ev.summary ?? '') ? 'unknown' : /reserved|reservation|booking|airbnb/i.test(ev.summary ?? '') ? 'reservation' : 'unknown';
+        const kind = classifyEvent(ev.summary);
         const r = await one<{ id: string }>(
           `INSERT INTO external_calendar_events (property_id, connection_id, uid, start_date, end_date, raw_summary, block_kind) VALUES ($1,$2,$3,$4,$5,$6,$7)
            ON CONFLICT (connection_id, uid) DO UPDATE SET start_date=EXCLUDED.start_date, end_date=EXCLUDED.end_date, sync_state='active', removed_at=NULL, last_seen_at=now() RETURNING id`,

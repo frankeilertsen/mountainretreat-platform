@@ -16,7 +16,7 @@ export default async function AdminBookings({ searchParams }: { searchParams: Pr
       FROM external_calendar_events e JOIN channel_connections cc ON cc.id=e.connection_id JOIN properties p ON p.id=e.property_id WHERE e.sync_state <> 'removed' AND e.end_date >= current_date - 30 ORDER BY e.start_date`);
     return (<><Head f={f} search={search} sp={sp} />
       <div className="card"><div className="table-wrap"><table><thead><tr><th>Kanal</th><th>Bolig</th><th>Datoer</th><th>Type</th><th>Status</th></tr></thead><tbody>
-        {ext.map(e => <tr key={e.id}><td>{e.display_name}</td><td>{e.property}</td><td>{fmtDate(e.start)} – {fmtDate(e.end)}</td><td><small>{e.block_kind} · {e.raw_summary}</small></td><td><Status s={e.sync_state === 'active' ? 'success' : e.sync_state} /></td></tr>)}
+        {ext.map(e => <tr key={e.id}><td>{e.display_name}</td><td>{e.property}</td><td>{fmtDate(e.start)} – {fmtDate(e.end)}</td><td><small>{({ reservation: 'Booking', owner_block: 'Stengt (ingen vask)', unknown: 'Ukjent (behandles som booking)' } as Record<string, string>)[e.block_kind] ?? e.block_kind} · {e.raw_summary}</small></td><td><Status s={e.sync_state === 'active' ? 'success' : e.sync_state} /></td></tr>)}
       </tbody></table></div>{ext.length === 0 && <Empty>Ingen eksterne bookinger.</Empty>}</div></>);
   }
   const where = f === 'aktive' ? `b.status IN ('pending_review','awaiting_payment','confirmed','cancellation_requested')` : f === 'avsluttet' ? `b.status IN ('rejected','cancelled','expired')` : f === 'alle' ? 'true' : `b.status = $2`;

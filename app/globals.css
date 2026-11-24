@@ -278,3 +278,7 @@ main { padding: 44px 0 90px; }
 .mcal tr.months th { height: 30px; padding: 0 10px; text-align: left; font-family: var(--serif, 'Cormorant Garamond', serif); font-size: .98rem; color: var(--gold-2); text-transform: capitalize; letter-spacing: .02em; white-space: nowrap; overflow: hidden; border-bottom: 1px solid var(--line-2); }
 .mcal tr.months th.prop { vertical-align: middle; font-family: inherit; font-size: .86rem; color: var(--ink); text-transform: none; }
 .mcal .mstart { border-left: 2px solid var(--gold); }
+
+/* Dates closed in a channel (Airbnb "Not available"): not a stay, shown faintly */
+.blk.blk-closed { background: repeating-linear-gradient(135deg, #2b2a26 0 6px, #24231f 6px 12px); color: var(--ink-3, #8a867c); border: 1px dashed #4a4740; }
+.legend i.lg-closed { background: repeating-linear-gradient(135deg, #3a3832 0 3px, #24231f 3px 6px); border: 1px dashed #5a574f; }

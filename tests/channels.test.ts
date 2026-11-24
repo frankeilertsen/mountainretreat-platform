@@ -88,3 +88,28 @@ describe('iCal channel sync', () => {
     expect(buildIcal('X', [])).toMatch(/BEGIN:VCALENDAR/);
   });
 });
+
+describe('Airbnb "Not available" is a closed date, not a stay', () => {
+  it('classifies channel summaries', async () => {
+    const { classifyEvent } = await import('../lib/channels/sync');
+    expect(classifyEvent('Reserved')).toBe('reservation');
+    expect(classifyEvent('Airbnb (Not available)')).toBe('owner_block');
+    expect(classifyEvent('CLOSED - Not available')).toBe('owner_block');
+    expect(classifyEvent('Blocked')).toBe('owner_block');
+    expect(classifyEvent(null)).toBe('unknown');
+  });
+
+  it('a "Not available" event still closes the dates but creates no cleaning task; a reservation does', async () => {
+    const pid = await property();
+    const c = await conn(pid);
+    const feed = ['BEGIN:VCALENDAR', 'VERSION:2.0',
+      'BEGIN:VEVENT', `DTSTART;VALUE=DATE:${d(5).replace(/-/g, '')}`, `DTEND;VALUE=DATE:${d(6).replace(/-/g, '')}`, 'UID:na1', 'SUMMARY:Airbnb (Not available)', 'END:VEVENT',
+      'BEGIN:VEVENT', `DTSTART;VALUE=DATE:${d(10).replace(/-/g, '')}`, `DTEND;VALUE=DATE:${d(13).replace(/-/g, '')}`, 'UID:res1', 'SUMMARY:Reserved', 'END:VEVENT',
+      'END:VCALENDAR'].join('\r\n');
+    await applySnapshot(c, parseIcal(feed));
+    expect((await one<{ n: number }>(`SELECT count(*)::int n FROM availability_blocks WHERE property_id=$1 AND block_type='external_sync'`, [pid]))!.n).toBe(2);
+    const tasks = await getPool().query(`SELECT e.uid, t.task_type FROM cleaning_tasks t JOIN external_calendar_events e ON e.id=t.external_event_id WHERE t.property_id=$1 AND t.status<>'cancelled'`, [pid]);
+    expect(tasks.rows.every(r => r.uid === 'res1')).toBe(true);
+    expect(tasks.rows.some(r => r.uid === 'res1' && r.task_type === 'turnover')).toBe(true);
+  });
+});
