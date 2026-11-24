@@ -39,7 +39,7 @@ class ResendEmail implements ChannelSender {
     const res = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: { Authorization: `Bearer ${this.apiKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from: this.from, to, subject, text, html: renderHtml(subject, text), ...(opts?.replyTo ? { reply_to: opts.replyTo } : {}), ...(attachments?.length ? { attachments } : {}) }),
+      body: JSON.stringify({ from: this.from, to, subject, text, html: renderHtml(subject, text), ...((opts?.replyTo || process.env.EMAIL_REPLY_TO) ? { reply_to: opts?.replyTo || process.env.EMAIL_REPLY_TO } : {}), ...(attachments?.length ? { attachments } : {}) }),
     });
     if (!res.ok) throw new Error(`Resend ${res.status}: ${await res.text()}`);
   }
