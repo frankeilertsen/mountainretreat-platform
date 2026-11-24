@@ -19,8 +19,8 @@ const no = {
     ltEyebrow: 'Langtid', ltTitle: 'Fast leie', ltText: 'Ønsker du å leie over lengre tid? Send oss en forespørsel, så tar vi kontakt for å avtale vilkår.', ltCta: 'Send forespørsel',
   },
   ff: {
-    eyebrow: 'Kun for inviterte', title1: 'Et stille sted i fjellet,', title2: 'for de nærmeste.',
-    lead: 'Mountain Retreat er FKE Property AS sin private bookingportal for venner og familie. Medlemskap skjer kun gjennom invitasjon.',
+    eyebrow: 'Kun for inviterte', title1: 'Pudder om morgenen, peiskos om kvelden,', title2: 'midt i Sunnmørsalpane.',
+    lead: 'Storslått fjellutsikt, ski inn/ski ut til Strandafjellet og et varmt sted å komme hjem til etter en dag i bakken. mountainretreat.no er vår private bookingportal for venner og familie, kun for inviterte.',
     how: 'Slik fungerer det', toMyPage: 'Til min side',
     steps: [
       ['Invitasjon', 'Du blir medlem når noen du kjenner inviterer deg. Ingen åpen registrering.'],
@@ -191,8 +191,8 @@ const en: Dict = {
     ltEyebrow: 'Long term', ltTitle: 'Long-term rental', ltText: 'Looking to rent for a longer period? Send us an enquiry and we will get in touch to agree on terms.', ltCta: 'Send enquiry',
   },
   ff: {
-    eyebrow: 'By invitation only', title1: 'A quiet place in the mountains,', title2: 'for those closest to us.',
-    lead: 'Mountain Retreat is FKE Property AS’s private booking portal for friends and family. Membership is by invitation only.',
+    eyebrow: 'By invitation only', title1: 'Powder mornings, fireside evenings,', title2: 'in the heart of the Sunnmøre Alps.',
+    lead: 'Breathtaking mountain views, ski-in/ski-out to Strandafjellet and a warm place to come home to after a day on the slopes. mountainretreat.no is our private booking portal for friends and family, by invitation only.',
     how: 'How it works', toMyPage: 'My page',
     steps: [
       ['Invitation', 'You become a member when someone you know invites you. There is no open registration.'],
