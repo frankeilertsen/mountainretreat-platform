@@ -51,6 +51,7 @@ databases:
   - name: mountainretreat-db
     region: frankfurt
     plan: basic-256mb
+    diskSizeGB: 1   # plenty for this platform; can be increased later, never decreased
     postgresMajorVersion: "16"
     databaseName: mountainretreat
     user: mountainretreat
