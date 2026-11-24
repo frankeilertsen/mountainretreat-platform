@@ -1,3 +1,4 @@
+import { publicHost } from '@/lib/http';
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession, clientIp } from '@/lib/auth/current';
 import { can } from '@/lib/auth/rbac';
@@ -13,7 +14,7 @@ export async function POST(req: NextRequest) {
   if (!s || s.aal < 2) return NextResponse.json({ error: 'Du må logge inn på nytt.' }, { status: 401 });
   if (!can(s as any, 'manage_admins')) return NextResponse.json({ error: 'Kun hovedadministrator kan gjøre dette.' }, { status: 403 });
   const origin = req.headers.get('origin');
-  if (origin && new URL(origin).host !== req.headers.get('host')) return NextResponse.json({ error: 'Ugyldig forespørsel.' }, { status: 403 });
+  if (origin && new URL(origin).host.toLowerCase() !== publicHost(req.headers)) return NextResponse.json({ error: 'Ugyldig forespørsel.' }, { status: 403 });
   if (!req.body) return NextResponse.json({ error: 'Velg en sikkerhetskopi (.tar.gz).' }, { status: 400 });
   try {
     const r = await restoreFiles(req.body);
