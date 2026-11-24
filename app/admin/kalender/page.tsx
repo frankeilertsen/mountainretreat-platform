@@ -11,7 +11,7 @@ export const metadata = { title: 'Kalender' };
 export default async function CentralCalendar({ searchParams }: { searchParams: Promise<Record<string, string>> }) {
   const sp = await searchParams;
   const today = todayOslo();
-  const from = /^\d{4}-\d{2}-\d{2}$/.test(sp.fra ?? '') ? sp.fra! : addDays(today, -3);
+  const from = /^\d{4}-\d{2}$/.test(sp.maaned ?? '') ? `${sp.maaned}-01` : /^\d{4}-\d{2}-\d{2}$/.test(sp.fra ?? '') ? sp.fra! : addDays(today, -3);
   const days = 42;
   const to = addDays(from, days);
   const props = await q<{ id: string; name: string }>(`SELECT id, name FROM properties WHERE active ORDER BY name`);
@@ -23,6 +23,18 @@ export default async function CentralCalendar({ searchParams }: { searchParams: 
   const conflicts = await q(`SELECT e.property_id, to_char(e.start_date,'YYYY-MM-DD') AS start, to_char(e.end_date,'YYYY-MM-DD') AS "end", cc.display_name FROM external_calendar_events e JOIN channel_connections cc ON cc.id=e.connection_id WHERE e.sync_state='conflict' AND daterange(e.start_date,e.end_date) && daterange($1::date,$2::date)`, [from, to]);
   const pending = await q(`SELECT b.property_id, to_char(b.start_date,'YYYY-MM-DD') AS start, to_char(b.end_date,'YYYY-MM-DD') AS "end", b.id, u.name FROM bookings b JOIN users u ON u.id=b.member_id WHERE b.status='pending_review' AND daterange(b.start_date,b.end_date) && daterange($1::date,$2::date)`, [from, to]);
   const dates = Array.from({ length: days }, (_, i) => addDays(from, i));
+  // Month bands for the header: one cell per month spanning its days in view
+  const MONTHS = ['januar', 'februar', 'mars', 'april', 'mai', 'juni', 'juli', 'august', 'september', 'oktober', 'november', 'desember'];
+  const monthLabel = (d: string) => `${MONTHS[Number(d.slice(5, 7)) - 1]} ${d.slice(0, 4)}`;
+  const bands: { key: string; label: string; span: number }[] = [];
+  for (const d of dates) {
+    const k = d.slice(0, 7);
+    if (bands.length && bands[bands.length - 1].key === k) bands[bands.length - 1].span++;
+    else bands.push({ key: k, label: monthLabel(d), span: 1 });
+  }
+  const lastDay = dates[dates.length - 1];
+  const rangeLabel = from.slice(0, 7) === lastDay.slice(0, 7) ? monthLabel(from) : `${fmtDate(from)} – ${fmtDate(lastDay)}`;
+  const dayCls = (d: string) => `${isoWeekday(d) >= 6 ? 'wknd' : ''} ${d === today ? 'today' : ''} ${d.endsWith('-01') && d !== from ? 'mstart' : ''}`;
   const manual = blocks.filter(b => b.block_type === 'manual_admin' && b.end >= today);
 
   const labelFor = (b: any) => b.block_type === 'platform_booking' ? `${b.member ?? ''}` : b.block_type === 'external_sync' ? (b.channel ?? 'Ekstern') : (b.reason ?? 'Sperret');
@@ -30,8 +42,12 @@ export default async function CentralCalendar({ searchParams }: { searchParams: 
   return (
     <>
       <div className="page-head row between">
-        <div><span className="eyebrow">Alle boliger · alle kanaler</span><h1>Sentral kalender</h1></div>
+        <div><span className="eyebrow">Alle boliger · alle kanaler</span><h1>Sentral kalender</h1><p className="muted" style={{ margin: '4px 0 0', fontSize: '1rem' }}>{rangeLabel}</p></div>
         <div className="row">
+          <form method="get" className="row" style={{ gap: 6 }}>
+            <input type="month" name="maaned" defaultValue={from.slice(0, 7)} aria-label="Velg måned" style={{ width: 170 }} />
+            <button className="btn ghost small">Vis</button>
+          </form>
           <Link className="btn ghost small" href={`/admin/kalender?fra=${addDays(from, -28)}`}>←</Link>
           <Link className="btn ghost small" href="/admin/kalender">I dag</Link>
           <Link className="btn ghost small" href={`/admin/kalender?fra=${addDays(from, 28)}`}>→</Link>
@@ -44,8 +60,12 @@ export default async function CentralCalendar({ searchParams }: { searchParams: 
         <span><i style={{ background: 'transparent', border: '1px dashed var(--gold)' }} />Forespørsel (holder ikke datoer)</span>
       </div>
       <div className="mcal">
-        <table>
-          <thead><tr><th className="prop">Bolig</th>{dates.map(d => <th key={d} className={`${isoWeekday(d) >= 6 ? 'wknd' : ''} ${d === today ? 'today' : ''}`} style={{ fontWeight: 400 }}><small>{['', 'ma', 'ti', 'on', 'to', 'fr', 'lø', 'sø'][isoWeekday(d)]}</small><br />{Number(d.slice(8))}</th>)}</tr></thead>
+        <table style={{ width: 230 + dates.length * 32 }}>
+          <colgroup><col style={{ width: 230 }} />{dates.map(d => <col key={d} style={{ width: 32 }} />)}</colgroup>
+          <thead>
+            <tr className="months"><th className="prop" rowSpan={2}>Bolig</th>{bands.map((b, i) => <th key={b.key} colSpan={b.span} className={i > 0 ? 'mstart' : ''}>{b.span >= 3 ? b.label : ''}</th>)}</tr>
+            <tr>{dates.map(d => <th key={d} className={dayCls(d)} style={{ fontWeight: 400 }}><small>{['', 'ma', 'ti', 'on', 'to', 'fr', 'lø', 'sø'][isoWeekday(d)]}</small><br />{Number(d.slice(8))}</th>)}</tr>
+          </thead>
           <tbody>
             {props.map(p => {
               const pb = blocks.filter(b => b.property_id === p.id);
@@ -58,7 +78,7 @@ export default async function CentralCalendar({ searchParams }: { searchParams: 
                     const b = pb.find(x => x.start <= d && x.end > d);
                     const c = pc.find(x => x.start <= d && x.end > d);
                     const pr = !b && pp.find(x => x.start <= d && x.end > d);
-                    const cls = `${isoWeekday(d) >= 6 ? 'wknd' : ''} ${d === today ? 'today' : ''}`;
+                    const cls = dayCls(d);
                     if (c) return <td key={d} className={cls} title={`KONFLIKT: ${c.display_name}`}><span className="blk blk-conflict">!</span></td>;
                     if (b) {
                       const first = b.start === d || d === from, last = addDays(d, 1) === b.end;
