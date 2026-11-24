@@ -126,5 +126,6 @@ async function loadAttachments(payload: any): Promise<Attachment[] | undefined> 
 }
 
 export function appUrl(path = ''): string {
-  return (process.env.APP_URL || 'http://localhost:3000').replace(/\/$/, '') + path;
+  // APP_URL = the site's address (your own domain). On Render, before a domain is connected, the service's own address is used.
+  return (process.env.APP_URL || process.env.RENDER_EXTERNAL_URL || 'http://localhost:3000').replace(/\/$/, '') + path;
 }

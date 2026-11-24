@@ -83,7 +83,7 @@ Fullt skjema: `db/migrations/0001_schema.sql` (+ standardinnstillinger i `0002`,
 
 ## 5. Testresultater
 
-`npm test` – **80 tester, 15 filer, alle grønne** (mot ekte PostgreSQL):
+`npm test` – **83 tester, 16 filer, alle grønne** (mot ekte PostgreSQL):
 - `pricing` (11): ekstra gjester (per opphold/natt, med i Airbnb-sammenligningen), Airbnb-prising (nattpris, rabatter, sammenligning inkl. avgift, manglende pris, min. netter), spesifikasjonens eksempel (14 175 kr), min/maks netter, hel periode, byttedag, uprisede datoer, tillegg, vaskefritak
 - `booking` (13): hele flyten, prislåsing, 2 og 20 samtidige godkjenninger → én vinner, idempotent webhook-replay, holdutløp + automatisk refusjon av sen betaling, kanselleringsvilkår + automatisk godkjenning, dobbeltinnsending, tilgang
 - `rewards` (11): tak på ubrukte vervebonuser, én bonus per part selv ved gjentatte/samtidige utløsere, kun første opphold, prosent med tak, minstebeløp, selvverving, suspendert verver, FIFO + tilbakeføring, 100 % bonusdekning, justering/tilbaketrekking/hovedbok, ende til ende
@@ -98,9 +98,10 @@ Fullt skjema: `db/migrations/0001_schema.sql` (+ standardinnstillinger i `0002`,
 - `invite-limit` (3): 50 invitasjoner per uke (51. avvises med tidspunkt for neste, tilbaketrukne teller, vinduet ruller), justerbar grense som holder ved samtidige innsendinger, gjelder ikke admin; den som inviterer får 500 kr for hver invitert persons første opphold, den inviterte 500 kr én gang, senere opphold gir ingenting
 - `storage` (2): Supabase Storage-adapteren (lagre, hente, signerte lenker, nøkkel i `apikey`-headeren, avviser farlige filnavn); direkte PDF-opplasting fra nettleser, kontroll av filen etterpå, ugyldig fil slettes, kun admin
 - `dbconfig` (1): Supabase-adresse gir TLS, `sslmode` fjernes fra adressen, sertifikatet sjekkes når `DATABASE_CA_CERT` er satt
+- `render` (3): sikkerhetskopien har alle filer og tabeller (uten økter/innloggingslenker), manglende filer legges tilbake fra arkivet uten å overskrive, ukjente filer og ugyldige arkiv avvises; første deploy oppretter hovedadministrator fra `INITIAL_ADMIN_EMAIL` kun én gang; bakgrunnsjobbene kjører ikke når en annen instans har låsen
 - `channels` (7): parsing, import/avlysning, konflikt, speiling, feil sletter ikke data, eksport uten ekko, ærlig kapabilitetsstatus
 
-I tillegg: produksjonsbygg OK, alle sider testet for alle roller, og nettleserflyt ende til ende (forespørsel → godkjenning → testbetaling → bekreftet → invitasjon).
+I tillegg: produksjonsbygg OK, kjørt i produksjonsmodus med Render-oppsett (disk + innebygde jobber, helsesjekk grønn), alle sider testet for alle roller, og nettleserflyt ende til ende (forespørsel → godkjenning → testbetaling → bekreftet → invitasjon).
 
 ## 6. Kjente begrensninger
 
@@ -131,7 +132,25 @@ npm test                        # krever databasen byrampen_test
 ```
 Med `DEV_LOGIN=1` viser `/login` en liste for ett-klikks innlogging som alle testbrukerne (aldri i produksjon). Ventende renholderinvitasjon: `/invitasjon/dev-helper-invite`. Testbrukere: `admin@fkeproperty.test` (super-admin), `eiendom@fkeproperty.test` (eiendomsadmin), `kari@` / `ola@` / `lise@example.test` (medlemmer), `renhold@` og `renhold2@fkeproperty.test` (renhold). Ventende invitasjon: `/invitasjon/dev-invite-token-per`.
 
-## 8. Produksjonssetting (GitHub + Supabase + Vercel + Domeneshop)
+## 8. Produksjonssetting (anbefalt: GitHub + Render + Resend + Domeneshop)
+
+Full steg-for-steg-guide på norsk: dokumentet «Mountain Retreat – test og lansering på Render» (lenke i chatten). Alt er beskrevet i `render.yaml` (Render Blueprint), så Render setter opp nettside, database, disk og nøkler selv. Ca. 14 USD/mnd (Starter-nettside 7 + Postgres basic-256mb 6 + 1 GB disk 0,25), region Frankfurt.
+
+1. **GitHub:** privat repo `mountainretreat-platform`.
+2. **Resend:** verifiser mountainretreat.no (MX/TXT på `send`, DKIM på `resend._domainkey` i Domeneshop).
+3. **Render → New → Blueprint** → velg repoet. Render lager:
+   - nettsiden `mountainretreat` (Node 22, `npm ci && npm run build`, `npm start`, helsesjekk `/api/health`)
+   - databasen `mountainretreat-db` (Postgres 16, ingen tilgang utenfra – `ipAllowList: []`)
+   - disken `files` på `/var/data` (bilder og PDF-er i `STORAGE_DIR=/var/data/storage`)
+   - `ENCRYPTION_KEY`, `TOKEN_PEPPER`, `CRON_SECRET` som tilfeldige 256-bits verdier; `DATABASE_URL` kobles automatisk.
+   Du fyller inn: `INITIAL_ADMIN_EMAIL`, `INITIAL_ADMIN_NAME`, `RESEND_API_KEY`, `EMAIL_REPLY_TO`, `ALLOW_MOCK_PAYMENTS` (1 under test, 0 i drift).
+4. **Før hver versjon** kjører `npm run migrate` (preDeployCommand): nye migreringer, og ved første gang opprettes hovedadministratoren fra `INITIAL_ADMIN_EMAIL` (bare hvis det ikke finnes noen aktiv super-admin).
+5. **Bakgrunnsjobber** kjører inne i nettsiden hvert minutt (`RUN_JOBS_IN_PROCESS=1`, `lib/scheduler.ts`). En låsing i databasen (`pg_try_advisory_lock`) gjør at de aldri kjører to ganger samtidig, selv med flere instanser. E-post sendes i tillegg rett etter hver handling.
+6. **Domene:** Render → Settings → Custom Domains: `mountainretreat.no` og `www.mountainretreat.no`. I Domeneshop: A-post `@` → `216.24.57.1`, CNAME `www` → `mountainretreat.onrender.com`, slett AAAA-poster for `@`/`www`. MX/TXT for e-post røres ikke. Legg så til `APP_URL=https://mountainretreat.no` (før det brukes `RENDER_EXTERNAL_URL`).
+7. **Sikkerhetskopi i tre lag:** Render tar backup av databasen med gjenoppretting til valgfritt tidspunkt (3 dager på Hobby, 7 på Pro). Disken får daglige øyeblikksbilder. I tillegg kan hovedadministrator laste ned alt fra `/admin/sikkerhetskopi`: én `.tar.gz` med alle filer og hver tabell som NDJSON. Økter, innloggingslenker og rate limits er utelatt. Filer kan legges tilbake derfra; bare manglende filer databasen kjenner til, ingenting overskrives. Både nedlasting og tilbakelegging logges.
+8. **Drift:** overvåk `/api/health`. Den viser database, migreringer, antall admins, siste jobbkjøring, lagring (`disk (/var/data/storage)`), e-post, app-adresse og manglende nøkler, men aldri hemmeligheter.
+
+### 8b. Alternativ: Supabase + Vercel
 
 Koden er tilpasset Vercel (serverløst) og Supabase. Full steg-for-steg-guide på norsk: dokumentet «Mountain Retreat – test og lansering» (lenke i chatten). Kortversjon:
 
@@ -145,4 +164,3 @@ Koden er tilpasset Vercel (serverløst) og Supabase. Full steg-for-steg-guide p�
 
 **Tilpasninger for Vercel:** filer lagres i Supabase Storage (privat bøtte; appen sjekker tilgang og gir en signert lenke som varer 60–120 sek), PDF-er lastes opp direkte fra nettleseren til Supabase (Vercel tar maks 4,5 MB per forespørsel), bilder krympes i nettleseren før opplasting (maks 2000 px), databasetilkoblingen bruker små pooler og TLS, og svg-captcha-fonten pakkes med funksjonene. Lokalt brukes fortsatt `STORAGE_DIR` når Supabase-variablene mangler.
 
-Kjører du på en egen server (Render/Fly/Railway) i stedet: `npm ci && npm run build && npm start`, `npm run migrate` mot databasen, og kall `/api/cron` hvert minutt.

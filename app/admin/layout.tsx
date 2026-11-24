@@ -39,6 +39,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           { group: 'Oppsett' },
           { href: '/admin/boliger', label: 'Boliger' },
           { href: '/admin/innstillinger', label: 'Innstillinger' },
+          { href: '/admin/sikkerhetskopi', label: 'Sikkerhetskopi' },
           { href: '/admin/logg', label: 'Revisjonslogg' },
           { group: 'Visninger' },
           { href: '/medlem', label: 'Medlemsportal' },

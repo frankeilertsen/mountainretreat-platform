@@ -30,9 +30,25 @@ export async function migrate(databaseUrl: string, reset = false) {
         throw new Error(`Migration ${f} failed: ${(e as Error).message}`);
       }
     }
+    await ensureInitialAdmin(client);
   } finally {
     await client.end();
   }
+}
+
+/**
+ * First administrator: if INITIAL_ADMIN_EMAIL is set and there is no active super-admin yet, create one.
+ * They log in with an e-mail link and set up two-factor login the first time. Does nothing once an admin exists.
+ */
+export async function ensureInitialAdmin(client: Client) {
+  const email = process.env.INITIAL_ADMIN_EMAIL?.trim().toLowerCase();
+  if (!email) return;
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { console.warn('INITIAL_ADMIN_EMAIL is not a valid e-mail address – skipped'); return; }
+  const has = await client.query(`SELECT 1 FROM users WHERE system_role='super_admin' AND status='active' LIMIT 1`);
+  if (has.rowCount) return;
+  const name = process.env.INITIAL_ADMIN_NAME?.trim() || email.split('@')[0];
+  await client.query(`INSERT INTO users (email, name, system_role, status) VALUES ($1, $2, 'super_admin', 'active') ON CONFLICT DO NOTHING`, [email, name]);
+  console.log('created first administrator', email);
 }
 
 if (require.main === module) {
