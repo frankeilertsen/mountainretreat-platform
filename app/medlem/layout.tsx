@@ -7,6 +7,8 @@ import { Logo } from '@/components/Logo';
 import { getT } from '@/lib/i18n/lang';
 import { LangSwitch } from '@/components/LangSwitch';
 import { memberUnreadCount } from '@/lib/domain/messages';
+import { badgeSignature } from '@/lib/domain/badges';
+import { LiveBadges } from '@/components/LiveBadges';
 
 export default async function MemberLayout({ children }: { children: React.ReactNode }) {
   const u = await requireUser('request_booking');
@@ -31,6 +33,7 @@ export default async function MemberLayout({ children }: { children: React.React
     <div className="admin-shell">
       <aside className="sidebar">
         <Logo href="/medlem" width={210} label={N.tagline} />
+        <LiveBadges scope="member" sig={badgeSignature({ unread })} />
         <SideNav exact={['/medlem']} items={items} />
         <div className="user"><div>{u.name}</div><small>{N.member}</small>
           <div style={{ margin: '12px 0' }}><LangSwitch lang={lang} /></div>

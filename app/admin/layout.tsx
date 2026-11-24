@@ -1,25 +1,19 @@
 import Link from 'next/link';
 import { requireUser } from '@/lib/auth/current';
-import { one } from '@/lib/db';
 import { SideNav } from '@/components/SideNav';
 import { Logo } from '@/components/Logo';
-import { adminUnansweredCount } from '@/lib/domain/messages';
+import { adminBadges, badgeSignature } from '@/lib/domain/badges';
+import { LiveBadges } from '@/components/LiveBadges';
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const u = await requireUser('admin');
-  const c = await one<{ pending: number; cancel: number; loyalty: number; sync: number; reports: number; refunds: number; inquiries: number }>(`SELECT
-    (SELECT count(*) FROM bookings WHERE status='pending_review')::int AS pending,
-    (SELECT count(*) FROM bookings WHERE status='cancellation_requested')::int AS cancel,
-    (SELECT count(*) FROM loyalty_applications WHERE status='pending')::int AS loyalty,
-    (SELECT count(*) FROM channel_connections WHERE active AND (last_sync_status='failure' OR id IN (SELECT connection_id FROM external_calendar_events WHERE sync_state='conflict')))::int AS sync,
-    (SELECT count(*) FROM cleaning_reports WHERE resolved_at IS NULL AND kind <> 'comment')::int AS reports,
-    (SELECT count(*) FROM refunds WHERE status IN ('failed','pending'))::int AS refunds,
-    (SELECT count(*) FROM long_term_inquiries WHERE status='new')::int AS inquiries`);
-  const unanswered = await adminUnansweredCount();
+  const c = await adminBadges();
+  const unanswered = c.unanswered;
   return (
     <div className="admin-shell">
       <aside className="sidebar">
         <Logo href="/admin" width={210} label="Administrasjon" />
+        <LiveBadges scope="admin" sig={badgeSignature(c)} />
         <SideNav exact={['/admin']} items={[
           { href: '/admin', label: 'Oversikt', badge: (c?.pending ?? 0) + (c?.cancel ?? 0) + (c?.loyalty ?? 0) },
           { group: 'Drift' },
