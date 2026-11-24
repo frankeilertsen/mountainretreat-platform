@@ -88,7 +88,7 @@ async function checkWeeklyInviteLimit(userId: string, db: Db) {
   if (qta.limit > 0 && qta.used >= qta.limit) {
     const p = qta.nextFreeAt ? Object.fromEntries(new Intl.DateTimeFormat('nb-NO', { timeZone: 'Europe/Oslo', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
       .formatToParts(new Date(qta.nextFreeAt)).map(x => [x.type, x.value])) : null;
-    throw new DomainError('invite_limit', `Du kan sende maks ${qta.limit} invitasjoner per uke.${p ? ` Du kan sende flere fra ${p.day}.${p.month}. kl. ${p.hour}:${p.minute}.` : ''}`);
+    throw new DomainError('invite_limit', `Du kan sende maks ${qta.limit} invitasjoner per uke.${p ? ` Du kan sende flere fra ${p.day.padStart(2, '0')}.${p.month.padStart(2, '0')}. kl. ${p.hour.padStart(2, '0')}:${p.minute.padStart(2, '0')}.` : ''}`);
   }
 }
 
