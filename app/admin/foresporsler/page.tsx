@@ -3,6 +3,7 @@ import { fmtDate, fmtDateTime } from '@/lib/format';
 import { getStr } from '@/lib/settings';
 import { Flash, Empty } from '@/components/ui';
 import { inquiryStatusAction } from '../../actions/admin';
+import { ValueButton } from '@/components/ValueButton';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Forespørsler fast leie' };
@@ -30,9 +31,9 @@ export default async function Inquiries({ searchParams }: { searchParams: Promis
           </dl>
           <p style={{ marginTop: 14, whiteSpace: 'pre-wrap' }}>{r.message}</p>
           <form action={inquiryStatusAction} className="row"><input type="hidden" name="id" value={r.id} />
-            {r.status !== 'contacted' && <button className="btn ghost small" name="status" value="contacted">Marker kontaktet</button>}
-            {r.status !== 'closed' && <button className="btn ghost small" name="status" value="closed">Avslutt</button>}
-            {r.status !== 'new' && <button className="btn ghost small" name="status" value="new">Merk som ny</button>}</form>
+            {r.status !== 'contacted' && <ValueButton className="btn ghost small" name="status" value="contacted">Marker kontaktet</ValueButton>}
+            {r.status !== 'closed' && <ValueButton className="btn ghost small" name="status" value="closed">Avslutt</ValueButton>}
+            {r.status !== 'new' && <ValueButton className="btn ghost small" name="status" value="new">Merk som ny</ValueButton>}</form>
         </div>
       ))}
     </>

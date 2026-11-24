@@ -4,6 +4,7 @@ import { fmtDate } from '@/lib/format';
 import { Flash, Empty } from '@/components/ui';
 import { updatePresentationAction } from '../../actions/presentations';
 import { PresentationUploadForm } from '@/components/forms/PresentationUpload';
+import { ValueButton } from '@/components/ValueButton';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Presentasjoner (PDF)' };
@@ -42,8 +43,8 @@ export default async function Presentations({ searchParams }: { searchParams: Pr
                   <td>
                     <form action={updatePresentationAction} className="row" style={{ justifyContent: 'flex-end', gap: 6 }}>
                       <input type="hidden" name="id" value={p.id} />
-                      {p.active && !p.is_default && <button className="btn ghost small" name="op" value="default">Gjør til standard</button>}
-                      {p.active ? <button className="btn ghost small" name="op" value="deactivate">Skjul</button> : <button className="btn ghost small" name="op" value="activate">Aktiver</button>}
+                      {p.active && !p.is_default && <ValueButton className="btn ghost small" name="op" value="default">Gjør til standard</ValueButton>}
+                      {p.active ? <ValueButton className="btn ghost small" name="op" value="deactivate">Skjul</ValueButton> : <ValueButton className="btn ghost small" name="op" value="activate">Aktiver</ValueButton>}
                     </form>
                   </td>
                 </tr>))}

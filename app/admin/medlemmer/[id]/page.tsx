@@ -7,6 +7,7 @@ import { memberDiscount } from '@/lib/domain/memberDiscount';
 import { invitationsWithOutcome, STAGE_LABEL } from '@/lib/domain/memberOverview';
 import { Flash, Status } from '@/components/ui';
 import * as A from '../../../actions/admin';
+import { ValueButton } from '@/components/ValueButton';
 
 export const dynamic = 'force-dynamic';
 
@@ -72,7 +73,7 @@ export default async function MemberDetail({ params, searchParams }: { params: P
               <small className="muted">{disc.basePct} % {disc.baseIsOverride ? 'personlig grunnrabatt' : 'standard'} + {disc.loyaltyPct} % lojalitet ({disc.bookingsCounted} bookinger, maks {disc.loyaltyMaxPct} %)</small>
               <form action={A.memberDiscountAction} className="row" style={{ marginTop: 14 }}><input type="hidden" name="id" value={id} />
                 <input name="pct" defaultValue={disc.baseIsOverride ? disc.basePct : ''} placeholder={`Standard ${disc.standardPct} %`} style={{ width: 160 }} />
-                <button className="btn small">Sett personlig grunnrabatt</button>{disc.baseIsOverride && <button className="btn ghost small" name="reset" value="1">Tilbake til standard</button>}</form>
+                <button className="btn small">Sett personlig grunnrabatt</button>{disc.baseIsOverride && <ValueButton className="btn ghost small" name="reset" value="1">Tilbake til standard</ValueButton>}</form>
               <small className="muted">Lojalitetsrabatten legges alltid oppå.</small>
             </div>
           )}

@@ -5,6 +5,7 @@ import { mockProvider, mockSignature } from '@/lib/domain/payments';
 import { appUrl } from '@/lib/notify';
 import { nok } from '@/lib/format';
 import crypto from 'crypto';
+import { ValueButton } from '@/components/ValueButton';
 
 export const dynamic = 'force-dynamic';
 
@@ -29,8 +30,8 @@ export default async function MockCheckout({ params }: { params: Promise<{ id: s
       <p>Booking {p.reference}. Denne siden erstattes av Stripe Checkout når STRIPE_SECRET_KEY er satt.</p>
       {p.status !== 'pending' ? <p>Betalingen har status <strong>{p.status}</strong>.</p> : (
         <form action={simulate} className="stack">
-          <button className="btn ok block" name="result" value="ok">Simuler vellykket betaling</button>
-          <button className="btn ghost block" name="result" value="fail">Simuler avvist kort</button>
+          <ValueButton className="btn ok block" name="result" value="ok">Simuler vellykket betaling</ValueButton>
+          <ValueButton className="btn ghost block" name="result" value="fail">Simuler avvist kort</ValueButton>
         </form>
       )}
     </div></div>

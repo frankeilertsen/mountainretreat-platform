@@ -8,6 +8,7 @@ import { Flash } from '@/components/ui';
 import { AutoRefresh, MessageBox, RefreshOnce, SendButton } from '@/components/Chat';
 import { Thread } from '@/components/Thread';
 import { replyAction, setConversationStatusAction } from '../../../actions/messages';
+import { ValueButton } from '@/components/ValueButton';
 
 export const dynamic = 'force-dynamic';
 
@@ -28,8 +29,8 @@ export default async function AdminThread({ params, searchParams }: { params: Pr
           <input type="hidden" name="conversationId" value={conv.id} />
           <span className={`badge ${conv.status === 'open' ? 'b-ok' : ''}`}>{conv.status === 'open' ? 'Åpen' : 'Avsluttet'}</span>
           {conv.status === 'open'
-            ? <button className="btn ghost small" name="status" value="closed">Avslutt samtale</button>
-            : <button className="btn ghost small" name="status" value="open">Åpne igjen</button>}
+            ? <ValueButton className="btn ghost small" name="status" value="closed">Avslutt samtale</ValueButton>
+            : <ValueButton className="btn ghost small" name="status" value="open">Åpne igjen</ValueButton>}
         </form>
       </div>
       <Flash sp={sp} />

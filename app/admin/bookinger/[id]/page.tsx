@@ -7,6 +7,7 @@ import { BED_LABELS } from '@/lib/domain/beds';
 import { Flash, Status } from '@/components/ui';
 import { RoomPlan } from '@/components/RoomPlan';
 import { approveAction, rejectAction, adminCancelAction, decideCancellationAction, adminPreparationAction, sleepingPlanAction, markInvoicePaidAction, goodwillRefundAction } from '../../../actions/admin';
+import { ValueButton } from '@/components/ValueButton';
 
 export const dynamic = 'force-dynamic';
 
@@ -93,7 +94,7 @@ export default async function AdminBooking({ params, searchParams }: { params: P
                     <tr key={bd.id}><td>{bd.room}<br /><small>{bd.label} · {BED_LABELS[bd.bed_type]}</small></td>
                       <td><input type="number" name={'bed_' + bd.id} min={0} max={bd.sleeps} defaultValue={bd.allocation?.persons ?? 0} style={{ width: 70 }} /></td>
                       <td><select name={'type_' + bd.id} defaultValue={bd.allocation?.guest_type ?? 'adult'}><option value="adult">Voksen</option><option value="child">Barn</option><option value="infant">Spedbarn</option><option value="mixed">Blandet</option></select></td></tr>))}</tbody></table>
-                  <div className="row" style={{ marginTop: 10 }}><button className="btn small">Lagre overstyring</button>{plan.source === 'admin_override' && <button className="btn ghost small" name="reset" value="1">Tilbake til automatisk</button>}</div>
+                  <div className="row" style={{ marginTop: 10 }}><button className="btn small">Lagre overstyring</button>{plan.source === 'admin_override' && <ValueButton className="btn ghost small" name="reset" value="1">Tilbake til automatisk</ValueButton>}</div>
                 </form>
               </details>
             </div>

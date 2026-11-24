@@ -7,6 +7,7 @@ import { sleepingPlaces, BED_SIZES } from '@/lib/domain/capacity';
 import { Flash } from '@/components/ui';
 import * as A from '../../../actions/properties';
 import { ImageInput } from '@/components/forms/ImageInput';
+import { ValueButton } from '@/components/ValueButton';
 
 export const dynamic = 'force-dynamic';
 const TABS: [string, string][] = [['', 'Detaljer'], ['rom', 'Rom og senger'], ['priser', 'Priser og regler']];
@@ -278,7 +279,7 @@ async function Pricing({ pid, mode, minNights }: { pid: string; mode: string; mi
               </div>
               <div className="field" style={{ marginTop: 8 }}><label>Innhold / beskrivelse</label><input name="description" defaultValue={a.description ?? ''} /></div>
               <div className="row"><label className="check" style={{ margin: 0 }}><input type="checkbox" name="mandatory" defaultChecked={a.mandatory} /> Obligatorisk</label>
-                <button className="btn ghost small">Lagre</button><button className="btn ghost small" name="deactivate" value={a.id}>Fjern</button></div>
+                <button className="btn ghost small">Lagre</button><ValueButton className="btn ghost small" name="deactivate" value={a.id}>Fjern</ValueButton></div>
             </form>))}
           <form action={A.saveAddOnAction} style={{ marginTop: 10 }}><input type="hidden" name="propertyId" value={pid} />
             <h4>Nytt tillegg</h4>
