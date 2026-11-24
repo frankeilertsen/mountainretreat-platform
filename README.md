@@ -1,6 +1,6 @@
-# Mountain Retreat – Friends & Family-plattform (FKE Property AS)
+# Mountain Retreat – Retreat Club (FKE Property AS)
 
-Privat, invitasjonsbasert bookingplattform med medlemsportal, administrasjon, renholdsportal, verveprogram, betaling og kanalsynk.
+Retreat Club: privat, invitasjonsbasert medlemsklubb og bookingplattform med medlemsportal, administrasjon, renholdsportal, verveprogram, betaling og kanalsynk.
 
 **Stack:** Next.js 15 (App Router, server actions) · TypeScript · PostgreSQL 16 (rene SQL-migreringer + `pg`) · Stripe · iCal · Resend (e-post). Ingen Redis – jobber og rate limiting går i Postgres (holder godt for dusinvis av medlemmer og et lite antall boliger).
 

@@ -10,7 +10,7 @@ import type { Metadata, Viewport } from 'next';
 
 export const metadata: Metadata = {
   title: { default: 'Mountain Retreat', template: '%s · Mountain Retreat' },
-  description: 'Privat bookingportal for venner og familie – FKE Property AS',
+  description: 'Retreat Club – privat bookingportal for medlemmer, kun for inviterte – FKE Property AS',
   robots: { index: false, follow: false },
 };
 export const viewport: Viewport = { width: 'device-width', initialScale: 1, themeColor: '#0e0e0d' };

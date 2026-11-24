@@ -54,7 +54,7 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
       </div>
       <div className="grid" style={{ gridTemplateColumns: 'minmax(0,1.4fr) minmax(0,1fr)', marginBottom: 24 }}>
         <div className="card">
-          <div className="row between"><h3 style={{ margin: 0 }}>Belegg neste 6 måneder</h3><div className="legend"><span><i style={{ background: 'var(--gold)' }} />Venner og familie</span><span><i style={{ background: '#6f8a9b' }} />Eksterne kanaler</span></div></div>
+          <div className="row between"><h3 style={{ margin: 0 }}>Belegg neste 6 måneder</h3><div className="legend"><span><i style={{ background: 'var(--gold)' }} />Retreat Club</span><span><i style={{ background: '#6f8a9b' }} />Eksterne kanaler</span></div></div>
           <small className="muted">Netter, alle boliger</small>
           <BarChart data={months.map(m => ({ label: MN[Number(m.month.slice(5)) - 1], value: m.own, value2: m.ext }))} />
         </div>

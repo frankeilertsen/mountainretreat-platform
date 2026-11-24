@@ -27,7 +27,7 @@ export default async function Reports() {
           <BarChart money data={revenue.map(r => ({ label: M[Number(r.month.slice(5)) - 1], value: Number(r.amount) }))} /></div>
         <div className="card"><h3>Belegg per måned (alle boliger)</h3><small className="muted">Netter · kapasitet {cap} per måned</small>
           <BarChart data={nights.map(r => ({ label: M[Number(r.month.slice(5)) - 1], value: r.own, value2: r.external }))} />
-          <div className="legend"><span><i style={{ background: 'var(--gold)' }} />Venner og familie</span><span><i style={{ background: '#6f8a9b' }} />Eksterne kanaler</span></div></div>
+          <div className="legend"><span><i style={{ background: 'var(--gold)' }} />Retreat Club</span><span><i style={{ background: '#6f8a9b' }} />Eksterne kanaler</span></div></div>
         <div className="card"><h3>Forespørsler siste 12 mnd</h3><ul className="list">{funnel.map(f => <li key={f.status} className="row between"><span>{f.status}</span><strong>{f.n}</strong></li>)}</ul></div>
         <div className="card"><h3>Verving</h3><dl className="dl"><dt>Invitasjoner sendt</dt><dd>{refs[0].sent}</dd><dt>Akseptert</dt><dd>{refs[0].accepted}</dd><dt>Kvalifiserte vervinger</dt><dd>{refs[0].qualified}</dd></dl></div>
       </div>

@@ -15,12 +15,12 @@ const no = {
     welcome: 'Velkommen', title: 'Hvordan vil du bo hos oss?',
     airbnbEyebrow: 'Ferieleie', airbnbTitle: 'Book via Airbnb', airbnbText: 'For alle gjester. Se ledige datoer, priser og omtaler, og book trygt gjennom Airbnb.',
     airbnbCta: 'Gå til Airbnb', soon: 'Kommer snart',
-    ffEyebrow: 'Kun for inviterte', ffTitle: 'Venner og familie', ffText: 'Den private bookingportalen for venner og familie. Har du fått en invitasjon, eller er du allerede medlem, går du videre her.', ffCta: 'Gå videre',
+    ffEyebrow: 'Kun for inviterte', ffTitle: 'Retreat Club', ffText: 'Vår private bookingportal for medlemmer av Retreat Club. Har du fått en invitasjon, eller er du allerede medlem, går du videre her.', ffCta: 'Gå videre',
     ltEyebrow: 'Langtid', ltTitle: 'Fast leie', ltText: 'Ønsker du å leie over lengre tid? Send oss en forespørsel, så tar vi kontakt for å avtale vilkår.', ltCta: 'Send forespørsel',
   },
   ff: {
-    eyebrow: 'Kun for inviterte', title1: 'Pudder om morgenen, peiskos om kvelden,', title2: 'midt i Sunnmørsalpane.',
-    lead: 'Storslått fjellutsikt, ski inn/ski ut til Strandafjellet og et varmt sted å komme hjem til etter en dag i bakken. mountainretreat.no er vår private bookingportal for venner og familie, kun for inviterte.',
+    eyebrow: 'Retreat Club · kun for inviterte', title1: 'Pudder om morgenen, peiskos om kvelden,', title2: 'midt i Sunnmørsalpane.',
+    lead: 'Storslått fjellutsikt, ski inn/ski ut til Strandafjellet og et varmt sted å komme hjem til etter en dag i bakken. mountainretreat.no er bookingportalen for Retreat Club, vår private medlemsklubb, kun for inviterte.',
     how: 'Slik fungerer det', toMyPage: 'Til min side',
     steps: [
       ['Invitasjon', 'Du blir medlem når noen du kjenner inviterer deg. Ingen åpen registrering.'],
@@ -51,14 +51,14 @@ const no = {
   },
   invite: {
     invalidTitle: 'Ugyldig invitasjon', notFound: 'Invitasjonen finnes ikke.', used: 'Denne invitasjonen er allerede brukt. Logg inn i stedet.', revoked: 'Invitasjonen er trukket tilbake.', expired: 'Invitasjonen er utløpt. Be om en ny.', toLogin: 'Til innlogging',
-    from: (n: string) => `Invitasjon fra ${n}`, cleaning: 'Renholdsportal', welcome: (n?: string | null) => `Velkommen${n ? `, ${n}` : ''}`,
+    from: (n: string) => `Invitasjon fra ${n}`, cleaning: 'Renholdsportal', welcome: (n?: string | null) => `Velkommen${n ? `, ${n}` : ''}`, welcomeClub: (n?: string | null) => `Velkommen til Retreat Club${n ? `, ${n}` : ''}`,
     memberText: (e: string) => `Opprett kontoen din for ${e}. Deretter setter du opp tofaktor med en autentiseringsapp.`,
     helperText: (p: string | null, e: string) => `Registrer deg som renholder${p ? ` for ${p}` : ''}. Du får varsel på e-post og SMS om nye bookinger og påminnelse samme dag som det skal vaskes. Innlogging skjer med ${e} og en kode fra en autentiseringsapp.`,
     name: 'Fullt navn', email: 'E-post', phoneHelper: 'Mobil (for SMS-varsler)', phone: 'Mobil (valgfritt)', terms: 'Jeg godtar vilkårene og har lest', privacyLink: 'personvernerklæringen',
     marketing: 'Ja takk, gi meg beskjed om ledige perioder og nyheter (valgfritt).', createMember: 'Opprett konto',
     benefitsTitle: 'Dette får du som medlem', presentation: 'Se presentasjonen', presentationText: 'Bilder og mer informasjon om stedet (PDF).', createTitle: 'Opprett konto', createHelper: 'Registrer meg',
   },
-  nav: { overview: 'Oversikt', benefits: 'Medlemsfordeler', properties: 'Boliger', myPage: 'Min side', bookings: 'Mine bookinger', invite: 'Inviter venner', invitations: 'Invitasjoner', wallet: 'Bonuslommebok', messages: 'Meldinger', profile: 'Profil og personvern', admin: 'Administrasjon', toAdmin: 'Til admin', member: 'Medlem', tagline: 'Venner og familie' },
+  nav: { overview: 'Oversikt', benefits: 'Medlemsfordeler', properties: 'Boliger', myPage: 'Min side', bookings: 'Mine bookinger', invite: 'Inviter venner', invitations: 'Invitasjoner', wallet: 'Bonuslommebok', messages: 'Meldinger', profile: 'Profil og personvern', admin: 'Administrasjon', toAdmin: 'Til admin', member: 'Medlem', tagline: 'Retreat Club' },
   status: {
     pending_review: 'Venter på godkjenning', rejected: 'Avslått', awaiting_payment: 'Venter på betaling', expired: 'Utløpt', confirmed: 'Bekreftet', cancellation_requested: 'Kansellering forespurt',
     cancelled: 'Kansellert', completed: 'Fullført', pending: 'Venter', succeeded: 'Betalt', failed: 'Feilet', refunded: 'Refundert', partially_refunded: 'Delvis refundert',
@@ -127,7 +127,7 @@ const no = {
     freeCancel: 'Bookingen er ikke betalt ennå og kan kanselleres kostnadsfritt.', cancel: 'Kanseller booking', bonusOnApproval: 'Bonus trekkes fra når forespørselen godkjennes.',
   },
   invites: {
-    eyebrow: 'Venner og familie', title: 'Inviter', lead: (a: string, b: string) => `Når noen du inviterer fullfører sitt første opphold, får du ${a} og vedkommende ${b} i bonus til neste booking. Kun det første oppholdet gir bonus.`,
+    eyebrow: 'Retreat Club', title: 'Inviter', lead: (a: string, b: string) => `Når noen du inviterer fullfører sitt første opphold, får du ${a} og vedkommende ${b} i bonus til neste booking. Kun det første oppholdet gir bonus.`,
     send: 'Send invitasjon', name: 'Navn', email: 'E-post', linkNote: (d: string) => `Lenken er personlig, kan brukes én gang og utløper etter ${d} dager.`,
     quota: (left: number, limit: number) => `Du kan sende ${left} invitasjon${left === 1 ? '' : 'er'} til denne uken (maks ${limit} per 7 dager). Du kan invitere så mange du vil over tid – du og hver person du inviterer får bonus når vedkommende har fullført sitt første opphold.`,
     attach: 'Legg ved presentasjon (PDF)', noAttach: 'Ikke legg ved', attachHelp: 'Sendes som vedlegg i e-posten og kan åpnes fra invitasjonen.', preview: 'Se presentasjonen', language: 'Språk i invitasjonen',
@@ -187,12 +187,12 @@ const en: Dict = {
     welcome: 'Welcome', title: 'How would you like to stay with us?',
     airbnbEyebrow: 'Holiday rental', airbnbTitle: 'Book via Airbnb', airbnbText: 'For all guests. See available dates, prices and reviews, and book securely through Airbnb.',
     airbnbCta: 'Go to Airbnb', soon: 'Coming soon',
-    ffEyebrow: 'By invitation only', ffTitle: 'Friends & family', ffText: 'The private booking portal for friends and family. If you have received an invitation or are already a member, continue here.', ffCta: 'Continue',
+    ffEyebrow: 'By invitation only', ffTitle: 'Retreat Club', ffText: 'Our private booking portal for Retreat Club members. If you have received an invitation or are already a member, continue here.', ffCta: 'Continue',
     ltEyebrow: 'Long term', ltTitle: 'Long-term rental', ltText: 'Looking to rent for a longer period? Send us an enquiry and we will get in touch to agree on terms.', ltCta: 'Send enquiry',
   },
   ff: {
-    eyebrow: 'By invitation only', title1: 'Powder mornings, fireside evenings,', title2: 'in the heart of the Sunnmøre Alps.',
-    lead: 'Breathtaking mountain views, ski-in/ski-out to Strandafjellet and a warm place to come home to after a day on the slopes. mountainretreat.no is our private booking portal for friends and family, by invitation only.',
+    eyebrow: 'Retreat Club · by invitation only', title1: 'Powder mornings, fireside evenings,', title2: 'in the heart of the Sunnmøre Alps.',
+    lead: 'Breathtaking mountain views, ski-in/ski-out to Strandafjellet and a warm place to come home to after a day on the slopes. mountainretreat.no is the booking portal for Retreat Club, our private members’ club, by invitation only.',
     how: 'How it works', toMyPage: 'My page',
     steps: [
       ['Invitation', 'You become a member when someone you know invites you. There is no open registration.'],
@@ -223,14 +223,14 @@ const en: Dict = {
   },
   invite: {
     invalidTitle: 'Invalid invitation', notFound: 'The invitation does not exist.', used: 'This invitation has already been used. Please log in instead.', revoked: 'The invitation has been withdrawn.', expired: 'The invitation has expired. Please ask for a new one.', toLogin: 'Go to login',
-    from: (n: string) => `Invitation from ${n}`, cleaning: 'Cleaning portal', welcome: (n?: string | null) => `Welcome${n ? `, ${n}` : ''}`,
+    from: (n: string) => `Invitation from ${n}`, cleaning: 'Cleaning portal', welcome: (n?: string | null) => `Welcome${n ? `, ${n}` : ''}`, welcomeClub: (n?: string | null) => `Welcome to Retreat Club${n ? `, ${n}` : ''}`,
     memberText: (e: string) => `Create your account for ${e}. You will then set up two-factor authentication with an authenticator app.`,
     helperText: (p: string | null, e: string) => `Register as a cleaner${p ? ` for ${p}` : ''}. You will receive email and SMS alerts about new bookings and a reminder on cleaning days. You log in with ${e} and a code from an authenticator app.`,
     name: 'Full name', email: 'Email', phoneHelper: 'Mobile (for SMS alerts)', phone: 'Mobile (optional)', terms: 'I accept the terms and have read the', privacyLink: 'privacy policy',
     marketing: 'Yes please, let me know about available dates and news (optional).', createMember: 'Create account', createHelper: 'Register',
     benefitsTitle: 'What you get as a member', presentation: 'View the presentation', presentationText: 'Pictures and more information about the place (PDF).', createTitle: 'Create your account',
   },
-  nav: { overview: 'Overview', benefits: 'Member benefits', properties: 'Properties', myPage: 'My page', bookings: 'My bookings', invite: 'Invite friends', invitations: 'Invitations', wallet: 'Bonus wallet', messages: 'Messages', profile: 'Profile & privacy', admin: 'Administration', toAdmin: 'Go to admin', member: 'Member', tagline: 'Friends & family' },
+  nav: { overview: 'Overview', benefits: 'Member benefits', properties: 'Properties', myPage: 'My page', bookings: 'My bookings', invite: 'Invite friends', invitations: 'Invitations', wallet: 'Bonus wallet', messages: 'Messages', profile: 'Profile & privacy', admin: 'Administration', toAdmin: 'Go to admin', member: 'Member', tagline: 'Retreat Club' },
   status: {
     pending_review: 'Awaiting approval', rejected: 'Declined', awaiting_payment: 'Awaiting payment', expired: 'Expired', confirmed: 'Confirmed', cancellation_requested: 'Cancellation requested',
     cancelled: 'Cancelled', completed: 'Completed', pending: 'Pending', succeeded: 'Paid', failed: 'Failed', refunded: 'Refunded', partially_refunded: 'Partly refunded',
@@ -299,7 +299,7 @@ const en: Dict = {
     freeCancel: 'The booking has not been paid yet and can be cancelled free of charge.', cancel: 'Cancel booking', bonusOnApproval: 'The bonus is deducted when the request is approved.',
   },
   invites: {
-    eyebrow: 'Friends & family', title: 'Invite', lead: (a: string, b: string) => `When someone you invite completes their first stay, you receive ${a} and they receive ${b} as a bonus towards your next booking. Only the first stay earns a bonus.`,
+    eyebrow: 'Retreat Club', title: 'Invite', lead: (a: string, b: string) => `When someone you invite completes their first stay, you receive ${a} and they receive ${b} as a bonus towards your next booking. Only the first stay earns a bonus.`,
     send: 'Send invitation', name: 'Name', email: 'Email', linkNote: (d: string) => `The link is personal, can be used once and expires after ${d} days.`,
     quota: (left: number, limit: number) => `You can send ${left} more invitation${left === 1 ? '' : 's'} this week (max ${limit} per 7 days). You can invite as many people as you like over time – you and each person you invite receive a bonus once they have completed their first stay.`,
     attach: 'Attach presentation (PDF)', noAttach: 'Do not attach', attachHelp: 'Sent as an attachment in the email and can be opened from the invitation.', preview: 'View presentation', language: 'Invitation language',

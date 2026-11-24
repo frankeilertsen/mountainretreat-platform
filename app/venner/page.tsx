@@ -4,7 +4,7 @@ import { homeFor } from '@/lib/auth/rbac';
 import { getT } from '@/lib/i18n/lang';
 import { LangSwitch } from '@/components/LangSwitch';
 
-export const metadata = { title: 'Venner og familie' };
+export const metadata = { title: 'Retreat Club' };
 export const dynamic = 'force-dynamic';
 
 export default async function Landing() {

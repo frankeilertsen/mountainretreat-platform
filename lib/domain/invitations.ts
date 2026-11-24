@@ -60,14 +60,14 @@ export async function createInvitation(inviter: UserLike & { email: string; name
     const attached = !!pres && pres.size_bytes <= MAX_ATTACH_BYTES;
     const hi = input.name?.trim() ? ' ' + input.name.trim() : '';
     const body = lang === 'en'
-      ? `Hi${hi}!\n\n${inviter.name} has invited you to Mountain Retreat – a private booking portal for friends and family.\n\nAs a member you get:\n${benefits}\n\n`
+      ? `Hi${hi}!\n\n${inviter.name} has invited you to Retreat Club – the private members’ club and booking portal of Mountain Retreat.\n\nAs a member you get:\n${benefits}\n\n`
         + (pres ? `${attached ? 'The attached presentation' : 'The presentation'} has pictures and more information about the place${attached ? '' : `: ${pdfLink}`}.\n\n` : '')
         + `Create your account here (valid for ${days} days):\n${link}`
-      : `Hei${hi}!\n\n${inviter.name} har invitert deg til Mountain Retreat – en privat bookingportal for venner og familie.\n\nSom medlem får du:\n${benefits}\n\n`
+      : `Hei${hi}!\n\n${inviter.name} har invitert deg til Retreat Club – den private medlemsklubben og bookingportalen til Mountain Retreat.\n\nSom medlem får du:\n${benefits}\n\n`
         + (pres ? `${attached ? 'I presentasjonen som er lagt ved' : 'I presentasjonen'} finner du bilder og mer informasjon om stedet${attached ? '' : `: ${pdfLink}`}.\n\n` : '')
         + `Opprett kontoen din her (gyldig i ${days} dager):\n${link}`;
     await enqueue({ to: email, type: 'invitation',
-      subject: lang === 'en' ? `${inviter.name} has invited you to Mountain Retreat` : `${inviter.name} har invitert deg til Mountain Retreat`,
+      subject: lang === 'en' ? `${inviter.name} has invited you to Retreat Club` : `${inviter.name} har invitert deg til Retreat Club`,
       body, payload: attached ? { attachPresentationId: pres!.id } : undefined }, c);
     await audit(c, actor, 'invitation.sent', 'invitation', inv!.id, undefined, { email, presentation: pres?.id ?? null, lang });
     return { invitationId: inv!.id, link };
@@ -186,7 +186,7 @@ export async function decideLoyalty(applicationId: string, approve: boolean, act
     const u = await one<{ email: string; name: string }>('SELECT email, name FROM users WHERE id=$1', [a.applicant_user_id], c);
     await enqueue({ userId: a.applicant_user_id, to: u!.email, type: 'loyalty_decided',
       subject: approve ? 'Du kan nå invitere andre' : 'Søknaden om invitasjonsrett ble ikke godkjent',
-      body: approve ? `Hei ${u!.name}! Du kan nå invitere venner og familie fra medlemssiden din.` : `Hei ${u!.name}. Søknaden ble ikke godkjent denne gangen. Du kan søke igjen om tre måneder.` }, c);
+      body: approve ? `Hei ${u!.name}! Du kan nå invitere venner til Retreat Club fra medlemssiden din.` : `Hei ${u!.name}. Søknaden ble ikke godkjent denne gangen. Du kan søke igjen om tre måneder.` }, c);
   });
 }
 

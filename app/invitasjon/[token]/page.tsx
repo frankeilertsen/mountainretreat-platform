@@ -32,7 +32,7 @@ export default async function Invite({ params, searchParams }: { params: Promise
         {invalid ? (<><h1>{T.invalidTitle}</h1><p>{invalid}</p><Link className="btn" href="/login">{T.toLogin}</Link></>) : (
           <>
             <span className="eyebrow">{helper ? T.cleaning : T.from(inv!.inviter_name)}</span>
-            <h1>{T.welcome(inv!.invitee_name)}</h1>
+            <h1>{helper ? T.welcome(inv!.invitee_name) : T.welcomeClub(inv!.invitee_name)}</h1>
             {benefits.length > 0 && (
               <section className="invite-benefits">
                 <h3>{T.benefitsTitle}</h3>
