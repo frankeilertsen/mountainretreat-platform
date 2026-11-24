@@ -43,3 +43,23 @@ describe('cleaner accounts and notifications', () => {
     expect(reminders.map(r => r.channel).sort()).toEqual(['email', 'sms']);
   });
 });
+
+describe('cleaner language', () => {
+  it('a cleaner who chose English gets e-mail and SMS in English', async () => {
+    const admin = await user('admin');
+    const pid = await property();
+    const h = await user('helper', { phone: '+4790000097' });
+    await getPool().query(`UPDATE users SET preferred_lang='en' WHERE id=$1`, [h.id]);
+    await getPool().query(`INSERT INTO helper_property_assignments (helper_user_id, property_id) VALUES ($1,$2)`, [h.id, pid]);
+    const m = await user('member', { invite_tier: 'admin_invited' });
+    const b = await requestBooking(m, { propertyId: pid, startDate: d(3), endDate: d(5), adults: 2, children: 0, infants: 0, addOns: [] }, { id: m.id, type: 'member' });
+    await approveBooking(b.id, { id: admin.id, type: 'admin' });
+    const p = await one<{ id: string }>(`INSERT INTO payments (booking_id, method, provider, amount_ore, idempotency_key) VALUES ($1,'stripe_card','mock',1,'en1') RETURNING id`, [b.id]);
+    await handlePaymentSucceeded(p!.id);
+    const sent = await q<{ channel: string; subject: string; body: string }>(`SELECT channel, subject, body FROM notifications WHERE type='cleaning_task' AND user_id=$1`, [h.id]);
+    expect(sent.length).toBeGreaterThan(0);
+    expect(sent.every(n => /New booking/.test(n.subject))).toBe(true);
+    expect(sent.find(n => n.channel === 'email')!.body).toMatch(/^Hi /);
+    expect(sent.find(n => n.channel === 'sms')!.body).toMatch(/New booking at/);
+  });
+});

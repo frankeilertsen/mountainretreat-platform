@@ -8,6 +8,7 @@ import { addDays, fmtDate, todayOslo } from '../format';
 import { allocateBeds, Allocation, BedInput, roomSupplies } from './beds';
 import { isAdmin, UserLike } from '../auth/rbac';
 import { putObject } from '../storage';
+import { helperMsg, helperEmailBody, HelperMessage } from '../i18n/cleaning';
 
 // ------------------------------------------------------------------ stay preparation
 export async function upsertBookingPreparation(c: PoolClient, bookingId: string, propertyId: string, g: { adults: number; children: number; infants: number }) {
@@ -95,11 +96,9 @@ export async function reconcileCleaningTasks(c: PoolClient, propertyId: string):
          status === 'not_needed' ? 'Gjesten vasker selv' : null, status === 'assigned' ? autoAssignee : null], c);
       created++;
       if (status !== 'not_needed') {
-        const kind = d.task_type === 'turnover' ? `vask ${fmtDate(d.date, true)}` : `klargjøring ${fmtDate(d.date, true)}`;
-        const guests = d.stay.guests ? ` (${d.stay.guests} gjester)` : '';
         for (const h of helpers.map(x => x.helper_user_id)) {
-          await notifyHelper(c, h, `Ny booking (${d.stay.channel}): ${prop!.name} – ${kind}${h === autoAssignee ? ' – tildelt deg' : ''}`, t!.id,
-            { dedupe: `cleaning_new:${t!.id}`, smsText: `Ny booking på ${prop!.name}: ${kind}${guests}${d.nextCheckin && d.nextCheckin === d.date ? ', nye gjester samme dag' : ''}.` });
+          await notifyHelper(c, h, helperMsg.newBooking(d.stay.channel, prop!.name, d.task_type, d.date, d.stay.guests, h === autoAssignee, !!d.nextCheckin && d.nextCheckin === d.date), t!.id,
+            { dedupe: `cleaning_new:${t!.id}` });
         }
       }
     } else {
@@ -108,7 +107,7 @@ export async function reconcileCleaningTasks(c: PoolClient, propertyId: string):
         await c.query(`UPDATE cleaning_tasks SET checkout_date=$2, next_checkin_date=$3, deadline_at=${deadlineSql}, next_preparation_id=$5, updated_at=now() WHERE id=$1`,
           [ex.id, d.date, d.nextCheckin, prop!.check_in_time, d.nextPrep]);
         updated++;
-        if (ex.assigned_to_user_id && ex.checkout_date !== d.date) await notifyHelper(c, ex.assigned_to_user_id, `Vask flyttet: ${prop!.name} nå ${fmtDate(d.date, true)}`, ex.id, { smsText: `Endring: vasken på ${prop!.name} er flyttet fra ${fmtDate(ex.checkout_date)} til ${fmtDate(d.date, true)}.` });
+        if (ex.assigned_to_user_id && ex.checkout_date !== d.date) await notifyHelper(c, ex.assigned_to_user_id, helperMsg.moved(prop!.name, ex.checkout_date, d.date), ex.id);
       }
     }
   }
@@ -116,21 +115,23 @@ export async function reconcileCleaningTasks(c: PoolClient, propertyId: string):
     if (seen.has(key) || ex.status === 'done') continue;
     await c.query(`UPDATE cleaning_tasks SET status='cancelled', updated_at=now() WHERE id=$1`, [ex.id]);
     cancelled++;
-    if (ex.assigned_to_user_id) await notifyHelper(c, ex.assigned_to_user_id, `Vask avlyst: ${prop!.name} ${fmtDate(ex.checkout_date, true)}`, ex.id, { smsText: `Avlyst: vasken på ${prop!.name} ${fmtDate(ex.checkout_date, true)} trengs ikke lenger (booking kansellert).` });
+    if (ex.assigned_to_user_id) await notifyHelper(c, ex.assigned_to_user_id, helperMsg.cancelled(prop!.name, ex.checkout_date), ex.id);
   }
   return { created, updated, cancelled };
 }
 
 /** E-mail + SMS (per the cleaner's own preferences) to one cleaner. */
-export async function notifyHelper(c: Db, helperId: string, subject: string, taskId: string, opts: { dedupe?: string; smsText?: string } = {}) {
-  const h = await one<{ email: string; name: string; phone: string | null; notify_email: boolean; notify_sms: boolean; status: string }>(
-    'SELECT email, name, phone, notify_email, notify_sms, status FROM users WHERE id=$1', [helperId], c);
+export async function notifyHelper(c: Db, helperId: string, msg: HelperMessage, taskId: string, opts: { dedupe?: string } = {}) {
+  const h = await one<{ email: string; name: string; phone: string | null; notify_email: boolean; notify_sms: boolean; status: string; preferred_lang: string | null }>(
+    'SELECT email, name, phone, notify_email, notify_sms, status, preferred_lang FROM users WHERE id=$1', [helperId], c);
   if (!h || h.status !== 'active') return;
+  const lang = h.preferred_lang === 'en' ? 'en' : 'no';
+  const m = msg[lang];
   const link = appUrl('/renhold/oppgaver/' + taskId);
-  if (h.notify_email) await enqueue({ userId: helperId, to: h.email, type: 'cleaning_task', subject, dedupeKey: opts.dedupe ? `${opts.dedupe}:email:${helperId}` : undefined,
-    body: `Hei ${h.name}!\n\n${subject}\nSe tider, gjester og sengeoppsett: ${link}` }, c);
-  if (h.notify_sms && h.phone) await enqueue({ userId: helperId, to: h.phone, channel: 'sms', type: 'cleaning_task', subject, dedupeKey: opts.dedupe ? `${opts.dedupe}:sms:${helperId}` : undefined,
-    body: `${opts.smsText ?? subject} ${link}` }, c);
+  if (h.notify_email) await enqueue({ userId: helperId, to: h.email, type: 'cleaning_task', subject: m.subject, dedupeKey: opts.dedupe ? `${opts.dedupe}:email:${helperId}` : undefined,
+    body: helperEmailBody(lang, h.name, m.subject, link) }, c);
+  if (h.notify_sms && h.phone) await enqueue({ userId: helperId, to: h.phone, channel: 'sms', type: 'cleaning_task', subject: m.subject, dedupeKey: opts.dedupe ? `${opts.dedupe}:sms:${helperId}` : undefined,
+    body: `${m.sms ?? m.subject} ${link}` }, c);
 }
 
 /** Every active cleaner assigned to the property (used for "new booking" alerts and unassigned reminders). */
@@ -151,11 +152,9 @@ export async function sameDayCleaningReminders(hour: number): Promise<number> {
      WHERE t.checkout_date=$1 AND t.status IN ('open','assigned')`, [today]);
   for (const t of tasks) {
     const who = t.assigned_to_user_id ? [t.assigned_to_user_id] : await propertyHelpers(getPool(), t.property_id);
-    const what = t.task_type === 'turnover' ? `utsjekk kl. ${t.cout}` : 'klargjøring';
-    const next = t.same_day ? ` Nye gjester kl. ${t.cin}${t.guests ? ` (${t.guests} pers.)` : ''} – må være ferdig før det.` : '';
     for (const h of who) {
-      await notifyHelper(getPool(), h, `I dag: vask ${t.property}, ${what}${t.assigned_to_user_id ? '' : ' (ikke tildelt ennå)'}`, t.id,
-        { dedupe: `cleaning_today:${t.id}:${today}`, smsText: `Påminnelse: vask i dag på ${t.property}, ${what}.${next}` });
+      await notifyHelper(getPool(), h, helperMsg.reminderToday(t.property, t.task_type, t.cout, t.cin, t.same_day, t.guests, !!t.assigned_to_user_id), t.id,
+        { dedupe: `cleaning_today:${t.id}:${today}` });
     }
   }
   return tasks.length;
@@ -316,7 +315,7 @@ export async function assignTask(taskId: string, helperId: string | null, actor:
     await c.query(`UPDATE cleaning_tasks SET assigned_to_user_id=$2, status = CASE WHEN status IN ('open','assigned') THEN (CASE WHEN $2::uuid IS NULL THEN 'open' ELSE 'assigned' END) ELSE status END, updated_at=now() WHERE id=$1`, [taskId, helperId]);
     await audit(c, actor, 'cleaning.assigned', 'cleaning_task', taskId, undefined, { helperId });
     const p = await one<{ name: string }>('SELECT name FROM properties WHERE id=$1', [t.property_id], c);
-    if (helperId) await notifyHelper(c, helperId, `Ny renholdsjobb: ${p!.name} ${fmtDate(t.checkout_date, true)}`, taskId);
+    if (helperId) await notifyHelper(c, helperId, helperMsg.assigned(p!.name, t.checkout_date), taskId);
   });
 }
 
@@ -348,6 +347,6 @@ export async function updatePreparation(prepId: string, data: { adults: number; 
       [prepId, data.adults, data.children, data.infants, data.comment.trim() || null, data.arrival || null, actor.id]);
     await audit(c, actor, 'stay.preparation_updated', 'stay_preparation', prepId, before, data);
     const assigned = await q<{ id: string; assigned_to_user_id: string }>(`SELECT id, assigned_to_user_id FROM cleaning_tasks WHERE next_preparation_id=$1 AND assigned_to_user_id IS NOT NULL AND status IN ('assigned','in_progress')`, [prepId], c);
-    for (const t of assigned) await notifyHelper(c, t.assigned_to_user_id, 'Endret info om neste ankomst', t.id);
+    for (const t of assigned) await notifyHelper(c, t.assigned_to_user_id, helperMsg.guestInfoChanged(), t.id);
   });
 }

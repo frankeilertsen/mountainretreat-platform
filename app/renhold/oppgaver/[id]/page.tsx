@@ -8,6 +8,9 @@ import { Flash, Status } from '@/components/ui';
 import { RoomPlan } from '@/components/RoomPlan';
 import { startTaskAction, completeTaskAction, roomDoneAction, reportAction, taskPhotoAction } from '../../../actions/cleaning';
 import { ImageInput } from '@/components/forms/ImageInput';
+import { getLang } from '@/lib/i18n/lang';
+import { cleanDict } from '@/lib/i18n/cleaning';
+import { fmtDateL, fmtDateTimeL } from '@/lib/i18n/format';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,6 +18,9 @@ export default async function TaskPage({ params, searchParams }: { params: Promi
   const { id } = await params;
   const sp = await searchParams;
   const u = await requireUser('cleaning_portal');
+  const lang = await getLang();
+  const C = cleanDict[lang].task;
+  const dt = (x: any) => fmtDateTimeL(x, lang);
   if (!(await helperCanSeeTask(u as any, id))) notFound();
   // Deliberately selects NO guest names, contact details, prices or member data.
   const t = await one(`SELECT t.id, t.task_type, t.status, t.channel_name, to_char(t.checkout_date,'YYYY-MM-DD') AS date, to_char(t.next_checkin_date,'YYYY-MM-DD') AS next_checkin,
@@ -29,66 +35,66 @@ export default async function TaskPage({ params, searchParams }: { params: Promi
   const photos = await q(`SELECT id FROM photos WHERE entity_type='cleaning_task' AND entity_id=$1 ORDER BY created_at`, [id]);
   const roomsToPrepare = plan.rooms.filter(r => r.beds.some(b => b.allocation));
   const open = ['open', 'assigned', 'in_progress'].includes(t.status);
-  const KIND: Record<string, string> = { damage: 'Skade', missing_item: 'Mangler', issue: 'Avvik', comment: 'Kommentar' };
+  const KIND = C.kinds;
   const sameDay = t.next_checkin === t.date;
   return (
     <>
-      <Link href="/renhold" className="muted">← Tilbake</Link>
-      <div className="row between" style={{ margin: '12px 0' }}><h1 style={{ margin: 0 }}>{t.property}</h1><Status s={t.status} /></div>
+      <Link href="/renhold" className="muted">{C.back}</Link>
+      <div className="row between" style={{ margin: '12px 0' }}><h1 style={{ margin: 0 }}>{t.property}</h1><Status s={t.status} lang={lang} /></div>
       <p className="muted" style={{ marginTop: -6 }}>{t.address}</p>
-      <Flash sp={sp} />
+      <Flash sp={sp} lang={lang} />
       <div className="card" style={{ padding: 18 }}>
         <dl className="dl" style={{ fontSize: '1rem' }}>
-          <dt>Dato</dt><dd><strong>{fmtDate(t.date, true)}</strong></dd>
-          <dt>Oppgave</dt><dd>{t.task_type === 'turnover' ? 'Utvask etter utsjekk' : 'Klargjøring før ankomst'} <small className="muted">({t.channel_name})</small></dd>
-          {t.task_type === 'turnover' && <><dt>Utsjekk</dt><dd>kl. {t.cout}{t.checkout_guests ? ` · ${t.checkout_guests} gjester reiser` : ''}</dd></>}
-          <dt>Neste ankomst</dt><dd>{t.next_checkin ? <>{sameDay ? <strong style={{ color: 'var(--gold-2)' }}>I DAG kl. {t.cin}</strong> : `${fmtDate(t.next_checkin, true)} kl. ${t.cin}`}{t.arrival ? ` (ventet ${t.arrival})` : ''}</> : 'Ingen planlagt'}</dd>
-          {t.deadline_at && <><dt>Frist</dt><dd><strong>{fmtDateTime(t.deadline_at)}</strong></dd></>}
-          {t.next_checkin && <><dt>Gjester</dt><dd>{t.adults != null && (t.adults + t.children + t.infants) > 0 ? `${t.adults} voksne${t.children ? `, ${t.children} barn` : ''}${t.infants ? `, ${t.infants} spedbarn` : ''}` : 'Ingen info om neste gjester ennå'}</dd></>}
-          <dt>Ansvarlig</dt><dd>{t.assignee ?? 'Ikke tildelt'}</dd>
+          <dt>{C.date}</dt><dd><strong>{fmtDateL(t.date, lang, true)}</strong></dd>
+          <dt>{C.job}</dt><dd>{t.task_type === 'turnover' ? C.turnover : C.preparation} <small className="muted">({t.channel_name})</small></dd>
+          {t.task_type === 'turnover' && <><dt>{C.checkout}</dt><dd>{C.at(t.cout)}{t.checkout_guests ? ` · ${C.leaving(t.checkout_guests)}` : ''}</dd></>}
+          <dt>{C.nextArrival}</dt><dd>{t.next_checkin ? <>{sameDay ? <strong style={{ color: 'var(--gold-2)' }}>{C.todayAt(t.cin)}</strong> : `${fmtDateL(t.next_checkin, lang, true)} ${C.at(t.cin)}`}{t.arrival ? ` ${C.expected(t.arrival)}` : ''}</> : C.nonePlanned}</dd>
+          {t.deadline_at && <><dt>{C.deadline}</dt><dd><strong>{dt(t.deadline_at)}</strong></dd></>}
+          {t.next_checkin && <><dt>{C.guests}</dt><dd>{t.adults != null && (t.adults + t.children + t.infants) > 0 ? C.guestList(t.adults, t.children, t.infants) : C.noGuestInfo}</dd></>}
+          <dt>{C.responsible}</dt><dd>{t.assignee ?? C.notAssigned}</dd>
         </dl>
         {(t.notes || t.comment_for_cleaner) && <div className="note" style={{ marginTop: 14 }}>{t.notes && <div>📋 {t.notes}</div>}{t.comment_for_cleaner && <div>💬 {t.comment_for_cleaner}</div>}</div>}
       </div>
 
-      {t.status === 'not_needed' && <p className="muted" style={{ marginTop: 16 }}>Ikke nødvendig – gjesten vasker selv.</p>}
+      {t.status === 'not_needed' && <p className="muted" style={{ marginTop: 16 }}>{C.notNeeded}</p>}
 
-      <h2 style={{ marginTop: 28 }}>Senger og rom {t.next_checkin && <small className="muted" style={{ fontSize: '.9rem' }}>– for neste gjester</small>}</h2>
-      {plan.source === 'none' ? <p className="muted">Ingen informasjon om neste gjester ennå. Re opp etter standard eller spør administrator.</p> : (
+      <h2 style={{ marginTop: 28 }}>{C.bedsTitle} {t.next_checkin && <small className="muted" style={{ fontSize: '.9rem' }}>{C.forNext}</small>}</h2>
+      {plan.source === 'none' ? <p className="muted">{C.noPlan}</p> : (
         <>
-          <p className="muted" style={{ fontSize: '.88rem' }}>{plan.source === 'admin_override' ? 'Soveplan satt av administrator.' : 'Automatisk forslag ut fra antall gjester og senger.'} {roomsToPrepare.length} rom skal gjøres klare · {done.size} ferdig.</p>
-          <RoomPlan plan={plan} doneRooms={done} roomAction={open ? roomDoneAction : undefined} taskId={id} />
+          <p className="muted" style={{ fontSize: '.88rem' }}>{plan.source === 'admin_override' ? C.planAdmin : C.planAuto} {C.roomsSummary(roomsToPrepare.length, done.size)}</p>
+          <RoomPlan plan={plan} doneRooms={done} roomAction={open ? roomDoneAction : undefined} taskId={id} lang={lang} />
         </>
       )}
 
-      <h2 style={{ marginTop: 28 }}>Rapporter</h2>
-      {reports.map((r, i) => <div key={i} className="card flat" style={{ padding: 14, marginBottom: 10 }}><span className="badge">{KIND[r.kind]}</span> <small className="muted">{fmtDateTime(r.created_at)}{r.resolved_at ? ' · løst' : ''}</small><p style={{ margin: '6px 0 0' }}>{r.description}</p>
+      <h2 style={{ marginTop: 28 }}>{C.reports}</h2>
+      {reports.map((r, i) => <div key={i} className="card flat" style={{ padding: 14, marginBottom: 10 }}><span className="badge">{KIND[r.kind]}</span> <small className="muted">{dt(r.created_at)}{r.resolved_at ? ` · ${C.resolved}` : ''}</small><p style={{ margin: '6px 0 0' }}>{r.description}</p>
         {r.photos && <div className="row" style={{ marginTop: 8 }}>{r.photos.map((ph: string) => <img key={ph} src={`/api/photos/${ph}`} alt="" style={{ width: 80, height: 64, objectFit: 'cover', borderRadius: 6 }} />)}</div>}</div>)}
       <details className="card flat" style={{ padding: 16 }}>
-        <summary><strong>+ Rapporter skade, mangel eller kommentar</strong></summary>
+        <summary><strong>{C.newReport}</strong></summary>
         <form action={reportAction} style={{ marginTop: 12 }}>
           <input type="hidden" name="taskId" value={id} />
-          <div className="field"><label>Type</label><select name="kind"><option value="damage">Skade</option><option value="missing_item">Noe mangler</option><option value="issue">Annet avvik</option><option value="comment">Kommentar</option></select></div>
-          <div className="field"><label>Beskrivelse</label><textarea name="description" required placeholder="Hva, hvor?" /></div>
-          <div className="field"><label>Bilde (valgfritt)</label><ImageInput name="photo" capture="environment" /></div>
-          <button className="btn block">Send</button>
+          <div className="field"><label>{C.type}</label><select name="kind"><option value="damage">{C.kindOptions.damage}</option><option value="missing_item">{C.kindOptions.missing_item}</option><option value="issue">{C.kindOptions.issue}</option><option value="comment">{C.kindOptions.comment}</option></select></div>
+          <div className="field"><label>{C.description}</label><textarea name="description" required placeholder={C.descPh} /></div>
+          <div className="field"><label>{C.photoOpt}</label><ImageInput name="photo" capture="environment" /></div>
+          <button className="btn block">{C.send}</button>
         </form>
       </details>
 
-      <h2 style={{ marginTop: 28 }}>Bilder</h2>
+      <h2 style={{ marginTop: 28 }}>{C.photos}</h2>
       <div className="row">{photos.map(p => <img key={p.id} src={`/api/photos/${p.id}`} alt="" style={{ width: 96, height: 76, objectFit: 'cover', borderRadius: 8 }} />)}</div>
-      <form action={taskPhotoAction} className="row" style={{ marginTop: 10 }}><input type="hidden" name="taskId" value={id} /><ImageInput name="photo" capture="environment" required style={{ flex: 1 }} /><button className="btn ghost small">Last opp</button></form>
+      <form action={taskPhotoAction} className="row" style={{ marginTop: 10 }}><input type="hidden" name="taskId" value={id} /><ImageInput name="photo" capture="environment" required style={{ flex: 1 }} /><button className="btn ghost small">{C.upload}</button></form>
 
       {open && (
         <div className="sticky-actions">
-          {t.status !== 'in_progress' && <form action={startTaskAction}><input type="hidden" name="taskId" value={id} /><button className="btn secondary block">Start renhold</button></form>}
+          {t.status !== 'in_progress' && <form action={startTaskAction}><input type="hidden" name="taskId" value={id} /><button className="btn secondary block">{C.start}</button></form>}
           <form action={completeTaskAction} className="card" style={{ padding: 12 }}>
             <input type="hidden" name="taskId" value={id} />
-            <input name="notes" placeholder="Notat til administrator (valgfritt)" style={{ marginBottom: 8 }} />
-            <button className="btn ok block">✓ Marker som ferdig{roomsToPrepare.length > done.size ? ` (${roomsToPrepare.length - done.size} rom gjenstår)` : ''}</button>
+            <input name="notes" placeholder={C.notePh} style={{ marginBottom: 8 }} />
+            <button className="btn ok block">{C.complete}{roomsToPrepare.length > done.size ? ` ${C.roomsLeft(roomsToPrepare.length - done.size)}` : ''}</button>
           </form>
         </div>
       )}
-      {t.status === 'done' && <p className="muted" style={{ marginTop: 20 }}>Ferdig {fmtDateTime(t.completed_at)}{t.completion_notes ? ` – «${t.completion_notes}»` : ''}.</p>}
+      {t.status === 'done' && <p className="muted" style={{ marginTop: 20 }}>{C.doneAt(dt(t.completed_at), t.completion_notes)}</p>}
     </>
   );
 }

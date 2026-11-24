@@ -7,6 +7,7 @@ import { getNum } from './settings';
 import { addDays, todayOslo, fmtDate } from './format';
 import { audit, SYSTEM } from './audit';
 import { notifyHelper, sameDayCleaningReminders } from './domain/cleaning';
+import { helperMsg } from './i18n/cleaning';
 
 type JobFn = () => Promise<unknown>;
 
@@ -77,7 +78,7 @@ async function cleaningDayBeforeReminders() {
     `SELECT t.id, u.email, u.name, u.id AS user_id, p.name AS property FROM cleaning_tasks t JOIN users u ON u.id=t.assigned_to_user_id JOIN properties p ON p.id=t.property_id
      WHERE t.checkout_date=$1 AND t.status IN ('assigned')`, [tomorrow]);
   for (const r of rows) {
-    await notifyHelper(getPool(), r.user_id, `I morgen: vask ${r.property}`, r.id, { dedupe: `cleaning_reminder:${r.id}`, smsText: `Husk: vask på ${r.property} i morgen (${fmtDate(tomorrow, true)}).` });
+    await notifyHelper(getPool(), r.user_id, helperMsg.reminderTomorrow(r.property, tomorrow), r.id, { dedupe: `cleaning_reminder:${r.id}` });
   }
   const unassigned = await one<{ n: number }>(`SELECT count(*)::int AS n FROM cleaning_tasks WHERE checkout_date BETWEEN current_date AND current_date + 2 AND status='open'`);
   if (unassigned && unassigned.n > 0) {

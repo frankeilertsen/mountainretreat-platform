@@ -235,6 +235,7 @@ const en: Dict = {
     pending_review: 'Awaiting approval', rejected: 'Declined', awaiting_payment: 'Awaiting payment', expired: 'Expired', confirmed: 'Confirmed', cancellation_requested: 'Cancellation requested',
     cancelled: 'Cancelled', completed: 'Completed', pending: 'Pending', succeeded: 'Paid', failed: 'Failed', refunded: 'Refunded', partially_refunded: 'Partly refunded',
     pending_vest: 'Vesting', available: 'Available', partially_used: 'Partly used', fully_used: 'Used', revoked: 'Withdrawn', accepted: 'Accepted', qualified: 'Qualified',
+    open: 'Not assigned', assigned: 'Assigned', in_progress: 'In progress', done: 'Done', not_needed: 'Not needed',
   },
   home: {
     welcome: 'Welcome', hi: (n: string) => `Hi, ${n}`, howBenefits: 'How the benefits work', properties: 'Properties', upTo: (n: number) => `Up to ${n} guests`,

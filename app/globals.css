@@ -282,3 +282,9 @@ main { padding: 44px 0 90px; }
 /* Dates closed in a channel (Airbnb "Not available"): not a stay, shown faintly */
 .blk.blk-closed { background: repeating-linear-gradient(135deg, #2b2a26 0 6px, #24231f 6px 12px); color: var(--ink-3, #8a867c); border: 1px dashed #4a4740; }
 .legend i.lg-closed { background: repeating-linear-gradient(135deg, #3a3832 0 3px, #24231f 3px 6px); border: 1px dashed #5a574f; }
+
+/* Compact language switch in the cleaning portal header (flags only on phones) */
+@media (max-width: 560px) { .lang-switch.compact span { display: none; } .lang-switch.compact a { padding: 4px 6px; } }
+
+.clean-head-right { flex-wrap: nowrap; gap: 8px; }
+@media (max-width: 560px) { .hide-sm { display: none !important; } }
