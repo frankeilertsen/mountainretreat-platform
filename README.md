@@ -77,13 +77,13 @@ Fullt skjema: `db/migrations/0001_schema.sql` (+ standardinnstillinger i `0002`,
 | SMS (renhold) | Klar, utestet mot live | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM` (norsk avsendernummer/alfanumerisk avsender). Uten nøkler skrives SMS til serverloggen. |
 | Cloudflare Turnstile (valgfritt) | Klar, utestet mot live | Gratis konto hos Cloudflare → Turnstile → legg til mountainretreat.no → sett `TURNSTILE_SITE_KEY` og `TURNSTILE_SECRET_KEY`. Uten nøkler brukes den innebygde bekreftelseskoden. Turnstile kontakter Cloudflare, så nevn det i personvernerklæringen hvis dere slår det på. |
 | Push | Ikke bygget | Kanalfeltet finnes; avsender må legges til |
-| Fillagring i sky | Lokal mappe | Bytt `lib/domain/cleaning.ts › savePhoto` til EU S3-kompatibel bøtte ved serverløs hosting |
+| Fillagring (Supabase Storage) | Klar, testet mot etterligning av API-et | `SUPABASE_URL`, `SUPABASE_SECRET_KEY`; bøtten lages av `db/supabase/1-oppsett.sql`. Uten disse brukes lokal mappe (`STORAGE_DIR`) |
 
 **Om iCal:** Det er ikke sanntid. Vi henter med fast intervall (standard 30 min), og kanalene henter vår lenke på egen timeplan (ofte 30 min – flere timer). Admin-godkjenning er siste kontroll, og overlapp fra en kanal varsles som konflikt. For sanntid trengs en channel manager.
 
 ## 5. Testresultater
 
-`npm test` – **77 tester, 13 filer, alle grønne** (mot ekte PostgreSQL):
+`npm test` – **80 tester, 15 filer, alle grønne** (mot ekte PostgreSQL):
 - `pricing` (11): ekstra gjester (per opphold/natt, med i Airbnb-sammenligningen), Airbnb-prising (nattpris, rabatter, sammenligning inkl. avgift, manglende pris, min. netter), spesifikasjonens eksempel (14 175 kr), min/maks netter, hel periode, byttedag, uprisede datoer, tillegg, vaskefritak
 - `booking` (13): hele flyten, prislåsing, 2 og 20 samtidige godkjenninger → én vinner, idempotent webhook-replay, holdutløp + automatisk refusjon av sen betaling, kanselleringsvilkår + automatisk godkjenning, dobbeltinnsending, tilgang
 - `rewards` (11): tak på ubrukte vervebonuser, én bonus per part selv ved gjentatte/samtidige utløsere, kun første opphold, prosent med tak, minstebeløp, selvverving, suspendert verver, FIFO + tilbakeføring, 100 % bonusdekning, justering/tilbaketrekking/hovedbok, ende til ende
@@ -96,6 +96,8 @@ Fullt skjema: `db/migrations/0001_schema.sql` (+ standardinnstillinger i `0002`,
 - `messages` (3): medlem spør → admin varsles én gang til det er lest → admin svarer → medlemmet varsles på sitt språk, uleste-tellere; andre medlemmer og renholdere har ikke tilgang; historikken kan ikke endres/slettes; avslutt/åpne igjen (medlemssvar åpner); admin starter samtale; validering og rate limiting
 - `presentations` (3): kun admin laster opp, kun ekte PDF under 20 MB, standard og skjul; invitasjons-e-post beskriver fordelene, legger ved valgt PDF og følger valgt språk (norsk/engelsk); skjult presentasjon kan ikke legges ved; vedlegget lastes ved utsending; medlemmer kan legge ved
 - `invite-limit` (3): 50 invitasjoner per uke (51. avvises med tidspunkt for neste, tilbaketrukne teller, vinduet ruller), justerbar grense som holder ved samtidige innsendinger, gjelder ikke admin; den som inviterer får 500 kr for hver invitert persons første opphold, den inviterte 500 kr én gang, senere opphold gir ingenting
+- `storage` (2): Supabase Storage-adapteren (lagre, hente, signerte lenker, nøkkel i `apikey`-headeren, avviser farlige filnavn); direkte PDF-opplasting fra nettleser, kontroll av filen etterpå, ugyldig fil slettes, kun admin
+- `dbconfig` (1): Supabase-adresse gir TLS, `sslmode` fjernes fra adressen, sertifikatet sjekkes når `DATABASE_CA_CERT` er satt
 - `channels` (7): parsing, import/avlysning, konflikt, speiling, feil sletter ikke data, eksport uten ekko, ærlig kapabilitetsstatus
 
 I tillegg: produksjonsbygg OK, alle sider testet for alle roller, og nettleserflyt ende til ende (forespørsel → godkjenning → testbetaling → bekreftet → invitasjon).
@@ -108,7 +110,6 @@ I tillegg: produksjonsbygg OK, alle sider testet for alle roller, og nettleserfl
 - Stripe er ikke verifisert mot en ekte konto.
 - E-postendring gjøres av admin (ingen selvbetjent flyt). Ingen passkey/WebAuthn.
 - Rapportene er enkle (inntekt, belegg, trakt, verving) – ingen eksport til regnskap (Fiken) ennå.
-- Bilder lagres på lokal disk; trenger skylagring på serverløs plattform.
 - Personlig iCal-feed for renholdere (fra spesifikasjonen) er ikke laget.
 - Endring av datoer på en eksisterende booking gjøres ved å kansellere og sende ny forespørsel.
 - Innhold som admin skriver inn (boligbeskrivelser, romnavn, fasiliteter, husregler, tillegg) vises på det språket det er skrevet på – det finnes ikke egne engelske felt ennå. Admin- og renholdsportalen er kun på norsk. E-post om meldinger og bekreftelsen ved fast leie sendes på valgt språk; øvrige e-poster/SMS til medlemmer sendes foreløpig på norsk.
@@ -130,18 +131,18 @@ npm test                        # krever databasen byrampen_test
 ```
 Med `DEV_LOGIN=1` viser `/login` en liste for ett-klikks innlogging som alle testbrukerne (aldri i produksjon). Ventende renholderinvitasjon: `/invitasjon/dev-helper-invite`. Testbrukere: `admin@fkeproperty.test` (super-admin), `eiendom@fkeproperty.test` (eiendomsadmin), `kari@` / `ola@` / `lise@example.test` (medlemmer), `renhold@` og `renhold2@fkeproperty.test` (renhold). Ventende invitasjon: `/invitasjon/dev-invite-token-per`.
 
-## 8. Produksjonssetting
+## 8. Produksjonssetting (GitHub + Supabase + Vercel + Domeneshop)
 
-Anbefalt: én container på **Render, Fly.io (arn – Stockholm) eller Railway (EU)** + administrert **PostgreSQL 16 i EU** (Neon Frankfurt, Supabase EU eller Render Frankfurt). Container gir lokal disk for bilder; på Vercel må bildelagring byttes til S3 først.
+Koden er tilpasset Vercel (serverløst) og Supabase. Full steg-for-steg-guide på norsk: dokumentet «Mountain Retreat – test og lansering» (lenke i chatten). Kortversjon:
 
-1. **Database:** Opprett Postgres 16 i EU. Sett `DATABASE_URL`. Kjør `npm run migrate` (aldri `db:reset` i produksjon).
-2. **Miljøvariabler:** `APP_URL=https://mountainretreat.no`, `ENCRYPTION_KEY`, `TOKEN_PEPPER`, `CRON_SECRET` (unike, tilfeldige, i hemmelighetslageret), `RESEND_API_KEY`, `EMAIL_FROM`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STORAGE_DIR=/data/storage` (vedvarende volum). **Ikke** sett `DEV_LOGIN` eller `ALLOW_MOCK_PAYMENTS`.
-3. **Bygg og start:** `npm ci && npm run build && npm start` (Node 20+). Helsesjekk: `/api/health`.
-4. **Første admin:** Opprett én super-admin i databasen:
-   `INSERT INTO users (email, name, system_role, status) VALUES ('frank@…', 'Frank', 'super_admin', 'active');` → logg inn med e-postlenke og sett opp tofaktor. Inviter resten fra admin.
-5. **Cron:** Kall `/api/cron` hvert minutt med header `x-cron-secret: $CRON_SECRET` (Render Cron Job, GitHub Actions, cron-job.org eller `npm run jobs -- --loop` som egen tjeneste).
-6. **Stripe:** Legg inn webhook-endepunktet (§4), kopier signeringsnøkkelen, test med Stripe CLI (`stripe trigger checkout.session.completed`) og én ekte betaling på lavt beløp før åpning.
-7. **Kanaler:** For hver bolig og kanal: legg til iCal-import (kanalens lenke) og iCal-eksport (lim vår lenke inn hos kanalen). Sjekk at «Hentet av kanalen» blir grønn innen et døgn.
-8. **E-post:** Verifiser domenet i Resend (SPF/DKIM).
-9. **Backup:** Slå på daglige snapshots + point-in-time recovery (7–30 dager) hos databaseleverandøren, og ta backup av bildevolumet. Test gjenoppretting én gang.
-10. **Overvåking:** Oppetidsovervåking på `/api/health`; feilloggen fra plattformen (eller Sentry). Synkfeil og feilede refusjoner varsles allerede på e-post til admin.
+1. **GitHub:** privat repo `mountainretreat-platform`.
+2. **Supabase (EU, Stockholm):** kjør `db/supabase/1-oppsett.sql` (alle migreringer, låser tabellene for Supabase sitt offentlige API med RLS og fjerner rettigheter for `anon`/`authenticated`, lager den private bøtten `mountainretreat`, tidssone Europe/Oslo), så `2-forste-admin.sql`. Filen genereres fra `db/migrations` med `npm run supabase:sql`.
+3. **Resend:** verifiser mountainretreat.no (MX/TXT på `send`, DKIM på `resend._domainkey` i Domeneshop).
+4. **Vercel:** importer repoet. Miljøvariabler: `DATABASE_URL` (Supabase *Transaction pooler*, port 6543, `?sslmode=require`), `SUPABASE_URL`, `SUPABASE_SECRET_KEY` (`sb_secret_…`), `SUPABASE_BUCKET`, `APP_URL`, `ENCRYPTION_KEY`, `TOKEN_PEPPER`, `CRON_SECRET`, `RESEND_API_KEY`, `EMAIL_FROM`, `EMAIL_REPLY_TO`, valgfritt `DATABASE_CA_CERT`, `STRIPE_*`, og kun under testing `ALLOW_MOCK_PAYMENTS=1`. Region `arn1` (Stockholm) er satt i `vercel.json`.
+5. **Bakgrunnsjobber:** `db/supabase/3-bakgrunnsjobber.sql` (pg_cron + pg_net kaller `/api/cron` hvert minutt med `x-cron-secret`). E-post sendes i tillegg rett etter hver handling (`after()`), så innloggingslenker kommer på sekunder.
+6. **Domene:** A-post for `@` og CNAME for `www` i Domeneshop etter verdiene Vercel viser; MX/TXT for e-post røres ikke. Oppdater `APP_URL` og kjør `3-bakgrunnsjobber.sql` på nytt.
+7. **Drift:** Vercel Pro (Hobby er kun ikke-kommersielt) og Supabase Pro (ingen pause, daglig backup). Overvåk `/api/health` (viser hva som er konfigurert, aldri hemmeligheter).
+
+**Tilpasninger for Vercel:** filer lagres i Supabase Storage (privat bøtte; appen sjekker tilgang og gir en signert lenke som varer 60–120 sek), PDF-er lastes opp direkte fra nettleseren til Supabase (Vercel tar maks 4,5 MB per forespørsel), bilder krympes i nettleseren før opplasting (maks 2000 px), databasetilkoblingen bruker små pooler og TLS, og svg-captcha-fonten pakkes med funksjonene. Lokalt brukes fortsatt `STORAGE_DIR` når Supabase-variablene mangler.
+
+Kjører du på en egen server (Render/Fly/Railway) i stedet: `npm ci && npm run build && npm start`, `npm run migrate` mot databasen, og kall `/api/cron` hvert minutt.
