@@ -4,10 +4,10 @@ import { DomainError } from '../errors';
 import { memberDiscount } from './memberDiscount';
 import { getNum } from '../settings';
 
-export type SeasonCategory = { id: string; kind: string; name: string; price_per_night_ore: number;
+export type SeasonCategory = { id: string; kind: string; name: string; price_per_night_ore: number; weekend_price_per_night_ore?: number | null;
   min_nights: number; max_nights: number | null; color?: string | null };
 export type PricingPeriod = { id: string; season_category_id: string; name: string; start_date: string; end_date: string;
-  price_per_night_ore: number | null; min_nights: number | null; max_nights: number | null;
+  price_per_night_ore: number | null; weekend_price_per_night_ore?: number | null; min_nights: number | null; max_nights: number | null;
   booking_mode: 'flexible' | 'whole_period' | 'fixed_changeover_day'; changeover_weekday: number | null; priority: number };
 export type LosDiscount = { season_category_id: string | null; min_nights: number; discount_percentage: number };
 export type AddOnItem = { id: string; name: string; price_type: 'flat' | 'per_night' | 'per_unit' | 'per_guest'; unit_price_ore: number; mandatory: boolean };
@@ -47,6 +47,16 @@ export type Quote = {
 
 const num = (v: unknown) => Number(v);
 
+/** Friday and Saturday nights use the weekend price when one is set. A period's own price overrides the season's. */
+export function nightPrice(date: string, p: Pick<PricingPeriod, 'price_per_night_ore' | 'weekend_price_per_night_ore'> | null, c: Pick<SeasonCategory, 'price_per_night_ore' | 'weekend_price_per_night_ore'>): number {
+  const weekend = [5, 6].includes(isoWeekday(date));
+  if (p && (p.price_per_night_ore != null || p.weekend_price_per_night_ore != null)) {
+    const base = p.price_per_night_ore ?? c.price_per_night_ore;
+    return weekend ? (p.weekend_price_per_night_ore ?? base) : base;
+  }
+  return weekend ? (c.weekend_price_per_night_ore ?? c.price_per_night_ore) : c.price_per_night_ore;
+}
+
 /** Pure price + stay-rule engine (spec §12a). All arithmetic in øre; rounded once at the end. Throws DomainError on rule violations. */
 export function computeQuote(input: PricingInput): Quote {
   const { startDate, endDate } = input;
@@ -77,7 +87,7 @@ export function computeQuote(input: PricingInput): Quote {
         min: p?.min_nights ?? c?.min_nights ?? input.defaultMinNights ?? 1, max: p?.max_nights ?? c?.max_nights ?? null });
     } else {
       if (!p || !c) throw new DomainError('unpriced', 'Noen av datoene er ikke åpne for booking.');
-      resolved.push({ date, p, c, label: p.name, price: p.price_per_night_ore ?? c.price_per_night_ore, min: p.min_nights ?? c.min_nights, max: p.max_nights ?? c.max_nights });
+      resolved.push({ date, p, c, label: p.name, price: nightPrice(date, p, c), min: p.min_nights ?? c.min_nights, max: p.max_nights ?? c.max_nights });
     }
   }
 
@@ -148,10 +158,10 @@ export async function loadPricingContext(propertyId: string, db: Db = getPool())
   if (!property || !property.active) throw new DomainError('not_found', 'Boligen finnes ikke.');
   // Sequential on purpose: db may be a single transaction client
   const categories = await 
-    q<SeasonCategory>(`SELECT id, kind, name, color, price_per_night_ore, min_nights, max_nights
+    q<SeasonCategory>(`SELECT id, kind, name, color, price_per_night_ore, weekend_price_per_night_ore, min_nights, max_nights
                        FROM season_categories WHERE property_id=$1 AND active`, [propertyId], db);
   const periods = await q<PricingPeriod>(`SELECT id, season_category_id, name, to_char(start_date,'YYYY-MM-DD') AS start_date, to_char(end_date,'YYYY-MM-DD') AS end_date,
-                       price_per_night_ore, min_nights, max_nights,
+                       price_per_night_ore, weekend_price_per_night_ore, min_nights, max_nights,
                        booking_mode, changeover_weekday, priority FROM pricing_periods WHERE property_id=$1 AND active`, [propertyId], db);
   const losDiscounts = await q<LosDiscount>(`SELECT season_category_id, min_nights, discount_percentage::float AS discount_percentage FROM length_of_stay_discounts WHERE property_id=$1 AND active`, [propertyId], db);
   const addOns = await q<AddOnItem>(`SELECT id, name, price_type, unit_price_ore, mandatory FROM add_on_items WHERE (property_id=$1 OR property_id IS NULL) AND active ORDER BY mandatory DESC, name`, [propertyId], db);

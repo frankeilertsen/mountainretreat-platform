@@ -95,3 +95,35 @@ describe('extra guests', () => {
     expect(withFee.airbnb_comparison_ore).toBe(Math.round((7 * 250000 * 0.9 + 120000 + 70000) * 1.15));
   });
 });
+
+describe('weekend prices and season painting', () => {
+  it('Friday and Saturday nights use the weekend price; a period price overrides the season', async () => {
+    const { computeQuote } = await import('../lib/domain/pricing');
+    const cat = { id: 'c', kind: 'low_season', name: 'Lavsesong', price_per_night_ore: 275000, weekend_price_per_night_ore: 300000, min_nights: 2, max_nights: null };
+    const period = { id: 'p', season_category_id: 'c', name: 'Lav', start_date: '2027-06-01', end_date: '2027-06-30', price_per_night_ore: null, weekend_price_per_night_ore: null, min_nights: null, max_nights: null, booking_mode: 'flexible' as const, changeover_weekday: null, priority: 0 };
+    const base = { guests: 2, maxGuests: 6, categories: [cat], losDiscounts: [], cleaningFeeOre: 0, addOns: [], selectedAddOns: [], pricingMode: 'manual' as const };
+    // Thu 10 → Sun 13 June 2027: Thu, Fri, Sat nights
+    const q1 = computeQuote({ ...base, periods: [period], startDate: '2027-06-10', endDate: '2027-06-13' });
+    expect(q1.nightLines.map(n => n.base_ore)).toEqual([275000, 300000, 300000]);
+    const q2 = computeQuote({ ...base, periods: [{ ...period, price_per_night_ore: 400000 }], startDate: '2027-06-10', endDate: '2027-06-13' });
+    expect(q2.nightLines.map(n => n.base_ore)).toEqual([400000, 400000, 400000]);
+  });
+
+  it('painting a range trims, splits and merges periods', async () => {
+    const { property } = await import('./factory');
+    const { paintSeason } = await import('../lib/domain/seasons');
+    const { q, one } = await import('../lib/db');
+    const pid = await property();
+    const cats = await q<{ id: string; kind: string }>(`SELECT id, kind FROM season_categories WHERE property_id=$1`, [pid]);
+    const low = cats.find(c => c.kind === 'low_season')?.id ?? (await one<{ id: string }>(`INSERT INTO season_categories (property_id, kind, name, price_per_night_ore) VALUES ($1,'low_season','Lav',100000) RETURNING id`, [pid]))!.id;
+    const hol = cats.find(c => c.kind === 'holiday')?.id ?? (await one<{ id: string }>(`INSERT INTO season_categories (property_id, kind, name, price_per_night_ore) VALUES ($1,'holiday','Ferie',200000) RETURNING id`, [pid]))!.id;
+    const list = () => q<{ s: string; e: string; k: string }>(`SELECT to_char(start_date,'YYYY-MM-DD') s, to_char(end_date,'YYYY-MM-DD') e, sc.kind k FROM pricing_periods pp JOIN season_categories sc ON sc.id=pp.season_category_id WHERE pp.property_id=$1 AND pp.active AND start_date >= '2030-01-01' ORDER BY start_date`, [pid]);
+    await paintSeason(pid, '2030-01-01', '2030-01-31', low);
+    await paintSeason(pid, '2030-01-10', '2030-01-12', hol);
+    expect(await list()).toEqual([{ s: '2030-01-01', e: '2030-01-09', k: 'low_season' }, { s: '2030-01-10', e: '2030-01-12', k: 'holiday' }, { s: '2030-01-13', e: '2030-01-31', k: 'low_season' }]);
+    await paintSeason(pid, '2030-01-10', '2030-01-12', low);
+    expect(await list()).toEqual([{ s: '2030-01-01', e: '2030-01-31', k: 'low_season' }]);
+    await paintSeason(pid, '2030-01-31', '2030-01-31', null);
+    expect(await list()).toEqual([{ s: '2030-01-01', e: '2030-01-30', k: 'low_season' }]);
+  });
+});

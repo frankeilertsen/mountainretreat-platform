@@ -114,8 +114,8 @@ export async function saveCategoryAction(f: FormData) {
   await run(back(pid, 'priser'), async () => {
     const before = await one('SELECT * FROM season_categories WHERE id=$1', [id]);
     const max = int(f, 'max_nights') || null;
-    await getPool().query(`UPDATE season_categories SET name=$2, price_per_night_ore=$3, min_nights=$4, max_nights=$5, color=$6, updated_at=now() WHERE id=$1 AND property_id=$7`,
-      [id, str(f, 'name'), kr(f, 'price') ?? 0, Math.max(1, int(f, 'min_nights', 1)), max, str(f, 'color') || null, pid]);
+    await getPool().query(`UPDATE season_categories SET name=$2, price_per_night_ore=$3, min_nights=$4, max_nights=$5, color=$6, weekend_price_per_night_ore=$8, updated_at=now() WHERE id=$1 AND property_id=$7`,
+      [id, str(f, 'name'), kr(f, 'price') ?? 0, Math.max(1, int(f, 'min_nights', 1)), max, str(f, 'color') || null, pid, kr(f, 'weekend_price') ?? null]);
     await audit(null, actor, 'pricing.category_updated', 'season_category', id, before, Object.fromEntries(f.entries()));
     return 'Sesongpris lagret.';
   });
@@ -129,11 +129,24 @@ export async function savePeriodAction(f: FormData) {
     const prio = int(f, 'priority', 0);
     const overlap = await one(`SELECT name FROM pricing_periods WHERE property_id=$1 AND active AND priority=$2 AND id <> COALESCE(NULLIF($3,'')::uuid,'00000000-0000-0000-0000-000000000000') AND daterange(start_date,end_date,'[]') && daterange($4::date,$5::date,'[]')`, [pid, prio, id, start, end]);
     if (overlap) throw new DomainError('overlap', `Overlapper «${overlap.name}» med samme prioritet. Gi perioden høyere prioritet hvis den skal overstyre.`);
-    const vals = [str(f, 'season_category_id'), str(f, 'name'), start, end, kr(f, 'price'), int(f, 'min_nights') || null, int(f, 'max_nights') || null, mode, wd, prio];
-    if (id) await getPool().query(`UPDATE pricing_periods SET season_category_id=$2, name=$3, start_date=$4, end_date=$5, price_per_night_ore=$6, min_nights=$7, max_nights=$8, booking_mode=$9, changeover_weekday=$10, priority=$11, updated_at=now() WHERE id=$1 AND property_id=$12`, [id, ...vals, pid]);
-    else await getPool().query(`INSERT INTO pricing_periods (property_id, season_category_id, name, start_date, end_date, price_per_night_ore, min_nights, max_nights, booking_mode, changeover_weekday, priority) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`, [pid, ...vals]);
+    const vals = [str(f, 'season_category_id'), str(f, 'name'), start, end, kr(f, 'price'), int(f, 'min_nights') || null, int(f, 'max_nights') || null, mode, wd, prio, kr(f, 'weekend_price') ?? null];
+    if (id) await getPool().query(`UPDATE pricing_periods SET season_category_id=$2, name=$3, start_date=$4, end_date=$5, price_per_night_ore=$6, min_nights=$7, max_nights=$8, booking_mode=$9, changeover_weekday=$10, priority=$11, weekend_price_per_night_ore=$12, updated_at=now() WHERE id=$1 AND property_id=$13`, [id, ...vals, pid]);
+    else await getPool().query(`INSERT INTO pricing_periods (property_id, season_category_id, name, start_date, end_date, price_per_night_ore, min_nights, max_nights, booking_mode, changeover_weekday, priority, weekend_price_per_night_ore) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`, [pid, ...vals]);
     await audit(null, actor, id ? 'pricing.period_updated' : 'pricing.period_created', 'property', pid, undefined, Object.fromEntries(f.entries()));
     return 'Perioden er lagret.';
+  });
+}
+/** Paint a date range in the season calendar: the range becomes the chosen season (or no season), overlapping periods are trimmed. */
+export async function paintSeasonAction(f: FormData) {
+  const { actor } = await admin(); const pid = str(f, 'propertyId');
+  await run(back(pid, 'priser'), async () => {
+    const { paintSeason } = await import('@/lib/domain/seasons');
+    let start = date(f, 'start'), end = date(f, 'end');
+    if (end < start) [start, end] = [end, start];
+    const cat = str(f, 'season_category_id') || null;
+    const name = await paintSeason(pid, start, end, cat);
+    await audit(null, actor, 'pricing.season_painted', 'property', pid, undefined, { start, end, cat });
+    return name ? `${name} satt for ${start} – ${end}.` : `Sesong fjernet for ${start} – ${end} (kan ikke bookes).`;
   });
 }
 export async function deletePeriodAction(f: FormData) {

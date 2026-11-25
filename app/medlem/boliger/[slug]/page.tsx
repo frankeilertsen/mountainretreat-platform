@@ -35,7 +35,7 @@ export default async function PropertyPage({ params, searchParams }: { params: P
   if (!p) notFound();
   const today = todayOslo();
   const blocks = await blocksForRange(p.id, today, addDays(today, 400));
-  const seasons = await q(`SELECT name, price_per_night_ore, min_nights, color FROM season_categories WHERE property_id=$1 AND active ORDER BY price_per_night_ore`, [p.id]);
+  const seasons = await q(`SELECT name, price_per_night_ore, weekend_price_per_night_ore AS wk, min_nights, color FROM season_categories WHERE property_id=$1 AND active ORDER BY price_per_night_ore`, [p.id]);
   const addOns = await q(`SELECT id, name, description, price_type, unit_price_ore, mandatory FROM add_on_items WHERE (property_id=$1 OR property_id IS NULL) AND active ORDER BY mandatory DESC, name`, [p.id]);
   const bal = await rewardBalance(u.id);
   const sleeping = await q<{ room: string; beds: string }>(`SELECT r.name AS room, string_agg(b.bed_type || '|' || COALESCE(b.width_cm::text,''), ',' ORDER BY b.allocation_priority) AS beds
@@ -78,7 +78,7 @@ export default async function PropertyPage({ params, searchParams }: { params: P
                 <small className="muted">{T.followsAirbnb(airbnbFee, disc.totalPct, disc.loyaltyPct)} <a href="/medlem/fordeler">{T.howCalc}</a></small>
               </> : <p className="muted">{T.notEntered}</p>
             ) : <>
-              {seasons.map(s => <div key={s.name} className="row between"><span><i style={{ display: 'inline-block', width: 10, height: 10, borderRadius: 3, background: s.color ?? '#ccc', marginRight: 8 }} />{s.name} <small>· {T.minNights(s.min_nights)}</small></span><span><small className="muted" style={{ textDecoration: 'line-through', marginRight: 8 }}>{nok(s.price_per_night_ore)}</small>{nok(s.price_per_night_ore * (1 - disc.totalPct / 100))} <small>{t.common.perNight}</small></span></div>)}
+              {seasons.map(s => <div key={s.name} className="row between"><span><i style={{ display: 'inline-block', width: 10, height: 10, borderRadius: 3, background: s.color ?? '#ccc', marginRight: 8 }} />{s.name} <small>· {T.minNights(s.min_nights)}</small></span><span><small className="muted" style={{ textDecoration: 'line-through', marginRight: 8 }}>{nok(s.price_per_night_ore)}</small>{nok(s.price_per_night_ore * (1 - disc.totalPct / 100))} <small>{t.common.perNight}</small>{s.wk != null && s.wk !== s.price_per_night_ore && <><br /><small className="muted">{lang === 'en' ? 'Fri–Sat' : 'fre–lør'} {nok(s.wk * (1 - disc.totalPct / 100))}</small></>}</span></div>)}
               <small className="muted">{T.discountApplied(disc.totalPct, disc.atMax ? null : disc.nextTotalPct)}</small>
             </>}
           </div>

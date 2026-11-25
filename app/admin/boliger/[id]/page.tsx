@@ -1,4 +1,6 @@
 import Link from 'next/link';
+import { SeasonCalendar, type SeasonDay } from '@/components/SeasonCalendar';
+import { nightPrice } from '@/lib/domain/pricing';
 import { notFound } from 'next/navigation';
 import { one, q } from '@/lib/db';
 import { addDays, fmtDate, nok, todayOslo } from '@/lib/format';
@@ -153,7 +155,7 @@ async function Rooms({ pid }: { pid: string }) {
 }
 
 async function Pricing({ pid, mode, minNights }: { pid: string; mode: string; minNights: number }) {
-  const cats = await q(`SELECT id, kind, name, price_per_night_ore, min_nights, max_nights, color FROM season_categories WHERE property_id=$1 ORDER BY price_per_night_ore`, [pid]);
+  const cats = await q(`SELECT id, kind, name, price_per_night_ore, weekend_price_per_night_ore, min_nights, max_nights, color FROM season_categories WHERE property_id=$1 ORDER BY price_per_night_ore`, [pid]);
   const periods = await q(`SELECT pp.*, to_char(start_date,'YYYY-MM-DD') AS s, to_char(end_date,'YYYY-MM-DD') AS e, sc.name AS cat, sc.color FROM pricing_periods pp JOIN season_categories sc ON sc.id=pp.season_category_id WHERE pp.property_id=$1 AND pp.active ORDER BY start_date`, [pid]);
   const los = await q(`SELECT l.id, l.min_nights, l.discount_percentage::float AS pct, sc.name AS cat FROM length_of_stay_discounts l LEFT JOIN season_categories sc ON sc.id=l.season_category_id WHERE l.property_id=$1 AND l.active ORDER BY min_nights`, [pid]);
   const addOns = await q(`SELECT * FROM add_on_items WHERE (property_id=$1 OR property_id IS NULL) AND active ORDER BY name`, [pid]);
@@ -171,6 +173,16 @@ async function Pricing({ pid, mode, minNights }: { pid: string; mode: string; mi
   const lastUpdate = rates.reduce((m, r) => (r.updated_at > m ? r.updated_at : m), '');
   const fee = Number((await q<{ value: string }>(`SELECT value FROM platform_settings WHERE key='airbnb_guest_fee_pct'`))[0]?.value ?? 15);
   const next60 = strip.slice(0, 63);
+  const calStart = today.slice(0, 8) + '01';
+  const calDays: SeasonDay[] = [];
+  const catMap = new Map(cats.map((c: any) => [c.id, c]));
+  const calEnd = (() => { const [y, m] = calStart.split('-').map(Number); const t = new Date(Date.UTC(y, m - 1 + 14, 1)); return t.toISOString().slice(0, 10); })(); // 14 months
+  for (let d = calStart; d < calEnd; d = addDays(d, 1)) {
+    const pp = periods.filter(x => x.s <= d && x.e >= d).sort((a, b) => b.priority - a.priority)[0];
+    const c = pp ? catMap.get(pp.season_category_id) : null;
+    const price = mode === 'airbnb' ? (rateMap.get(d) ?? null) : c ? nightPrice(d, pp, c) : null;
+    calDays.push({ d, color: pp?.color ?? null, price, label: pp ? `${pp.name} (${pp.cat})` : null, past: d < today });
+  }
   return (
     <div className="stack">
       <div className="card" style={{ borderColor: 'var(--gold-line)' }}>
@@ -212,21 +224,21 @@ async function Pricing({ pid, mode, minNights }: { pid: string; mode: string; mi
         </div>
       )}
       <div className="card">
-        <h3>Årsoversikt – sesongperioder (neste 12 måneder)</h3>
-        <div style={{ display: 'flex', height: 34, borderRadius: 8, overflow: 'hidden', border: '1px solid var(--line)' }}>
-          {strip.map(s => <span key={s.d} title={`${fmtDate(s.d)}: ${s.name ?? 'IKKE PRISSATT'}`} style={{ flex: 1, background: s.color ?? 'var(--danger)' }} />)}
-        </div>
-        <div className="row between" style={{ fontSize: '.75rem', color: 'var(--muted)', marginTop: 4 }}>{[0, 3, 6, 9, 12].map(m => <span key={m}>{fmtDate(addDays(today, Math.min(364, m * 30)))}</span>)}</div>
-        {unpriced > 0 && mode === 'manual' && <p style={{ color: 'var(--danger)', marginTop: 8 }}>{unpriced} dager har ingen periode og kan ikke bookes (rødt).</p>}
+        <div className="row between"><h3 style={{ margin: 0 }}>Sesongkalender</h3>
+          <span className="row" style={{ gap: 10 }}>{cats.map((c: any) => <small key={c.id}><i style={{ display: 'inline-block', width: 10, height: 10, borderRadius: 3, background: c.color ?? '#ccc', marginRight: 4 }} />{c.name}</small>)}</span></div>
+        <p className="muted" style={{ fontSize: '.85rem' }}>Tallet under datoen er prisen per natt i tusen kr{mode === 'airbnb' ? ' (Airbnb-prisen du har lagt inn)' : ''}. Trykk første og siste natt for å endre sesong. Prisen for hver sesong justerer du under «Sesongpriser».</p>
+        {unpriced > 0 && mode === 'manual' && <p style={{ color: 'var(--danger)', fontSize: '.88rem' }}>{unpriced} av de neste 365 nettene har ingen sesong og kan ikke bookes (stiplet rødt).</p>}
+        <SeasonCalendar days={calDays} cats={cats.map((c: any) => ({ id: c.id, name: c.name, color: c.color }))} propertyId={pid} action={A.paintSeasonAction} />
       </div>
       <div className="card">
-        <h3>Sesonggrupper {mode === 'airbnb' && <small className="muted" style={{ fontSize: '.8rem' }}>(brukes kun ved egne priser)</small>}</h3><p className="muted" style={{ fontSize: '.88rem' }}>Ordinær pris per natt (før medlemsrabatt). Medlemsrabatten styres under Medlemsfordeler. Perioder under knytter datoer til en gruppe og kan overstyre enkeltverdier.</p>
+        <h3>Sesongpriser {mode === 'airbnb' && <small className="muted" style={{ fontSize: '.8rem' }}>(brukes kun ved egne priser)</small>}</h3><p className="muted" style={{ fontSize: '.88rem' }}>Ordinær pris per natt (før medlemsrabatt). Fredag og lørdag natt bruker helgeprisen hvis den er fylt ut. Medlemsrabatten styres under Medlemsfordeler. Perioder under knytter datoer til en gruppe og kan overstyre enkeltverdier.</p>
         {cats.map(c => (
           <form key={c.id} action={A.saveCategoryAction} className="row" style={{ marginBottom: 8, flexWrap: 'nowrap', gap: 8 }}>
             <input type="hidden" name="id" value={c.id} /><input type="hidden" name="propertyId" value={pid} />
             <input type="color" name="color" defaultValue={c.color ?? '#cccccc'} style={{ width: 44, padding: 2 }} />
             <input name="name" defaultValue={c.name} style={{ width: 140 }} />
-            <label style={{ margin: 0 }}>kr/natt</label><input name="price" defaultValue={c.price_per_night_ore / 100} style={{ width: 100 }} />
+            <label style={{ margin: 0 }}>søn–tor</label><input name="price" defaultValue={c.price_per_night_ore / 100} style={{ width: 90 }} />
+            <label style={{ margin: 0 }}>fre–lør</label><input name="weekend_price" defaultValue={c.weekend_price_per_night_ore != null ? c.weekend_price_per_night_ore / 100 : ''} placeholder="samme" style={{ width: 90 }} />
             <label style={{ margin: 0 }}>min</label><input type="number" name="min_nights" defaultValue={c.min_nights} style={{ width: 64 }} />
             <label style={{ margin: 0 }}>maks</label><input type="number" name="max_nights" defaultValue={c.max_nights ?? ''} style={{ width: 64 }} />
             <button className="btn ghost small">Lagre</button>
@@ -237,7 +249,7 @@ async function Pricing({ pid, mode, minNights }: { pid: string; mode: string; mi
         <div className="table-wrap"><table><thead><tr><th>Navn</th><th>Datoer (siste natt)</th><th>Gruppe</th><th>Overstyring</th><th>Regel</th><th>Prio</th><th></th></tr></thead><tbody>
           {periods.map(p => (
             <tr key={p.id}><td>{p.name}</td><td>{fmtDate(p.s)} – {fmtDate(p.e)}</td><td><i style={{ display: 'inline-block', width: 10, height: 10, background: p.color, borderRadius: 2 }} /> {p.cat}</td>
-              <td><small>{p.price_per_night_ore != null ? nok(p.price_per_night_ore) + '/natt ' : ''}{p.min_nights ? `min ${p.min_nights} ` : ''}</small></td>
+              <td><small>{p.price_per_night_ore != null ? nok(p.price_per_night_ore) + '/natt ' : ''}{p.weekend_price_per_night_ore != null ? `helg ${nok(p.weekend_price_per_night_ore)} ` : ''}{p.min_nights ? `min ${p.min_nights} ` : ''}</small></td>
               <td><small>{p.booking_mode === 'whole_period' ? 'Hel periode' : p.booking_mode === 'fixed_changeover_day' ? `Byttedag ${WD[p.changeover_weekday]}` : 'Fleksibel'}</small></td><td>{p.priority}</td>
               <td><form action={A.deletePeriodAction}><input type="hidden" name="id" value={p.id} /><input type="hidden" name="propertyId" value={pid} /><button className="btn ghost small">Fjern</button></form></td></tr>))}
         </tbody></table></div>
@@ -248,7 +260,8 @@ async function Pricing({ pid, mode, minNights }: { pid: string; mode: string; mi
             <div><label>Første natt</label><input type="date" name="start_date" required /></div>
             <div><label>Siste natt</label><input type="date" name="end_date" required /></div>
             <div><label>Gruppe</label><select name="season_category_id">{cats.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
-            <div><label>Pris/natt (valgfri)</label><input name="price" placeholder="arv" /></div>
+            <div><label>Pris søn–tor (valgfri)</label><input name="price" placeholder="arv" /></div>
+            <div><label>Pris fre–lør (valgfri)</label><input name="weekend_price" placeholder="arv" /></div>
             <div><label>Min netter</label><input type="number" name="min_nights" placeholder="arv" /></div>
             <div><label>Maks netter</label><input type="number" name="max_nights" placeholder="arv" /></div>
             <div><label>Regel</label><select name="booking_mode"><option value="flexible">Fleksibel</option><option value="whole_period">Hel periode</option><option value="fixed_changeover_day">Fast byttedag</option></select></div>
