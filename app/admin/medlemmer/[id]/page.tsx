@@ -83,6 +83,11 @@ export default async function MemberDetail({ params, searchParams }: { params: P
                 <form action={A.adjustRewardAction}><input type="hidden" name="userId" value={id} /><input type="hidden" name="back" value={back} />
                   <div className="fields"><div><label>Beløp (kr, negativt = trekk)</label><input name="amount" required /></div><div><label>Begrunnelse</label><input name="note" required /></div></div>
                   <button className="btn small" style={{ marginTop: 10 }}>Juster</button></form></div>
+              <div className="card"><h3>Faktura</h3><p className="muted" style={{ fontSize: '.88rem' }}>Medlemmet kan velge å betale med faktura. Bookingen bekreftes med en gang, og du får et fakturagrunnlag som du sender fra Fiken.</p>
+                {u.invoice_allowed
+                  ? <><p><span className="badge b-ok">Kan betale med faktura</span></p><form action={A.invoiceAllowedAction}><input type="hidden" name="id" value={id} /><input type="hidden" name="on" value="0" /><button className="btn ghost small">Slå av faktura</button></form></>
+                  : <form action={A.invoiceAllowedAction}><input type="hidden" name="id" value={id} /><input type="hidden" name="on" value="1" /><button className="btn ghost small">Tillat faktura</button></form>}
+              </div>
               <div className="card"><h3>Vasker selv (fast fritak)</h3><p className="muted" style={{ fontSize: '.88rem' }}>Medlemmet betaler ikke sluttrengjøring, og det lages ingen vaskejobb etter oppholdene deres. Gjelder alle nye bookinger.</p>
                 {exempt ? <><p>Har fritak siden {fmtDate(exempt.granted_at)}{exempt.notes ? ` – ${exempt.notes}` : ''}.</p><form action={A.cleaningExemptionAction}><input type="hidden" name="id" value={id} /><input type="hidden" name="grant" value="0" /><button className="btn ghost small">Fjern fritak</button></form></>
                   : <form action={A.cleaningExemptionAction} className="row"><input type="hidden" name="id" value={id} /><input type="hidden" name="grant" value="1" /><input name="notes" placeholder="Merknad" style={{ flex: 1 }} /><button className="btn ghost small">Gi fast fritak</button></form>}</div>

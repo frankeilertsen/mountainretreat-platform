@@ -28,7 +28,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           { href: '/admin/bonus', label: 'Medlemsfordeler' },
           { href: '/admin/foresporsler', label: 'Fast leie – forespørsler', badge: c?.inquiries },
           { group: 'Økonomi' },
-          { href: '/admin/betalinger', label: 'Betalinger', badge: c?.refunds, danger: true },
+          { href: '/admin/betalinger', label: 'Betalinger', badge: (c?.refunds ?? 0) + (c?.invoices ?? 0) || undefined, danger: true },
           { href: '/admin/rapporter', label: 'Rapporter' },
           { group: 'Oppsett' },
           { href: '/admin/boliger', label: 'Boliger' },

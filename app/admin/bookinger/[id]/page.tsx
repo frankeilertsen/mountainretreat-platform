@@ -23,7 +23,7 @@ export default async function AdminBooking({ params, searchParams }: { params: P
   const [overlaps, payments, refunds, addOns, log] = await Promise.all([
     q(`SELECT ab.block_type, to_char(lower(ab.date_range),'YYYY-MM-DD') AS start, to_char(upper(ab.date_range),'YYYY-MM-DD') AS "end", ab.reason, cc.display_name FROM availability_blocks ab LEFT JOIN channel_connections cc ON cc.id=ab.source_connection_id
        WHERE ab.property_id=$1 AND ab.date_range && daterange($2::date,$3::date) AND (ab.reference_id IS DISTINCT FROM $4)`, [b.pid, b.start, b.end, id]),
-    q(`SELECT p.*, i.invoice_number, i.kid_number, i.status AS invoice_status FROM payments p LEFT JOIN invoices i ON i.payment_id=p.id WHERE p.booking_id=$1 ORDER BY p.created_at`, [id]),
+    q(`SELECT p.*, i.id AS invoice_id, i.invoice_number, i.kid_number, i.fiken_invoice_number, i.status AS invoice_status FROM payments p LEFT JOIN invoices i ON i.payment_id=p.id WHERE p.booking_id=$1 ORDER BY p.created_at`, [id]),
     q(`SELECT r.* FROM refunds r JOIN payments p ON p.id=r.payment_id WHERE p.booking_id=$1 ORDER BY r.created_at`, [id]),
     q(`SELECT a.name, ba.quantity, ba.total_price_ore FROM booking_add_ons ba JOIN add_on_items a ON a.id=ba.add_on_item_id WHERE ba.booking_id=$1`, [id]),
     q(`SELECT a.action, a.created_at, a.actor_type, u.name FROM audit_log a LEFT JOIN users u ON u.id=a.actor_user_id WHERE a.entity_id=$1 ORDER BY a.created_at`, [id]),
@@ -129,7 +129,7 @@ export default async function AdminBooking({ params, searchParams }: { params: P
             <h3>Betalinger</h3>
             {payments.length === 0 ? <p className="muted">Ingen betalinger.</p> : <ul className="list">{payments.map(p => (
               <li key={p.id}><div className="row between"><span>{p.provider}{p.provider === 'mock' ? ' (test)' : ''} · {nok(p.amount_ore)} <small>{fmtDateTime(p.created_at)}</small></span><Status s={p.status} /></div>
-                {p.invoice_number && <small>Faktura {p.invoice_number} · KID {p.kid_number} · <Status s={p.invoice_status} /></small>}
+                {p.invoice_number && <small>Faktura {p.fiken_invoice_number ? `Fiken nr. ${p.fiken_invoice_number}` : p.invoice_number}{p.kid_number ? ` · KID ${p.kid_number}` : ''} · <Status s={p.invoice_status} /> · <Link href={`/admin/betalinger/faktura/${p.invoice_id}`}>Fakturagrunnlag</Link></small>}
                 {p.method === 'invoice' && p.status === 'pending' && <form action={markInvoicePaidAction} style={{ marginTop: 8 }}><input type="hidden" name="paymentId" value={p.id} /><input type="hidden" name="back" value={back} /><button className="btn small ok">Marker faktura betalt</button></form>}
               </li>))}</ul>}
             {refunds.length > 0 && <><h4>Refusjoner</h4><ul className="list">{refunds.map(r => <li key={r.id} className="row between"><span>{nok(r.amount_ore)} · {r.reason}{r.error ? <><br /><small className="muted">{r.error}</small></> : null}</span><Status s={r.status} /></li>)}</ul></>}

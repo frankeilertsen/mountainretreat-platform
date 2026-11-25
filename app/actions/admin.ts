@@ -142,6 +142,26 @@ export async function cleaningExemptionAction(f: FormData) {
     return 'Oppdatert.';
   });
 }
+export async function invoiceAllowedAction(f: FormData) {
+  const { actor } = await admin(); const id = str(f, 'id'); const on = str(f, 'on') === '1';
+  await run(`/admin/medlemmer/${id}`, async () => {
+    await getPool().query(`UPDATE users SET invoice_allowed=$2, updated_at=now() WHERE id=$1`, [id, on]);
+    await audit(null, actor, on ? 'user.invoice_allowed' : 'user.invoice_disallowed', 'user', id);
+    return on ? 'Medlemmet kan nå velge faktura.' : 'Faktura er slått av for medlemmet.';
+  });
+}
+export async function invoiceSentAction(f: FormData) {
+  const { actor } = await admin(); const id = str(f, 'id');
+  await run(`/admin/betalinger/faktura/${id}`, async () => {
+    const nr = str(f, 'fiken_nr').trim().slice(0, 40);
+    if (!nr) throw new DomainError('bad', 'Skriv inn fakturanummeret fra Fiken.');
+    const kid = str(f, 'kid').replace(/\s/g, '').slice(0, 25) || null;
+    const r = await one(`UPDATE invoices SET status='sent', fiken_invoice_number=$2, kid_number=COALESCE($3, kid_number), sent_at=now(), sent_by_user_id=$4 WHERE id=$1 AND status IN ('draft','sent','overdue') RETURNING id`, [id, nr, kid, actor.id]);
+    if (!r) throw new DomainError('bad_state', 'Fakturaen kan ikke endres.');
+    await audit(null, actor, 'invoice.sent_from_fiken', 'invoice', id, undefined, { fiken_invoice_number: nr, kid });
+    return 'Registrert som sendt fra Fiken.';
+  });
+}
 export async function revokeSessionsAction(f: FormData) {
   const { actor } = await admin(); const id = str(f, 'id');
   await run(`/admin/medlemmer/${id}`, async () => { await revokeAllSessions(id); await audit(null, actor, 'auth.sessions_revoked', 'user', id); return 'Alle økter er logget ut.'; });

@@ -48,6 +48,7 @@ export function termsSections(lang: Lang, i: TermsInput): { title: string; lead:
       { h: '4. Payment', p: [
         'You can pay by card (Visa, Mastercard and others, via Stripe) or with Vipps. The payment is processed by Stripe or Vipps MobilePay – we never see or store your card details.',
         'The full amount is charged when you pay. The booking is confirmed automatically when the payment has been verified.',
+        'Members who have agreed this with us may also pay by invoice. The booking is then confirmed straight away, and the invoice is sent by e-mail with the due date stated on it. For late payment we may charge late-payment interest and reminder fees under the applicable rules.',
       ] },
       { h: '5. Delivery', p: [
         `The service is delivered by the accommodation being made available to you for the booked period. Check-in is from ${i.checkIn} on the day of arrival and check-out is by ${i.checkOut} on the day of departure, unless otherwise stated in your booking.`,
@@ -107,6 +108,7 @@ export function termsSections(lang: Lang, i: TermsInput): { title: string; lead:
       { h: '4. Betaling', p: [
         'Du kan betale med kort (Visa, Mastercard m.fl. via Stripe) eller med Vipps. Betalingen behandles av Stripe eller Vipps MobilePay – vi ser eller lagrer aldri kortopplysningene dine.',
         'Hele beløpet trekkes når du betaler. Bookingen bekreftes automatisk når betalingen er verifisert.',
+        'Medlemmer som har avtalt det med oss, kan også betale med faktura. Da bekreftes bookingen med en gang, og fakturaen sendes på e-post med forfallsdato som står på fakturaen. Ved for sen betaling kan vi kreve forsinkelsesrente og purregebyr etter gjeldende regler.',
       ] },
       { h: '5. Levering', p: [
         `Tjenesten leveres ved at boligen stilles til din disposisjon i den bookede perioden. Innsjekk er fra kl. ${i.checkIn} på ankomstdagen, og utsjekk er innen kl. ${i.checkOut} på avreisedagen, med mindre annet står i bookingen din.`,

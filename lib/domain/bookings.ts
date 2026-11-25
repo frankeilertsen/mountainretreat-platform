@@ -158,9 +158,13 @@ export async function startPayment(bookingId: string, user: UserLike & { email: 
      FROM bookings b LEFT JOIN booking_holds h ON h.booking_id=b.id AND h.released_at IS NULL WHERE b.id=$1`, [bookingId, method]);
   if (!b) throw new DomainError('not_found', 'Fant ikke bookingen.', 404);
   if (b.member_id !== user.id && !isAdmin(user)) throw forbidden();
+  if (method === 'invoice' && b.status === 'confirmed' && (b as any).payment_method === 'invoice') return { invoice: true as const }; // double click
   if (b.status !== 'awaiting_payment') throw new DomainError('not_payable', 'Bookingen venter ikke på betaling.');
   if (!b.hold_expires || new Date(b.hold_expires) < new Date()) throw new DomainError('hold_expired', 'Fristen for betaling er utløpt.');
-  if (!b.method_enabled) throw new DomainError('method_disabled', 'Denne betalingsmåten er ikke tilgjengelig.');
+  if (method === 'invoice') {
+    const allowed = await one<{ ok: boolean }>(`SELECT invoice_allowed AS ok FROM users WHERE id=$1`, [b.member_id]);
+    if (!allowed?.ok) throw new DomainError('method_disabled', 'Faktura er ikke tilgjengelig for deg. Velg kort eller Vipps.');
+  } else if (!b.method_enabled) throw new DomainError('method_disabled', 'Denne betalingsmåten er ikke tilgjengelig.');
   if (b.price_total_ore <= 0) throw new DomainError('nothing_to_pay', 'Ingenting å betale.');
 
   if (method === 'invoice') return createInvoice(b, user);
@@ -187,24 +191,35 @@ export async function startPayment(bookingId: string, user: UserLike & { email: 
   }
 }
 
+/**
+ * Invoice (only for members the administrator has allowed): the booking is confirmed at once, and an invoice
+ * draft (fakturagrunnlag) is made for the administrator to issue and send from Fiken. Payment stays open
+ * until the administrator marks it as paid.
+ */
 async function createInvoice(b: BookingRow, user: UserLike) {
   return tx(async c => {
     const existing = await one<{ id: string }>(`SELECT p.id FROM payments p WHERE booking_id=$1 AND method='invoice' AND status='pending'`, [b.id], c);
     if (existing) return { invoice: true as const };
     const days = await getNum('invoice_due_date_days', 14, c);
     const pay = await one<{ id: string }>(`INSERT INTO payments (booking_id, method, provider, amount_ore, idempotency_key) VALUES ($1,'invoice','invoice',$2,$3) RETURNING id`,
-      [b.id, b.price_total_ore, `inv_${b.id}`], c);
+      [b.id, b.price_total_ore, `inv_${b.id}_${Date.now()}`], c);
     const seq = await one<{ n: string }>(`SELECT (count(*) + 10001)::text AS n FROM invoices`, [], c);
-    const kid = kidMod10(seq!.n.padStart(8, '0'));
-    await c.query(`INSERT INTO invoices (payment_id, invoice_number, kid_number, amount_ore, due_date) VALUES ($1,$2,$3,$4, current_date + $5::int)`,
-      [pay!.id, `F-${seq!.n}`, kid, b.price_total_ore, days]);
-    // Invoice holds last until the due date (spec §13)
-    await c.query(`UPDATE booking_holds SET expires_at = GREATEST(expires_at, now() + make_interval(days => $2)) WHERE booking_id=$1 AND released_at IS NULL`, [b.id, days]);
-    await c.query(`UPDATE bookings SET payment_method='invoice' WHERE id=$1`, [b.id]);
-    await audit(c, { id: user.id, type: 'member' }, 'payment.invoice_created', 'payment', pay!.id, undefined, { kid, amount: b.price_total_ore });
+    const inv = await one<{ id: string; due: string }>(`INSERT INTO invoices (payment_id, invoice_number, kid_number, amount_ore, due_date, status) VALUES ($1,$2,NULL,$3, current_date + $4::int, 'draft')
+      RETURNING id, to_char(due_date,'YYYY-MM-DD') AS due`, [pay!.id, `U-${seq!.n}`, b.price_total_ore, days], c);
+    // Confirm the booking straight away – the member is trusted to pay the invoice
+    await c.query(`UPDATE bookings SET status='confirmed', confirmed_at=now(), payment_method='invoice', updated_at=now() WHERE id=$1`, [b.id]);
+    await c.query(`UPDATE booking_holds SET released_at=now() WHERE booking_id=$1 AND released_at IS NULL`, [b.id]);
+    await c.query(`UPDATE payments SET status='cancelled', updated_at=now() WHERE booking_id=$1 AND status='pending' AND id<>$2`, [b.id, pay!.id]);
+    await audit(c, { id: user.id, type: 'member' }, 'payment.invoice_requested', 'payment', pay!.id, undefined, { amount: b.price_total_ore, invoice: `U-${seq!.n}` });
+    await audit(c, { id: user.id, type: 'member' }, 'booking.confirmed', 'booking', b.id, { status: b.status }, { status: 'confirmed', by: 'invoice' });
+    await reconcileCleaningTasks(c, b.property_id);
+    await announceDiscountLevel(c, b.member_id, b.id);
     const m = await memberOf(c, b.member_id);
-    await enqueue({ userId: m.id, to: m.email, type: 'invoice', dedupeKey: `invoice:${pay!.id}`, subject: `Faktura for ${b.reference}`,
-      body: `Hei ${m.name}!\n\nBeløp: ${nok(b.price_total_ore)}\nKID: ${kid}\nKontonummer: se medlemssiden\nForfall: om ${days} dager\n\nBookingen bekreftes når betalingen er registrert.` }, c);
+    const prop = await propertyName(c, b.property_id);
+    await enqueue({ userId: m.id, to: m.email, type: 'booking_confirmed', dedupeKey: `booking_confirmed:${b.id}`, subject: `Bekreftet: ${prop} ${fmtDate(b.start_date)} (${b.reference})`,
+      body: `Hei ${m.name}!\n\nOppholdet er bekreftet.\n${prop}: ${fmtDate(b.start_date, true)} – ${fmtDate(b.end_date, true)}\nBeløp: ${nok(b.price_total_ore)}\n\nFakturaen sendes til deg på e-post fra FKE Property AS, med forfall om ${days} dager.\n\nGod tur!` }, c);
+    await notifyAdmins({ type: 'invoice_to_send', dedupeKey: `invoice_to_send:${inv!.id}`, subject: `Faktura skal sendes i Fiken: ${m.name} (${b.reference})`,
+      body: `${m.name} har valgt faktura for ${prop} ${fmtDate(b.start_date)} – ${fmtDate(b.end_date)}. Beløp ${nok(b.price_total_ore)}, forfall ${fmtDate(inv!.due)}.\nFakturagrunnlag: ${appUrl('/admin/betalinger/faktura/' + inv!.id)}` }, c);
     return { invoice: true as const };
   });
 }
@@ -222,6 +237,14 @@ export async function handlePaymentSucceeded(paymentId: string, actor: Actor = S
     const b = await lockBooking(c, p.booking_id);
     await c.query(`UPDATE payments SET status='succeeded', updated_at=now() WHERE id=$1`, [p.id]);
     await audit(c, actor, 'payment.succeeded', 'payment', p.id, { status: 'pending' }, { status: 'succeeded' });
+    const method = (await one<{ method: string }>(`SELECT method FROM payments WHERE id=$1`, [p.id], c))!.method;
+    if (method === 'invoice' && ['confirmed', 'completed', 'cancellation_requested'].includes(b.status)) {
+      // Invoice bookings are confirmed when the invoice is requested; this only records the payment
+      const m = await memberOf(c, b.member_id);
+      await enqueue({ userId: m.id, to: m.email, type: 'payment_received', dedupeKey: `invoice_paid:${p.id}`, subject: `Betaling mottatt (${b.reference})`,
+        body: `Hei ${m.name}!\n\nVi har registrert betalingen på ${nok(p.amount_ore)} for ${b.reference}. Takk!` }, c);
+      return 'confirmed' as const;
+    }
     const block = await one(`SELECT 1 FROM availability_blocks WHERE block_type='platform_booking' AND reference_id=$1`, [b.id], c);
     if (b.status !== 'awaiting_payment' || !block) {
       const r = await one<{ id: string }>(`INSERT INTO refunds (payment_id, amount_ore, reason, status) VALUES ($1,$2,'conflict_auto_refund','pending') RETURNING id`, [p.id, p.amount_ore], c);
@@ -258,7 +281,7 @@ export async function handlePaymentFailed(paymentId: string) {
 }
 
 export async function markInvoicePaid(paymentId: string, actor: Actor) {
-  await one(`UPDATE invoices SET status='paid', marked_paid_by_user_id=$2, marked_paid_at=now() WHERE payment_id=$1 AND status IN ('sent','overdue') RETURNING id`, [paymentId, actor.id]);
+  await one(`UPDATE invoices SET status='paid', marked_paid_by_user_id=$2, marked_paid_at=now() WHERE payment_id=$1 AND status IN ('draft','sent','overdue') RETURNING id`, [paymentId, actor.id]);
   await audit(null, actor, 'invoice.marked_paid', 'payment', paymentId);
   return handlePaymentSucceeded(paymentId, actor);
 }
@@ -335,7 +358,16 @@ async function doCancel(c: PoolClient, b: BookingRow, reason: string, refundPct:
   await removeBlocksFor(c, 'platform_booking', b.id);
   await c.query(`UPDATE booking_holds SET released_at=now() WHERE booking_id=$1 AND released_at IS NULL`, [b.id]);
   await c.query(`UPDATE payments SET status='cancelled', updated_at=now() WHERE booking_id=$1 AND status='pending'`, [b.id]);
-  await c.query(`UPDATE invoices SET status='cancelled' WHERE payment_id IN (SELECT id FROM payments WHERE booking_id=$1) AND status IN ('sent','overdue')`, [b.id]);
+  const openInv = await q<{ id: string; invoice_number: string; fiken_invoice_number: string | null; status: string; amount_ore: number }>(
+    `SELECT i.id, i.invoice_number, i.fiken_invoice_number, i.status, i.amount_ore FROM invoices i JOIN payments p ON p.id=i.payment_id WHERE p.booking_id=$1 AND i.status IN ('draft','sent','overdue')`, [b.id], c);
+  await c.query(`UPDATE invoices SET status='cancelled' WHERE payment_id IN (SELECT id FROM payments WHERE booking_id=$1) AND status IN ('draft','sent','overdue')`, [b.id]);
+  for (const iv of openInv) {
+    const owed = Math.round(iv.amount_ore * (100 - refundPct) / 100);
+    await notifyAdmins({ type: 'invoice_credit', dedupeKey: `invoice_credit:${iv.id}`, subject: `Booking ${b.reference} kansellert – ${iv.status === 'draft' ? 'ikke send fakturaen' : 'krediter fakturaen i Fiken'}`,
+      body: iv.status === 'draft'
+        ? `Fakturaen ${iv.invoice_number} var ikke sendt ennå.${owed > 0 ? ` Etter avbestillingsvilkårene skal gjesten likevel betale ${nok(owed)}.` : ' Ingenting skal faktureres.'}`
+        : `Fakturaen${iv.fiken_invoice_number ? ` (Fiken nr. ${iv.fiken_invoice_number})` : ''} på ${nok(iv.amount_ore)} må krediteres i Fiken.${owed > 0 ? ` Etter avbestillingsvilkårene skal gjesten betale ${nok(owed)} – send en ny faktura på dette beløpet.` : ''}` }, c);
+  }
   await reverseRedemptions(c, b.id);
   const refundIds: string[] = [];
   if (refundPct > 0) {

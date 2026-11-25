@@ -19,7 +19,7 @@ const STATUS: Record<string, [string, string]> = {
   active: ['Aktiv', 'b-ok'], suspended: ['Suspendert', 'b-warn'], revoked: ['Utestengt', 'b-danger'], invited: ['Invitert', 'b-info'], anonymized: ['Anonymisert', ''],
   accepted: ['Akseptert', 'b-ok'], pending_vest: ['Opptjenes', 'b-warn'], available: ['Tilgjengelig', 'b-ok'], partially_used: ['Delvis brukt', 'b-sage'], fully_used: ['Brukt', ''],
   success: ['OK', 'b-ok'], failure: ['Feiler', 'b-danger'], never: ['Ikke synket ennå', 'b-warn'], qualified: ['Kvalifisert', 'b-ok'],
-  sent: ['Sendt', 'b-info'], paid: ['Betalt', 'b-ok'], overdue: ['Forfalt', 'b-danger'],
+  sent: ['Sendt', 'b-info'], paid: ['Betalt', 'b-ok'], overdue: ['Forfalt', 'b-danger'], draft: ['Skal sendes', 'b-warn'],
   echo: ['Speilet', ''], conflict: ['KONFLIKT', 'b-danger'], removed: ['Fjernet', ''],
 };
 export function Status({ s, lang = 'no' }: { s: string | null | undefined; lang?: Lang }) {

@@ -29,7 +29,8 @@ export default async function BookingDetail({ params, searchParams }: { params: 
     LEFT JOIN stay_preparations sp ON sp.booking_id=b.id WHERE b.id=$1`, [id]);
   if (!b || b.member_id !== u.id) notFound();
   const methods = await q<{ method: string }>(`SELECT method FROM payment_method_settings WHERE enabled ORDER BY method`);
-  const payments = await q(`SELECT p.method, p.status, p.amount_ore, p.refunded_amount_ore, p.created_at, i.kid_number, i.invoice_number, to_char(i.due_date,'YYYY-MM-DD') AS due
+  const me = await one<{ invoice_allowed: boolean }>(`SELECT invoice_allowed FROM users WHERE id=$1`, [u.id]);
+  const payments = await q(`SELECT p.method, p.status, p.amount_ore, p.refunded_amount_ore, p.created_at, i.kid_number, i.invoice_number, i.fiken_invoice_number, i.status AS invoice_status, to_char(i.due_date,'YYYY-MM-DD') AS due
     FROM payments p LEFT JOIN invoices i ON i.payment_id=p.id WHERE p.booking_id=$1 AND p.status <> 'cancelled' ORDER BY p.created_at`, [id]);
   const addOns = await q(`SELECT a.name, ba.quantity, ba.total_price_ore FROM booking_add_ons ba JOIN add_on_items a ON a.id=ba.add_on_item_id WHERE ba.booking_id=$1`, [id]);
   const cancellable = ['pending_review', 'awaiting_payment', 'confirmed'].includes(b.status);
@@ -90,6 +91,7 @@ export default async function BookingDetail({ params, searchParams }: { params: 
               <p>{T.heldUntil(fmtDateTime(b.hold_expires))}</p>
               <div className="stack">
                 {methods.some(m => m.method === 'stripe_card') && cardLabel && <form action={payAction}><input type="hidden" name="id" value={id} /><input type="hidden" name="method" value="stripe_card" /><button className="btn block">{cardLabel}</button></form>}
+                {me?.invoice_allowed && <form action={payAction}><input type="hidden" name="id" value={id} /><input type="hidden" name="method" value="invoice" /><button className="btn ghost block">{T.payInvoice}</button></form>}
                 {methods.some(m => m.method === 'vipps') && vippsConfigured() && <form action={payAction}><input type="hidden" name="id" value={id} /><input type="hidden" name="method" value="vipps" /><button className="btn secondary block">{T.payVipps}</button></form>}
               </div>
               <small className="muted">{T.cardNote}</small>
@@ -98,8 +100,8 @@ export default async function BookingDetail({ params, searchParams }: { params: 
           )}
           {payments.length > 0 && (
             <div className="card"><h3>{T.payments}</h3><ul className="list">{payments.map((p, i) => (
-              <li key={i}><div className="row between"><span>{p.method === 'invoice' ? `${T.invoice} ${p.invoice_number ?? ''}` : p.method === 'vipps' ? 'Vipps' : T.card} · {nok(p.amount_ore)}</span><Status s={p.status} lang={lang} /></div>
-                {p.kid_number && p.status === 'pending' && <small>{T.kidLine(p.kid_number, fmtDate(p.due), bankAccount)}</small>}
+              <li key={i}><div className="row between"><span>{p.method === 'invoice' ? `${T.invoice}${p.fiken_invoice_number ? ` ${p.fiken_invoice_number}` : ''}` : p.method === 'vipps' ? 'Vipps' : T.card} · {nok(p.amount_ore)}</span><Status s={p.status} lang={lang} /></div>
+                {p.method === 'invoice' && p.status === 'pending' && <small>{p.invoice_status === 'draft' ? (lang === 'en' ? `The invoice will be sent to you by e-mail from FKE Property AS. Due ${fmtDate(p.due)}.` : `Fakturaen sendes til deg på e-post fra FKE Property AS. Forfall ${fmtDate(p.due)}.`) : (lang === 'en' ? `The invoice has been sent to your e-mail. Due ${fmtDate(p.due)}.` : `Fakturaen er sendt til e-posten din. Forfall ${fmtDate(p.due)}.`)}</small>}
                 {p.refunded_amount_ore > 0 && <small>{T.refunded(nok(p.refunded_amount_ore))}</small>}</li>))}</ul></div>
           )}
           <Link href={`/medlem/meldinger?booking=${id}`} className="btn secondary">{t.msg.askAbout}</Link>

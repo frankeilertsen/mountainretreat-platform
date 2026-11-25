@@ -27,6 +27,7 @@ export const JOBS: Record<string, JobFn> = {
   checkin_reminders: checkinReminders,
   retry_refunds: () => processRefunds(),
   vipps_check: () => checkOpenVippsPayments(),
+  invoice_overdue: invoiceOverdue,
   retention_purge: retentionPurge,
   deliver_notifications: () => deliverQueued(100),
 };
@@ -51,6 +52,19 @@ export async function runAllJobs() {
     try { out[name] = await runJob(name); } catch (e) { out[name] = { error: (e as Error).message }; }
   }
   return out;
+}
+
+/** Invoices sent from Fiken that are past due: mark as overdue and tell the administrators once. */
+async function invoiceOverdue() {
+  const rows = await q<{ id: string; reference: string; name: string; amount_ore: number; fiken: string | null }>(
+    `UPDATE invoices i SET status='overdue' FROM payments p, bookings b, users u
+      WHERE p.id=i.payment_id AND b.id=p.booking_id AND u.id=b.member_id AND i.status='sent' AND i.due_date < current_date
+      RETURNING i.id, b.reference, u.name, i.amount_ore, i.fiken_invoice_number AS fiken`);
+  for (const r of rows) {
+    await notifyAdmins({ type: 'invoice_overdue', dedupeKey: `invoice_overdue:${r.id}`, subject: `Faktura forfalt: ${r.name} (${r.reference})`,
+      body: `Fakturaen${r.fiken ? ` (Fiken nr. ${r.fiken})` : ''} på ${(r.amount_ore / 100).toFixed(0)} kr er forfalt. Sjekk i Fiken og send purring om nødvendig: ${appUrl('/admin/betalinger/faktura/' + r.id)}` });
+  }
+  return rows.length;
 }
 
 async function rewardExpiryWarnings() {
