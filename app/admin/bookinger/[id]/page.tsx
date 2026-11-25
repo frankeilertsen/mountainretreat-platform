@@ -6,7 +6,7 @@ import { roomPlanForPreparation } from '@/lib/domain/cleaning';
 import { BED_LABELS } from '@/lib/domain/beds';
 import { Flash, Status } from '@/components/ui';
 import { RoomPlan } from '@/components/RoomPlan';
-import { approveAction, rejectAction, adminCancelAction, decideCancellationAction, adminPreparationAction, sleepingPlanAction, markInvoicePaidAction, goodwillRefundAction } from '../../../actions/admin';
+import { approveAction, rejectAction, adminCancelAction, decideCancellationAction, adminPreparationAction, sleepingPlanAction, markInvoicePaidAction, goodwillRefundAction, bookingCleaningSelfAction } from '../../../actions/admin';
 import { ValueButton } from '@/components/ValueButton';
 
 export const dynamic = 'force-dynamic';
@@ -107,12 +107,23 @@ export default async function AdminBooking({ params, searchParams }: { params: P
               {quote?.nightLines?.length > 0 && <details><summary className="muted">{quote.nights} netter – vis per natt</summary>
                 {quote.nightLines.map((n: any) => <div key={n.date} className="row"><small>{fmtDate(n.date)} · {n.category}{n.los_discount_pct ? ` −${n.los_discount_pct}%` : ''}</small><small>{nok(n.price_ore)}</small></div>)}</details>}
               <div className="row"><span>Opphold{quote?.member_discount_pct ? ` (medlemsrabatt ${quote.member_discount_pct} %)` : ''}</span><span>{nok(b.stay_price_ore)}</span></div>
-              <div className="row"><span>Sluttrengjøring</span><span>{nok(b.cleaning_fee_ore)}</span></div>
+              <div className="row"><span>Sluttrengjøring{b.cleaning_self ? ' (vasker selv)' : ''}</span><span>{b.cleaning_self && !b.price_locked_at ? nok(0) : nok(b.cleaning_fee_ore)}</span></div>
               {b.extra_guest_fee_ore > 0 && <div className="row"><span>Ekstra gjester ({quote?.extra_guests})</span><span>{nok(b.extra_guest_fee_ore)}</span></div>}
               {addOns.map((a, i) => <div key={i} className="row"><span>{a.name} × {a.quantity}</span><span>{nok(a.total_price_ore)}</span></div>)}
               {b.reward_discount_ore > 0 && <div className="row"><span>Bonus</span><span>−{nok(b.reward_discount_ore)}</span></div>}
               <div className="row price-total"><span>Totalt</span><span>{nok(b.price_total_ore)}</span></div>
             </div>
+          </div>
+          <div className="card">
+            <h3>Sluttrengjøring</h3>
+            {b.cleaning_self ? <>
+              <p className="muted">Gjesten vasker selv denne gangen. Det lages ingen vaskejobb{b.price_locked_at ? '' : ', og sluttrengjøringen fjernes fra prisen når bookingen godkjennes'}.</p>
+              <form action={bookingCleaningSelfAction}><input type="hidden" name="id" value={b.id} /><input type="hidden" name="on" value="0" /><button className="btn ghost small">Sett tilbake vanlig sluttrengjøring</button></form>
+            </> : <>
+              <p className="muted">Skal gjesten (eller du selv) vaske etter oppholdet? Da slås vaskejobben av{b.price_locked_at ? '. Prisen er allerede låst, så eventuell refusjon av sluttrengjøringen gjøres under Betalinger.' : ', og sluttrengjøringen trekkes fra prisen ved godkjenning.'}</p>
+              <form action={bookingCleaningSelfAction}><input type="hidden" name="id" value={b.id} /><input type="hidden" name="on" value="1" /><button className="btn ghost small">Gjesten vasker selv</button></form>
+            </>}
+            <p className="muted" style={{ fontSize: '.85rem', marginBottom: 0 }}>Vasker medlemmet alltid selv, kan du gi fast fritak på medlemssiden.</p>
           </div>
           <div className="card">
             <h3>Betalinger</h3>

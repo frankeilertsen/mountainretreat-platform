@@ -63,3 +63,43 @@ describe('cleaner language', () => {
     expect(sent.find(n => n.channel === 'sms')!.body).toMatch(/New booking at/);
   });
 });
+
+describe('switching cleaning off ("vasker selv")', () => {
+  it('admin turns a job off and on again; the cleaner is told; a later sync does not turn it back on', async () => {
+    const { skipTask, reactivateTask, reconcileCleaningTasks } = await import('../lib/domain/cleaning');
+    const admin = await user('admin');
+    const pid = await property();
+    const h = await user('helper', { phone: '+4790000096' });
+    await getPool().query(`INSERT INTO helper_property_assignments (helper_user_id, property_id) VALUES ($1,$2)`, [h.id, pid]);
+    const m = await user('member', { invite_tier: 'admin_invited' });
+    const b = await requestBooking(m, { propertyId: pid, startDate: d(20), endDate: d(23), adults: 2, children: 0, infants: 0, addOns: [] }, { id: m.id, type: 'member' });
+    await approveBooking(b.id, { id: admin.id, type: 'admin' });
+    const p = await one<{ id: string }>(`INSERT INTO payments (booking_id, method, provider, amount_ore, idempotency_key) VALUES ($1,'stripe_card','mock',1,'skip1') RETURNING id`, [b.id]);
+    await handlePaymentSucceeded(p!.id);
+    const t = (await one<{ id: string }>(`SELECT id FROM cleaning_tasks WHERE booking_id=$1 AND task_type='turnover'`, [b.id]))!;
+    await getPool().query(`UPDATE cleaning_tasks SET assigned_to_user_id=$2, status='assigned' WHERE id=$1`, [t.id, h.id]);
+    await skipTask(t.id, 'Eier vasker selv', { id: admin.id, type: 'admin' });
+    expect(await one(`SELECT status, not_needed_reason FROM cleaning_tasks WHERE id=$1`, [t.id])).toEqual({ status: 'not_needed', not_needed_reason: 'Eier vasker selv' });
+    expect((await q(`SELECT subject FROM notifications WHERE user_id=$1 AND subject LIKE 'Vask trengs ikke%'`, [h.id])).length).toBeGreaterThan(0);
+    const c = await getPool().connect();
+    try { await reconcileCleaningTasks(c, pid); } finally { c.release(); }
+    expect((await one<{ status: string }>(`SELECT status FROM cleaning_tasks WHERE id=$1`, [t.id]))!.status).toBe('not_needed');
+    await reactivateTask(t.id, { id: admin.id, type: 'admin' });
+    expect((await one<{ status: string }>(`SELECT status FROM cleaning_tasks WHERE id=$1`, [t.id]))!.status).toBe('assigned');
+  });
+
+  it('"gjesten vasker selv" on a booking before approval: no cleaning fee and no cleaning job', async () => {
+    const { setBookingCleaningSelf } = await import('../lib/domain/cleaning');
+    const admin = await user('admin');
+    const pid = await property();
+    const m = await user('member', { invite_tier: 'admin_invited' });
+    const b = await requestBooking(m, { propertyId: pid, startDate: d(30), endDate: d(33), adults: 2, children: 0, infants: 0, addOns: [] }, { id: m.id, type: 'member' });
+    const r = await setBookingCleaningSelf(b.id, true, { id: admin.id, type: 'admin' });
+    expect(r.priceLocked).toBe(false);
+    await approveBooking(b.id, { id: admin.id, type: 'admin' });
+    expect((await one<{ fee: number }>(`SELECT cleaning_fee_ore AS fee FROM bookings WHERE id=$1`, [b.id]))!.fee).toBe(0);
+    const p = await one<{ id: string }>(`INSERT INTO payments (booking_id, method, provider, amount_ore, idempotency_key) VALUES ($1,'stripe_card','mock',1,'self1') RETURNING id`, [b.id]);
+    await handlePaymentSucceeded(p!.id);
+    expect((await one<{ status: string }>(`SELECT status FROM cleaning_tasks WHERE booking_id=$1 AND task_type='turnover'`, [b.id]))!.status).toBe('not_needed');
+  });
+});

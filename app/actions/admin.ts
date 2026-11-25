@@ -8,7 +8,7 @@ import { approveBooking, rejectBooking, adminCancel, decideCancellation, markInv
 import { createInvitation, createHelperInvitation, revokeInvitation, decideLoyalty, setMemberStatus } from '@/lib/domain/invitations';
 import { createManualBlock, deleteManualBlock } from '@/lib/domain/availability';
 import { adjustRewards, revokeCredit } from '@/lib/domain/rewards';
-import { assignTask, overrideSleepingPlan, updatePreparation, savePhoto, reconcileCleaningTasks } from '@/lib/domain/cleaning';
+import { assignTask, overrideSleepingPlan, updatePreparation, savePhoto, reconcileCleaningTasks, skipTask, reactivateTask, setBookingCleaningSelf } from '@/lib/domain/cleaning';
 import { createConnection, rotateExportToken, syncConnection } from '@/lib/channels/sync';
 import { runAllJobs } from '@/lib/jobs';
 import { humanCode } from '@/lib/crypto';
@@ -313,6 +313,26 @@ export async function classifyEventAction(f: FormData) {
 export async function assignTaskAction(f: FormData) {
   const { actor } = await admin();
   await run(str(f, 'back') || '/admin/renhold', async () => { await assignTask(str(f, 'id'), str(f, 'helperId') || null, actor); return 'Oppgaven er tildelt.'; });
+}
+export async function skipTaskAction(f: FormData) {
+  const { actor } = await admin();
+  await run(str(f, 'back') || '/admin/renhold', async () => { await skipTask(str(f, 'id'), str(f, 'reason'), actor); return 'Vaskejobben er slått av. Renholderen er varslet.'; });
+}
+export async function reactivateTaskAction(f: FormData) {
+  const { actor } = await admin();
+  await run(str(f, 'back') || '/admin/renhold', async () => { await reactivateTask(str(f, 'id'), actor); return 'Vaskejobben er slått på igjen.'; });
+}
+export async function bookingCleaningSelfAction(f: FormData) {
+  const { actor } = await admin();
+  const id = str(f, 'id');
+  await run(`/admin/bookinger/${id}`, async () => {
+    const on = str(f, 'on') === '1';
+    const r = await setBookingCleaningSelf(id, on, actor);
+    if (!on) return 'Vanlig sluttrengjøring er satt tilbake.';
+    return r.priceLocked
+      ? 'Vaskejobben er slått av. Prisen var allerede låst – refunder sluttrengjøringen under Betalinger hvis gjesten ikke skal betale den.'
+      : 'Gjesten vasker selv: sluttrengjøringen fjernes fra prisen når bookingen godkjennes, og det lages ingen vaskejobb.';
+  });
 }
 export async function taskNotesAction(f: FormData) {
   const { actor } = await admin();

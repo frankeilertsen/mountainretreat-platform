@@ -133,6 +133,10 @@ export const helperMsg = {
       sms: `Reminder: cleaning today at ${property}, ${type === 'turnover' ? `check-out at ${cout}` : 'preparation'}.${sameDay ? ` New guests at ${cin}${guests ? ` (${guests} people)` : ''} – must be done before then.` : ''}`,
     },
   }),
+  notNeeded: (property: string, date: string): HelperMessage => ({
+    no: { subject: `Vask trengs ikke: ${property} ${d(date, 'no')}`, sms: `Endring: vasken på ${property} ${d(date, 'no')} trengs ikke – det vaskes selv denne gangen.` },
+    en: { subject: `Cleaning not needed: ${property} ${d(date, 'en')}`, sms: `Change: the cleaning at ${property} on ${d(date, 'en')} is not needed – the guests clean themselves this time.` },
+  }),
   assigned: (property: string, date: string): HelperMessage => ({
     no: { subject: `Ny renholdsjobb: ${property} ${d(date, 'no')}` },
     en: { subject: `New cleaning job: ${property} ${d(date, 'en')}` },

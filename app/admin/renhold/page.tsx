@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { q } from '@/lib/db';
 import { addDays, fmtDate, fmtDateTime, todayOslo } from '@/lib/format';
 import { Flash, Status, Empty } from '@/components/ui';
-import { assignTaskAction, resolveReportAction, manualTaskAction } from '../../actions/admin';
+import { assignTaskAction, resolveReportAction, manualTaskAction , skipTaskAction, reactivateTaskAction } from '../../actions/admin';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Renhold' };
@@ -11,7 +11,7 @@ export default async function CleaningAdmin({ searchParams }: { searchParams: Pr
   const sp = await searchParams;
   const today = todayOslo();
   const tasks = await q(`SELECT t.id, t.task_type, t.status, t.channel_name, to_char(t.checkout_date,'YYYY-MM-DD') AS date, to_char(t.next_checkin_date,'YYYY-MM-DD') AS next_checkin, t.assigned_to_user_id,
-      t.completion_notes, t.completed_at, p.name AS property, p.id AS pid, u.name AS helper, sp.adults + sp.children AS next_guests,
+      t.completion_notes, t.completed_at, t.not_needed_reason, p.name AS property, p.id AS pid, u.name AS helper, sp.adults + sp.children AS next_guests,
       (SELECT count(*) FROM cleaning_reports r WHERE r.cleaning_task_id=t.id AND r.kind<>'comment')::int AS reports
     FROM cleaning_tasks t JOIN properties p ON p.id=t.property_id LEFT JOIN users u ON u.id=t.assigned_to_user_id LEFT JOIN stay_preparations sp ON sp.id=t.next_preparation_id
     WHERE t.checkout_date BETWEEN $1 AND $2 AND t.status <> 'cancelled' ORDER BY t.checkout_date, p.name`, [addDays(today, -7), addDays(today, 60)]);
@@ -36,7 +36,7 @@ export default async function CleaningAdmin({ searchParams }: { searchParams: Pr
       )}
       <div className="card">
         <h3>Oppgaver (siste 7 og neste 60 dager)</h3>
-        {tasks.length === 0 ? <Empty>Ingen oppgaver.</Empty> : <div className="table-wrap"><table><thead><tr><th>Dato</th><th>Bolig</th><th>Type</th><th>Neste ankomst</th><th>Renholder</th><th>Status</th></tr></thead><tbody>
+        {tasks.length === 0 ? <Empty>Ingen oppgaver.</Empty> : <div className="table-wrap"><table><thead><tr><th>Dato</th><th>Bolig</th><th>Type</th><th>Neste ankomst</th><th>Renholder</th><th>Status</th><th></th></tr></thead><tbody>
           {tasks.map(t => {
             const same = t.next_checkin === t.date;
             return (
@@ -50,7 +50,14 @@ export default async function CleaningAdmin({ searchParams }: { searchParams: Pr
                     <select name="helperId" defaultValue={t.assigned_to_user_id ?? ''} style={{ width: 150 }}><option value="">Ikke tildelt</option>{helpers.map(h => <option key={h.id} value={h.id}>{h.name}{h.props?.includes(t.pid) ? '' : ' (annen bolig)'}</option>)}</select>
                     <button className="btn ghost small">Tildel</button></form>)}
                   {t.completion_notes && <small className="muted">«{t.completion_notes}»</small>}</td>
-                <td><Status s={t.status} /></td>
+                <td><Status s={t.status} />{t.status === 'not_needed' && t.not_needed_reason && <><br /><small className="muted">{t.not_needed_reason}</small></>}</td>
+                <td>{['open', 'assigned'].includes(t.status) ? (
+                  <form action={skipTaskAction} className="row" style={{ flexWrap: 'nowrap', gap: 6 }}><input type="hidden" name="id" value={t.id} />
+                    <input name="reason" placeholder="Vasker selv" style={{ width: 120 }} aria-label="Grunn" />
+                    <button className="btn ghost small" title="Slå av denne vaskejobben">Slå av</button></form>
+                ) : t.status === 'not_needed' ? (
+                  <form action={reactivateTaskAction}><input type="hidden" name="id" value={t.id} /><button className="btn ghost small">Slå på igjen</button></form>
+                ) : null}</td>
               </tr>);
           })}
         </tbody></table></div>}

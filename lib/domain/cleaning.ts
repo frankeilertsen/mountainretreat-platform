@@ -41,7 +41,7 @@ export async function reconcileCleaningTasks(c: PoolClient, propertyId: string):
 
   const bookingStays = await q<{ id: string; start: string; end: string; guests: number; prep_id: string; exempt: boolean }>(
     `SELECT b.id, to_char(b.start_date,'YYYY-MM-DD') AS start, to_char(b.end_date,'YYYY-MM-DD') AS "end", b.adults + b.children AS guests, sp.id AS prep_id,
-            EXISTS (SELECT 1 FROM member_cleaning_exemptions e WHERE e.user_id=b.member_id AND e.active AND (e.property_id IS NULL OR e.property_id=b.property_id)) AS exempt
+            (b.cleaning_self OR EXISTS (SELECT 1 FROM member_cleaning_exemptions e WHERE e.user_id=b.member_id AND e.active AND (e.property_id IS NULL OR e.property_id=b.property_id))) AS exempt
      FROM bookings b JOIN stay_preparations sp ON sp.booking_id=b.id
      WHERE b.property_id=$1 AND b.status IN ('confirmed','completed','cancellation_requested') AND b.end_date >= $2`, [propertyId, horizonStart], c);
   const extStays = await q<{ id: string; start: string; end: string; channel: string }>(
@@ -317,6 +317,58 @@ export async function assignTask(taskId: string, helperId: string | null, actor:
     const p = await one<{ name: string }>('SELECT name FROM properties WHERE id=$1', [t.property_id], c);
     if (helperId) await notifyHelper(c, helperId, helperMsg.assigned(p!.name, t.checkout_date), taskId);
   });
+}
+
+/**
+ * "Vasker selv": the administrator turns off one cleaning job (e.g. own stay, or a guest who cleans themselves).
+ * The job is kept in the history as "Ikke nødvendig"; the assigned cleaner is told it is not needed.
+ */
+export async function skipTask(taskId: string, reason: string, actor: Actor) {
+  await tx(async c => {
+    const t = await one<{ status: string; property_id: string; checkout_date: string; assigned_to_user_id: string | null }>(
+      `SELECT status, property_id, to_char(checkout_date,'YYYY-MM-DD') AS checkout_date, assigned_to_user_id FROM cleaning_tasks WHERE id=$1 FOR UPDATE`, [taskId], c);
+    if (!t) throw new DomainError('not_found', 'Fant ikke oppgaven.');
+    if (!['open', 'assigned'].includes(t.status)) throw new DomainError('bad_state', 'Bare oppgaver som ikke er startet kan slås av.');
+    await c.query(`UPDATE cleaning_tasks SET status='not_needed', not_needed_reason=$2, updated_at=now() WHERE id=$1`, [taskId, reason.trim().slice(0, 200) || 'Vasker selv']);
+    await audit(c, actor, 'cleaning.skipped', 'cleaning_task', taskId, { status: t.status }, { status: 'not_needed', reason });
+    if (t.assigned_to_user_id) {
+      const p = await one<{ name: string }>('SELECT name FROM properties WHERE id=$1', [t.property_id], c);
+      await notifyHelper(c, t.assigned_to_user_id, helperMsg.notNeeded(p!.name, t.checkout_date), taskId);
+    }
+  });
+}
+
+/** Turn a job that was switched off back on (assigned again if it had a cleaner). */
+export async function reactivateTask(taskId: string, actor: Actor) {
+  await tx(async c => {
+    const t = await one<{ status: string; property_id: string; checkout_date: string; assigned_to_user_id: string | null }>(
+      `SELECT status, property_id, to_char(checkout_date,'YYYY-MM-DD') AS checkout_date, assigned_to_user_id FROM cleaning_tasks WHERE id=$1 FOR UPDATE`, [taskId], c);
+    if (!t) throw new DomainError('not_found', 'Fant ikke oppgaven.');
+    if (t.status !== 'not_needed') throw new DomainError('bad_state', 'Oppgaven er ikke slått av.');
+    await c.query(`UPDATE cleaning_tasks SET status=$2, not_needed_reason=NULL, updated_at=now() WHERE id=$1`, [taskId, t.assigned_to_user_id ? 'assigned' : 'open']);
+    await audit(c, actor, 'cleaning.reactivated', 'cleaning_task', taskId, { status: 'not_needed' }, { status: t.assigned_to_user_id ? 'assigned' : 'open' });
+    if (t.assigned_to_user_id) {
+      const p = await one<{ name: string }>('SELECT name FROM properties WHERE id=$1', [t.property_id], c);
+      await notifyHelper(c, t.assigned_to_user_id, helperMsg.assigned(p!.name, t.checkout_date), taskId);
+    }
+  });
+}
+
+/**
+ * "Gjesten vasker selv" on one booking. Before approval the cleaning fee is dropped when the price is locked.
+ * The cleaning job after the stay is switched off (or back on).
+ */
+export async function setBookingCleaningSelf(bookingId: string, on: boolean, actor: Actor): Promise<{ priceLocked: boolean }> {
+  const b = await one<{ status: string; property_id: string; cleaning_self: boolean }>(`SELECT status, property_id, cleaning_self FROM bookings WHERE id=$1`, [bookingId]);
+  if (!b) throw new DomainError('not_found', 'Fant ikke bookingen.');
+  await tx(async c => {
+    await c.query(`UPDATE bookings SET cleaning_self=$2, updated_at=now() WHERE id=$1`, [bookingId, on]);
+    await audit(c, actor, on ? 'booking.cleaning_self_on' : 'booking.cleaning_self_off', 'booking', bookingId, { cleaning_self: b.cleaning_self }, { cleaning_self: on });
+  });
+  const task = await one<{ id: string; status: string }>(`SELECT id, status FROM cleaning_tasks WHERE booking_id=$1 AND task_type='turnover' AND status <> 'cancelled' ORDER BY created_at DESC LIMIT 1`, [bookingId]);
+  if (task && on && ['open', 'assigned'].includes(task.status)) await skipTask(task.id, 'Gjesten vasker selv', actor);
+  if (task && !on && task.status === 'not_needed') await reactivateTask(task.id, actor);
+  return { priceLocked: b.status !== 'pending_review' };
 }
 
 export async function overrideSleepingPlan(prepId: string, plan: { bed_id: string; persons: number; guest_type: string }[] | null, actor: Actor) {

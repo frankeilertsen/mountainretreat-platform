@@ -173,7 +173,7 @@ export async function quoteFor(propertyId: string, memberId: string, startDate: 
   const quote = computeQuote({
     startDate, endDate, guests, maxGuests: ctx.property.max_guests,
     categories: ctx.categories, periods: ctx.periods, losDiscounts: ctx.losDiscounts,
-    cleaningFeeOre: ctx.property.cleaning_fee_ore, cleaningExempt: await isCleaningExempt(memberId, propertyId, db),
+    cleaningFeeOre: ctx.property.cleaning_fee_ore, cleaningExempt: (await isCleaningExempt(memberId, propertyId, db)) || (!!excludeBookingId && !!(await one(`SELECT 1 FROM bookings WHERE id=$1 AND cleaning_self`, [excludeBookingId], db))),
     addOns: ctx.addOns, selectedAddOns, memberDiscountPct: discount.totalPct,
     memberDiscountSplit: { basePct: discount.basePct, loyaltyPct: discount.loyaltyPct },
     includedGuests: ctx.property.included_guests, extraGuestFeeOre: ctx.property.extra_guest_fee_ore, extraGuestBasis: ctx.property.extra_guest_fee_basis,
