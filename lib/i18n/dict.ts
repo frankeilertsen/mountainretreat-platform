@@ -9,7 +9,7 @@ const no = {
   common: {
     back: '← Tilbake', home: '← Forsiden', login: 'Logg inn', logout: 'Logg ut', save: 'Lagre', send: 'Send', all: 'Alle →', none: 'Ingen.',
     nights: (n: number) => `${n} ${n === 1 ? 'natt' : 'netter'}`, perNight: '/ natt', guests: (n: number) => `${n} gjester`,
-    privacy: 'Personvern', footer: '© FKE Property AS · mountainretreat.no',
+    privacy: 'Personvern', terms: 'Salgsvilkår', footer: '© FKE Property AS · mountainretreat.no',
   },
   front: {
     welcome: 'Velkommen', title: 'Hvordan vil du bo hos oss?',
@@ -181,7 +181,7 @@ const en: Dict = {
   common: {
     back: '← Back', home: '← Home', login: 'Log in', logout: 'Log out', save: 'Save', send: 'Send', all: 'All →', none: 'None.',
     nights: (n: number) => `${n} ${n === 1 ? 'night' : 'nights'}`, perNight: '/ night', guests: (n: number) => `${n} guests`,
-    privacy: 'Privacy', footer: '© FKE Property AS · mountainretreat.no',
+    terms: 'Terms of sale', privacy: 'Privacy', footer: '© FKE Property AS · mountainretreat.no',
   },
   front: {
     welcome: 'Welcome', title: 'How would you like to stay with us?',

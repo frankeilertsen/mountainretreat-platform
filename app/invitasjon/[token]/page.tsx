@@ -52,7 +52,7 @@ export default async function Invite({ params, searchParams }: { params: Promise
               <div className="field"><label htmlFor="name">{T.name}</label><input id="name" name="name" required defaultValue={inv!.invitee_name ?? ''} autoComplete="name" /></div>
               <div className="field"><label htmlFor="email">{T.email}</label><input id="email" value={inv!.invitee_email} disabled /></div>
               <div className="field"><label htmlFor="phone">{helper ? T.phoneHelper : T.phone}</label><input id="phone" name="phone" type="tel" autoComplete="tel" required={helper} placeholder="+47 …" /></div>
-              <label className="check field"><input type="checkbox" name="terms" required /> <span>{T.terms} <Link href="/personvern" target="_blank">{T.privacyLink}</Link>.</span></label>
+              <label className="check field"><input type="checkbox" name="terms" required /> <span>{helper ? <>{T.terms} </> : <>{lang === 'en' ? 'I accept the ' : 'Jeg godtar '}<Link href="/salgsvilkar" target="_blank">{lang === 'en' ? 'terms of sale' : 'salgsvilkårene'}</Link>{lang === 'en' ? ' and have read the ' : ' og har lest '}</>}<Link href="/personvern" target="_blank">{T.privacyLink}</Link>.</span></label>
               {!helper && <label className="check field"><input type="checkbox" name="marketing" /> <span>{T.marketing}</span></label>}
               <button className="btn block">{helper ? T.createHelper : T.createMember}</button>
             </form>

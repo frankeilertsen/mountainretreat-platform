@@ -45,7 +45,7 @@ export default async function FrontPage() {
           </section>
         </div>
       </div>
-      <footer className="front-foot"><small>{t.common.footer} · <Link href="/personvern">{t.common.privacy}</Link></small></footer>
+      <footer className="front-foot"><small>{t.common.footer} · <Link href="/salgsvilkar">{t.common.terms}</Link> · <Link href="/personvern">{t.common.privacy}</Link></small></footer>
     </main>
   );
 }

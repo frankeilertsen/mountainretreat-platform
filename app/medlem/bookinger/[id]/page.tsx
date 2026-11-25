@@ -93,6 +93,7 @@ export default async function BookingDetail({ params, searchParams }: { params: 
                 {methods.some(m => m.method === 'vipps') && vippsConfigured() && <form action={payAction}><input type="hidden" name="id" value={id} /><input type="hidden" name="method" value="vipps" /><button className="btn secondary block">{T.payVipps}</button></form>}
               </div>
               <small className="muted">{T.cardNote}</small>
+              <small className="muted" style={{ display: 'block', marginTop: 8 }}>{lang === 'en' ? 'By paying you accept our ' : 'Ved å betale godtar du '}<Link href="/salgsvilkar" target="_blank">{lang === 'en' ? 'terms of sale' : 'salgsvilkårene'}</Link>.</small>
             </div>
           )}
           {payments.length > 0 && (

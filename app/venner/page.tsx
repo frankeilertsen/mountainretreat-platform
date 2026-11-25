@@ -42,7 +42,7 @@ export default async function Landing() {
         </div>
       </section>
       <footer className="container" style={{ padding: '40px 24px', borderTop: '1px solid var(--line)' }}>
-        <small>{t.common.footer} · <Link href="/personvern">{t.common.privacy}</Link></small>
+        <small>{t.common.footer} · <Link href="/salgsvilkar">{t.common.terms}</Link> · <Link href="/personvern">{t.common.privacy}</Link></small>
       </footer>
     </>
   );
