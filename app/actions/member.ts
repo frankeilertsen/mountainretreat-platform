@@ -35,7 +35,7 @@ export async function payAction(f: FormData) {
   await run(`/medlem/bookinger/${id}`, async () => {
     const method = str(f, 'method') as 'stripe_card' | 'vipps' | 'invoice';
     const r = await startPayment(id, u, method);
-    if ('checkoutUrl' in r) url = r.checkoutUrl;
+    if ('checkoutUrl' in r) url = r.checkoutUrl ?? null;
     return url ? { redirect: url } : 'Bookingen er bekreftet. Fakturaen sendes til deg på e-post.';
   });
 }
