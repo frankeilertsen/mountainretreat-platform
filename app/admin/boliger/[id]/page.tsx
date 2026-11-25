@@ -182,7 +182,7 @@ async function Pricing({ pid, mode, minNights }: { pid: string; mode: string; mi
           <div style={{ width: 150 }}><label>Min. netter (standard)</label><input type="number" name="default_min_nights" min={1} defaultValue={minNights} /></div>
           <button className="btn small">Lagre</button>
         </form>
-        <p className="muted" style={{ fontSize: '.85rem', marginTop: 12 }}>Med Airbnb-prising er utgangspunktet nattprisen på Airbnb. Medlemmene slipper Airbnbs serviceavgift ({fee} %) og får i tillegg medlemsrabatt og lojalitetsrabatt. Sesongperiodene under brukes da kun for regler (min. netter, hel periode, byttedag).</p>
+        <p className="muted" style={{ fontSize: '.85rem', marginTop: 12 }}>Med Airbnb-prising er utgangspunktet overnattingsprisen på Airbnb. Medlemmene slipper Airbnbs serviceavgift ({fee} %) og får i tillegg medlemsrabatt og lojalitetsrabatt. Sesongperiodene under brukes da kun for regler (min. netter, hel periode, byttedag).</p>
       </div>
       {mode === 'airbnb' && (
         <div className="card">

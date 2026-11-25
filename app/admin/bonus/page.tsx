@@ -28,7 +28,7 @@ export default async function RewardsAdmin({ searchParams }: { searchParams: Pro
       <div className="grid g2" style={{ alignItems: 'start' }}>
         <form action={saveSettingsAction} className="card">
           <h3>Medlemsrabatt</h3><input type="hidden" name="back" value="/admin/bonus" />
-          <p className="muted" style={{ fontSize: '.88rem' }}>Ved Airbnb-prising slipper medlemmet Airbnbs serviceavgift (brukes i sammenligningen medlemmet ser). Medlemsrabatten gjelder nattprisen for alle medlemmer i tillegg. Kan overstyres per medlem på medlemssiden. Lojalitetsrabatten legges oppå: +steg % per booking (bekreftet/fullført), opp til maks.</p>
+          <p className="muted" style={{ fontSize: '.88rem' }}>Ved Airbnb-prising slipper medlemmet Airbnbs serviceavgift (brukes i sammenligningen medlemmet ser). Medlemsrabatten gjelder overnattingsprisen for alle medlemmer i tillegg. Kan overstyres per medlem på medlemssiden. Lojalitetsrabatten legges oppå: +steg % per booking (bekreftet/fullført), opp til maks.</p>
           <div className="fields">
             <div><label>Airbnb-avgift medlemmer slipper %</label><input name="airbnb_guest_fee_pct" defaultValue={s.airbnb_guest_fee_pct} /></div>
             <div><label>Medlemsrabatt %</label><input name="member_base_discount_pct" defaultValue={s.member_base_discount_pct} /></div>
