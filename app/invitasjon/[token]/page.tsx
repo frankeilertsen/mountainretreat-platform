@@ -1,3 +1,4 @@
+import { BackLink } from '@/components/BackLink';
 import { Logo } from '@/components/Logo';
 import Link from 'next/link';
 import { getInvitationByToken } from '@/lib/domain/invitations';
@@ -26,6 +27,7 @@ export default async function Invite({ params, searchParams }: { params: Promise
   const benefits = !invalid && !helper ? await inviteBenefits(lang) : [];
   return (
     <div className="narrow" style={{ position: 'relative', maxWidth: benefits.length ? 760 : undefined }}>
+      <BackLink label={t.common.home} fallback="/" />
       <LangSwitch lang={lang} className="lang-corner" />
       <div style={{ textAlign: 'center' }}><Logo width={240} /></div>
       <div className="card" style={{ marginTop: 28 }}>

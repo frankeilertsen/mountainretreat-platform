@@ -1,3 +1,4 @@
+import { BackLink } from '@/components/BackLink';
 import { getT } from '@/lib/i18n/lang';
 import { LangSwitch } from '@/components/LangSwitch';
 import { Logo } from '@/components/Logo';
@@ -17,6 +18,7 @@ export default async function Login({ searchParams }: { searchParams: Promise<Re
     : [];
   return (
     <div className="narrow" style={{ position: 'relative' }}>
+      <BackLink label={t.common.back} />
       <LangSwitch lang={lang} className="lang-corner" />
       <div style={{ textAlign: 'center' }}><Logo width={240} /></div>
       <div className="card" style={{ marginTop: 28 }}>

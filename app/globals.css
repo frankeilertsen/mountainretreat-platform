@@ -288,3 +288,7 @@ main { padding: 44px 0 90px; }
 
 .clean-head-right { flex-wrap: nowrap; gap: 8px; }
 @media (max-width: 560px) { .hide-sm { display: none !important; } }
+
+/* "← Tilbake" in the top-left corner of the narrow public pages (login, invitation) */
+.back-corner { position: absolute; top: 18px; left: 22px; z-index: 30; }
+@media (max-width: 560px) { .back-corner { top: 14px; left: 14px; } }
