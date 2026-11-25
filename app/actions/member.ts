@@ -112,3 +112,15 @@ export async function anonymizeAction(f: FormData) {
   await revokeAllSessions(u.id);
   redirect('/?ok=anonymisert');
 }
+
+export async function reviewAction(f: FormData) {
+  const u = await assertUser('request_booking');
+  const id = str(f, 'id');
+  await run(`/medlem/bookinger/${id}/omtale`, async () => {
+    const { submitReview } = await import('@/lib/domain/reviews');
+    const input: Record<string, unknown> = {};
+    for (const k of ['rating', 'cleanliness', 'accuracy', 'checkin', 'communication', 'location', 'value', 'public_text', 'private_feedback', 'consent_publish', 'lang']) input[k] = f.get(k) ?? undefined;
+    await submitReview(u.id, id, input);
+    return { redirect: `/medlem/bookinger/${id}/omtale?takk=1` };
+  });
+}

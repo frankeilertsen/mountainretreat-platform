@@ -388,3 +388,24 @@ export async function manualTaskAction(f: FormData) {
     await audit(null, actor, 'cleaning.manual_task_created', 'cleaning_task', r!.id); return 'Oppgave opprettet.';
   });
 }
+
+export async function addAirbnbReviewAction(f: FormData) {
+  const { actor } = await admin();
+  await run('/admin/omtaler?vis=airbnb', async () => {
+    const { addAirbnbReview, updateReview } = await import('@/lib/domain/reviews');
+    const input = Object.fromEntries(['author_name', 'rating', 'stay_month', 'property_id', 'lang', 'public_text'].map(k => [k, f.get(k) ?? undefined]));
+    const id = await addAirbnbReview(input, actor);
+    if (str(f, 'featured') === '1') await updateReview(id, { featured: '1' }, actor);
+    return 'Omtalen fra Airbnb er lagt til.';
+  });
+}
+export async function updateReviewAction(f: FormData) {
+  const { actor } = await admin();
+  await run('/admin/omtaler', async () => {
+    const { updateReview } = await import('@/lib/domain/reviews');
+    const input: Record<string, unknown> = {};
+    for (const k of ['featured', 'status', 'author_name', 'host_reply', 'featured_order']) if (f.has(k)) input[k] = str(f, k);
+    await updateReview(str(f, 'id'), input, actor);
+    return 'Oppdatert.';
+  });
+}

@@ -292,3 +292,29 @@ main { padding: 44px 0 90px; }
 /* "← Tilbake" in the top-left corner of the narrow public pages (login, invitation) */
 .back-corner { position: absolute; top: 18px; left: 22px; z-index: 30; }
 @media (max-width: 560px) { .back-corner { top: 14px; left: 14px; } }
+
+/* Star rating (reviews) */
+.stars { border: 0; padding: 0; margin: 0 0 14px; }
+.stars legend { font-size: .78rem; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-2, #b9b3a6); margin-bottom: 6px; padding: 0; }
+.stars-row { display: inline-flex; flex-direction: row-reverse; gap: 4px; }
+.stars-row input { position: absolute; opacity: 0; pointer-events: none; }
+.stars-row label { cursor: pointer; color: #4a473f; line-height: 1; transition: color .12s; }
+.stars-lg .stars-row label { font-size: 2.1rem; }
+.stars-sm .stars-row label { font-size: 1.4rem; }
+.stars-row label:hover, .stars-row label:hover ~ span label, .stars-row span:hover ~ span label,
+.stars-row input:checked + label, .stars-row span:has(input:checked) ~ span label { color: var(--gold, #c8a96b); }
+.stars-row input:focus-visible + label { outline: 2px solid var(--gold, #c8a96b); outline-offset: 2px; border-radius: 4px; }
+.stars-static { color: var(--gold, #c8a96b); letter-spacing: 2px; }
+.stars-static .off { color: #4a473f; }
+.review-cats { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 0 18px; }
+.review-quote { font-family: var(--serif, 'Cormorant Garamond', serif); font-size: 1.15rem; line-height: 1.5; margin: 10px 0; }
+
+/* Front page: chosen reviews */
+.front-reviews { margin: 64px auto 0; max-width: 1100px; text-align: center; }
+.front-reviews h2 { font-size: clamp(1.8rem, 3.4vw, 2.5rem); margin: 6px 0 26px; }
+.front-reviews-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 18px; text-align: left; }
+.front-review { margin: 0; padding: 22px 22px 18px; border: 1px solid var(--line, #2c2a25); border-radius: 18px; background: rgba(255,255,255,.02); display: flex; flex-direction: column; gap: 10px; }
+.front-review blockquote { margin: 0; font-family: var(--serif, 'Cormorant Garamond', serif); font-size: 1.18rem; line-height: 1.5; color: var(--ink, #ece6d8); }
+.front-review figcaption { font-size: .86rem; color: var(--ink-2, #b9b3a6); display: flex; justify-content: space-between; gap: 10px; margin-top: auto; }
+.front-review figcaption .src { font-size: .72rem; letter-spacing: .12em; text-transform: uppercase; color: var(--gold-2, #d8bf8a); }
+.front-review .reply { font-size: .85rem; color: var(--ink-2, #b9b3a6); margin: 0; border-left: 2px solid var(--gold, #c8a96b); padding-left: 10px; }

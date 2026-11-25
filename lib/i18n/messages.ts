@@ -86,6 +86,9 @@ const EXACT: Record<string, string> = {
   'Kun JPEG, PNG eller WebP er tillatt.': 'Only JPEG, PNG or WebP are allowed.',
   'Bookingen er bekreftet. Fakturaen sendes til deg på e-post.': 'Your booking is confirmed. The invoice will be sent to you by e-mail.',
   'Faktura er ikke tilgjengelig for deg. Velg kort eller Vipps.': 'Invoice is not available to you. Please choose card or Vipps.',
+  'Du har allerede gitt en omtale for dette oppholdet. Takk!': 'You have already reviewed this stay. Thank you!',
+  'Du kan gi en omtale når oppholdet er gjennomført.': 'You can review the stay once it has been completed.',
+  'Velg en samlet vurdering (1–5 stjerner).': 'Please choose an overall rating (1–5 stars).',
 };
 const PATTERNS: [RegExp, (m: RegExpMatchArray) => string][] = [
   [/^Du kan sende maks (\d+) invitasjoner per uke\.(?: Du kan sende flere fra (\d+)\.(\d+)\. kl\. (\d+:\d+)\.)?$/, m => `You can send at most ${m[1]} invitations per week.${m[2] ? ` You can send more from ${m[2]}/${m[3]} at ${m[4]}.` : ''}`],

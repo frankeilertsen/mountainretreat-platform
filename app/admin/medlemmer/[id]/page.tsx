@@ -1,3 +1,4 @@
+import { Stars } from '@/components/forms/StarInput';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { one, q } from '@/lib/db';
@@ -14,6 +15,7 @@ export const dynamic = 'force-dynamic';
 export default async function MemberDetail({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<Record<string, string>> }) {
   const { id } = await params;
   const sp = await searchParams;
+  const reviews = await q<any>(`SELECT r.id, r.rating, r.public_text, r.private_feedback, r.featured, r.created_at, b.reference FROM reviews r JOIN bookings b ON b.id=r.booking_id WHERE r.member_id=$1 ORDER BY r.created_at DESC`, [id]);
   const u = await one(`SELECT u.*, iu.name AS inviter, iu.id AS inviter_id FROM users u LEFT JOIN users iu ON iu.id=u.invited_by_user_id WHERE u.id=$1`, [id]);
   if (!u) notFound();
   const [bookings, invited, bal, exempt, sessions, assignments, props] = await Promise.all([
@@ -93,6 +95,11 @@ export default async function MemberDetail({ params, searchParams }: { params: P
                   : <form action={A.cleaningExemptionAction} className="row"><input type="hidden" name="id" value={id} /><input type="hidden" name="grant" value="1" /><input name="notes" placeholder="Merknad" style={{ flex: 1 }} /><button className="btn ghost small">Gi fast fritak</button></form>}</div>
             </>
           )}
+          {reviews.length > 0 && <div className="card"><h3>Omtaler ({reviews.length})</h3>
+            <ul className="list">{reviews.map(r => <li key={r.id}><Stars n={r.rating} /> <small className="muted">{fmtDate(r.created_at)} · {r.reference}</small>{r.featured && <> <span className="badge b-ok">På forsiden</span></>}
+              {r.public_text && <div className="muted" style={{ fontSize: '.9rem' }}>«{r.public_text.length > 220 ? r.public_text.slice(0, 220) + '…' : r.public_text}»</div>}
+              {r.private_feedback && <div style={{ fontSize: '.85rem' }}><small className="muted">Til dere:</small> {r.private_feedback}</div>}</li>)}</ul>
+            <Link href="/admin/omtaler?vis=retreat_club" className="muted" style={{ fontSize: '.85rem' }}>Alle omtaler →</Link></div>}
           <div className="card flat"><h3>Sikkerhet</h3>
             <p className="muted">{sessions.length} aktive økter{sessions[0] ? `, sist aktiv ${fmtDateTime(sessions[0].last_activity_at)}` : ''}.</p>
             <div className="row"><form action={A.revokeSessionsAction}><input type="hidden" name="id" value={id} /><button className="btn ghost small">Logg ut overalt</button></form>

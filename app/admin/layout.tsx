@@ -24,6 +24,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           { group: 'Medlemmer' },
           { href: '/admin/medlemmer', label: 'Medlemmer og ansatte', badge: c?.loyalty },
           { href: '/admin/meldinger', label: 'Meldinger', badge: unanswered },
+          { href: '/admin/omtaler', label: 'Omtaler' },
           { href: '/admin/presentasjoner', label: 'Presentasjoner (PDF)' },
           { href: '/admin/bonus', label: 'Medlemsfordeler' },
           { href: '/admin/foresporsler', label: 'Fast leie – forespørsler', badge: c?.inquiries },

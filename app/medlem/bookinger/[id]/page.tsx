@@ -1,3 +1,5 @@
+import { reviewDict } from '@/lib/i18n/reviews';
+import { Stars } from '@/components/forms/StarInput';
 import { vippsConfigured } from '@/lib/payments/vipps';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
@@ -29,6 +31,7 @@ export default async function BookingDetail({ params, searchParams }: { params: 
     LEFT JOIN stay_preparations sp ON sp.booking_id=b.id WHERE b.id=$1`, [id]);
   if (!b || b.member_id !== u.id) notFound();
   const methods = await q<{ method: string }>(`SELECT method FROM payment_method_settings WHERE enabled ORDER BY method`);
+  const myReview = await one<{ rating: number; public_text: string | null }>(`SELECT rating, public_text FROM reviews WHERE booking_id=$1`, [id]);
   const me = await one<{ invoice_allowed: boolean }>(`SELECT invoice_allowed FROM users WHERE id=$1`, [u.id]);
   const payments = await q(`SELECT p.method, p.status, p.amount_ore, p.refunded_amount_ore, p.created_at, i.kid_number, i.invoice_number, i.fiken_invoice_number, i.status AS invoice_status, to_char(i.due_date,'YYYY-MM-DD') AS due
     FROM payments p LEFT JOIN invoices i ON i.payment_id=p.id WHERE p.booking_id=$1 AND p.status <> 'cancelled' ORDER BY p.created_at`, [id]);
@@ -85,6 +88,12 @@ export default async function BookingDetail({ params, searchParams }: { params: 
               : <div className="row price-total"><span>{T.total}</span><span>{nok(b.price_total_ore)}</span></div>}
             {!b.price_locked_at && b.price_breakdown?.use_rewards && <small className="muted">{T.bonusOnApproval}</small>}
           </div>
+          {b.status === 'completed' && (myReview ? (
+            <div className="card"><h3>{reviewDict[lang].your}</h3><Stars n={myReview.rating} size="1.3rem" />{myReview.public_text && <p className="review-quote">«{myReview.public_text}»</p>}</div>
+          ) : (
+            <div className="card" style={{ borderColor: 'var(--gold)' }}><h3>{reviewDict[lang].cta}</h3><p className="muted">{reviewDict[lang].ctaText}</p>
+              <Link href={`/medlem/bookinger/${id}/omtale`} className="btn">{reviewDict[lang].cta} ★</Link></div>
+          ))}
           {b.status === 'awaiting_payment' && (
             <div className="card" style={{ borderColor: 'var(--clay)' }}>
               <h3>{T.payTitle}</h3>

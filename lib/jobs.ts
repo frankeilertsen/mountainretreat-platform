@@ -9,6 +9,7 @@ import { audit, SYSTEM } from './audit';
 import { notifyHelper, sameDayCleaningReminders } from './domain/cleaning';
 import { helperMsg } from './i18n/cleaning';
 import { checkOpenVippsPayments } from './payments/vipps';
+import { sendReviewRequests } from './domain/reviews';
 
 type JobFn = () => Promise<unknown>;
 
@@ -28,6 +29,7 @@ export const JOBS: Record<string, JobFn> = {
   retry_refunds: () => processRefunds(),
   vipps_check: () => checkOpenVippsPayments(),
   invoice_overdue: invoiceOverdue,
+  review_requests: () => sendReviewRequests(),
   retention_purge: retentionPurge,
   deliver_notifications: () => deliverQueued(100),
 };
