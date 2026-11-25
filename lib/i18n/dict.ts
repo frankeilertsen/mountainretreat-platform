@@ -114,7 +114,7 @@ const no = {
     calNote: (t: string) => `Innsjekk fra kl. ${t}. Kalenderen oppdateres fortløpende fra alle kanaler.`, datesBusy: 'Noen av datoene er opptatt. Velg andre datoer.', quoteFailed: 'Kunne ikke beregne pris.',
   },
   bookings: {
-    title: 'Mine bookinger', paidNote: 'Takk! Betalingen behandles – bookingen bekreftes automatisk når betalingen er verifisert.', upcoming: 'Kommende', none: 'Ingen kommende opphold.',
+    title: 'Mine bookinger', paidNote: 'Takk! Betalingen behandles – bookingen bekreftes automatisk når betalingen er verifisert.', cancelledNote: 'Betalingen ble avbrutt. Datoene holdes fortsatt av en stund – du kan prøve igjen fra bookingen.', upcoming: 'Kommende', none: 'Ingen kommende opphold.',
     past: 'Tidligere og avsluttede', noneYet: 'Ingen ennå.', th: { property: 'Bolig', dates: 'Datoer', ref: 'Ref.', amount: 'Beløp', status: 'Status' },
     back: '← Mine bookinger', checkIn: 'Innsjekk', checkOut: 'Utsjekk', fromT: (t: string) => `fra kl. ${t}`, byT: (t: string) => `innen kl. ${t}`, guests: 'Gjester',
     guestLine: (a: number, c: number, i: number) => `${a} voksne${c ? `, ${c} barn` : ''}${i ? `, ${i} spedbarn` : ''}`, address: 'Adresse', wishes: 'Dine ønsker', reason: 'Begrunnelse',
@@ -287,7 +287,7 @@ const en: Dict = {
     calNote: (t: string) => `Check-in from ${t}. The calendar is kept up to date from all channels.`, datesBusy: 'Some of the dates are taken. Please choose other dates.', quoteFailed: 'Could not calculate the price.',
   },
   bookings: {
-    title: 'My bookings', paidNote: 'Thank you! Your payment is being processed – the booking is confirmed automatically once the payment has been verified.', upcoming: 'Upcoming', none: 'No upcoming stays.',
+    title: 'My bookings', paidNote: 'Thank you! Your payment is being processed – the booking is confirmed automatically once the payment has been verified.', cancelledNote: 'The payment was cancelled. The dates are still held for a while – you can try again from the booking.', upcoming: 'Upcoming', none: 'No upcoming stays.',
     past: 'Past and closed', noneYet: 'None yet.', th: { property: 'Property', dates: 'Dates', ref: 'Ref.', amount: 'Amount', status: 'Status' },
     back: '← My bookings', checkIn: 'Check-in', checkOut: 'Check-out', fromT: (t: string) => `from ${t}`, byT: (t: string) => `by ${t}`, guests: 'Guests',
     guestLine: (a: number, c: number, i: number) => `${a} adult${a === 1 ? '' : 's'}${c ? `, ${c} child${c === 1 ? '' : 'ren'}` : ''}${i ? `, ${i} infant${i === 1 ? '' : 's'}` : ''}`, address: 'Address', wishes: 'Your requests', reason: 'Reason',

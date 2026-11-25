@@ -71,7 +71,7 @@ Fullt skjema: `db/migrations/0001_schema.sql` (+ standardinnstillinger i `0002`,
 | Stripe | Klar, utestet mot live | `STRIPE_SECRET_KEY`, webhook til `/api/webhooks/stripe` med hendelsene `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `checkout.session.async_payment_failed`, `checkout.session.expired` → `STRIPE_WEBHOOK_SECRET` |
 | Airbnb / Booking.com / Vrbo / Expedia via iCal | Klar | Lim inn hver kanals iCal-lenke (import) og legg vår eksportlenke inn hos kanalen. Seed-lenkene er plassholdere. |
 | Resend (e-post) | Klar | `RESEND_API_KEY`, verifisert avsenderdomene (mountainretreat.no), EU-region |
-| Vipps ePayment | **Kun struktur** | Vipps MobilePay-avtale + API-nøkler; adapteren må implementeres og testes |
+| Vipps MobilePay (ePayment) | Klar, testet mot etterligning av API-et | Avtale med Vipps MobilePay (direkte). `VIPPS_CLIENT_ID`, `VIPPS_CLIENT_SECRET`, `VIPPS_SUBSCRIPTION_KEY`, `VIPPS_MSN`, `VIPPS_ENV` (test/production). Deretter Admin → Innstillinger → «Registrer Vipps-webhook» (hemmeligheten lagres kryptert). Betalingen trekkes (capture) med en gang den er godkjent i appen; status bekreftes via webhook, returside og bakgrunnsjobb (`vipps_check`). |
 | Guesty / Hostaway | **Kun struktur** | Konto, API-nøkler og en testannonse; adapteren må implementeres og testes |
 | Direkte Airbnb/Booking.com-API | **Ikke tilgjengelig** | Krever godkjent partnerstatus – bruk iCal eller channel manager |
 | SMS (renhold) | Klar, utestet mot live | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM` (norsk avsendernummer/alfanumerisk avsender). Uten nøkler skrives SMS til serverloggen. |
@@ -83,7 +83,7 @@ Fullt skjema: `db/migrations/0001_schema.sql` (+ standardinnstillinger i `0002`,
 
 ## 5. Testresultater
 
-`npm test` – **83 tester, 16 filer, alle grønne** (mot ekte PostgreSQL):
+`npm test` – **92 tester, 18 filer, alle grønne** (mot ekte PostgreSQL):
 - `pricing` (11): ekstra gjester (per opphold/natt, med i Airbnb-sammenligningen), Airbnb-prising (nattpris, rabatter, sammenligning inkl. avgift, manglende pris, min. netter), spesifikasjonens eksempel (14 175 kr), min/maks netter, hel periode, byttedag, uprisede datoer, tillegg, vaskefritak
 - `booking` (13): hele flyten, prislåsing, 2 og 20 samtidige godkjenninger → én vinner, idempotent webhook-replay, holdutløp + automatisk refusjon av sen betaling, kanselleringsvilkår + automatisk godkjenning, dobbeltinnsending, tilgang
 - `rewards` (11): tak på ubrukte vervebonuser, én bonus per part selv ved gjentatte/samtidige utløsere, kun første opphold, prosent med tak, minstebeløp, selvverving, suspendert verver, FIFO + tilbakeføring, 100 % bonusdekning, justering/tilbaketrekking/hovedbok, ende til ende
@@ -107,7 +107,8 @@ I tillegg: produksjonsbygg OK, kjørt i produksjonsmodus med Render-oppsett (dis
 
 - Airbnb-prisene hentes ikke automatisk (Airbnb har ikke åpent pris-API, og skraping bryter vilkårene). De legges inn manuelt/lim inn til en channel manager kobles til. Sammenligningen bruker en fast avgiftsprosent (Airbnbs faktiske gjesteavgift varierer noe).
 
-- Vipps, Guesty, Hostaway og push er ikke funksjonelle (se §4). SMS er implementert mot Twilio, men ikke testet med ekte nøkler.
+- Guesty, Hostaway og push er ikke funksjonelle (se §4). Vipps er ikke kjørt mot Vipps sitt testmiljø ennå.
+- Faktura tilbys ikke lenger som betalingsmåte (kort og Vipps). Koden for faktura med KID finnes fortsatt. SMS er implementert mot Twilio, men ikke testet med ekte nøkler.
 - Stripe er ikke verifisert mot en ekte konto.
 - E-postendring gjøres av admin (ingen selvbetjent flyt). Ingen passkey/WebAuthn.
 - Rapportene er enkle (inntekt, belegg, trakt, verving) – ingen eksport til regnskap (Fiken) ennå.

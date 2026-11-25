@@ -1,6 +1,7 @@
 import Stripe from 'stripe';
 import { appUrl } from '../notify';
 import { hmacSign } from '../crypto';
+import { vippsConfigured, createVippsPayment, refundVipps } from '../payments/vipps';
 
 /**
  * Payment provider abstraction. Card data never touches this platform: Stripe Checkout (hosted page)
@@ -50,12 +51,21 @@ export const stripeProvider: PaymentProvider = {
   },
 };
 
-/** Vipps ePayment: structure only. Requires a Vipps MobilePay merchant agreement + API keys. NOT functional yet. */
+/** Vipps MobilePay ePayment (direct agreement). See lib/payments/vipps.ts. */
 export const vippsProvider: PaymentProvider = {
   id: 'vipps',
-  configured: () => false,
-  async createCheckout() { throw new Error('Vipps er ikke koblet til ennå (krever avtale og API-nøkler).'); },
-  async refund() { throw new Error('Vipps er ikke koblet til ennå.'); },
+  configured: () => vippsConfigured(),
+  async createCheckout(r) {
+    return createVippsPayment({ paymentId: r.paymentId, amountOre: r.amountOre, description: r.description, idempotencyKey: `crt_${r.paymentId}` });
+  },
+  async refund(providerReference, amountOre, idempotencyKey) {
+    try {
+      const res = await refundVipps(providerReference, amountOre, idempotencyKey);
+      return { providerReference: res.pspReference ?? `${providerReference}:refund:${idempotencyKey}`, status: 'succeeded' };
+    } catch (e) {
+      return { providerReference: '', status: 'failed', error: (e as Error).message.slice(0, 300) };
+    }
+  },
 };
 
 /**

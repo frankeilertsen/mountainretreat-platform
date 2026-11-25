@@ -1,3 +1,4 @@
+import { vippsConfigured } from '@/lib/payments/vipps';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { requireUser } from '@/lib/auth/current';
@@ -89,8 +90,7 @@ export default async function BookingDetail({ params, searchParams }: { params: 
               <p>{T.heldUntil(fmtDateTime(b.hold_expires))}</p>
               <div className="stack">
                 {methods.some(m => m.method === 'stripe_card') && cardLabel && <form action={payAction}><input type="hidden" name="id" value={id} /><input type="hidden" name="method" value="stripe_card" /><button className="btn block">{cardLabel}</button></form>}
-                {methods.some(m => m.method === 'vipps') && <form action={payAction}><input type="hidden" name="id" value={id} /><input type="hidden" name="method" value="vipps" /><button className="btn secondary block">{T.payVipps}</button></form>}
-                {methods.some(m => m.method === 'invoice') && <form action={payAction}><input type="hidden" name="id" value={id} /><input type="hidden" name="method" value="invoice" /><button className="btn ghost block">{T.payInvoice}</button></form>}
+                {methods.some(m => m.method === 'vipps') && vippsConfigured() && <form action={payAction}><input type="hidden" name="id" value={id} /><input type="hidden" name="method" value="vipps" /><button className="btn secondary block">{T.payVipps}</button></form>}
               </div>
               <small className="muted">{T.cardNote}</small>
             </div>

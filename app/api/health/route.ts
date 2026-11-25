@@ -1,3 +1,4 @@
+import { vippsConfigured, vippsEnv, vippsWebhookInfo } from '@/lib/payments/vipps';
 import { NextResponse } from 'next/server';
 import { one } from '@/lib/db';
 import { storageBackend } from '@/lib/storage';
@@ -20,6 +21,7 @@ export async function GET() {
     email: process.env.RESEND_API_KEY ? 'resend' : 'kun logg (ingen e-post sendes)',
     app_url: process.env.APP_URL || process.env.RENDER_EXTERNAL_URL || 'MANGLER',
     secrets: ['ENCRYPTION_KEY', 'TOKEN_PEPPER', 'CRON_SECRET'].filter(k => !process.env[k]).map(k => `${k} mangler`),
+    vipps: vippsConfigured() ? `${vippsEnv() === 'production' ? 'produksjon' : 'testmiljø'}${(await vippsWebhookInfo()) ? '' : ' (webhook ikke registrert)'}` : 'av',
     card_payments: process.env.STRIPE_SECRET_KEY ? (process.env.STRIPE_SECRET_KEY.startsWith('sk_test') ? 'stripe (testmodus)' : 'stripe') : process.env.ALLOW_MOCK_PAYMENTS === '1' ? 'testbetaling' : 'av',
   };
   try {

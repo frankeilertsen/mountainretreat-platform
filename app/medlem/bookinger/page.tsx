@@ -26,7 +26,8 @@ export default async function MyBookings({ searchParams }: { searchParams: Promi
     <>
       <div className="page-head"><h1>{T.title}</h1></div>
       <Flash sp={sp} lang={lang} />
-      {sp.betalt && <div className="flash ok">{T.paidNote}</div>}
+      {(sp.betalt || sp.venter) && <div className="flash ok">{T.paidNote}</div>}
+      {sp.avbrutt && <div className="flash err">{T.cancelledNote}</div>}
       <div className="card"><h3>{T.upcoming}</h3>{upcoming.length ? <Table list={upcoming} /> : <Empty>{T.none}</Empty>}</div>
       <div className="card" style={{ marginTop: 20 }}><h3>{T.past}</h3>{other.length ? <Table list={other} /> : <Empty>{T.noneYet}</Empty>}</div>
     </>

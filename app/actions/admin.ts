@@ -85,6 +85,16 @@ export async function goodwillRefundAction(f: FormData) {
     await processRefunds([r!.id]); return 'Refusjon sendt.';
   });
 }
+export async function registerVippsWebhookAction() {
+  const { actor } = await admin();
+  await run('/admin/innstillinger', async () => {
+    const { registerVippsWebhook, vippsConfigured } = await import('@/lib/payments/vipps');
+    if (!vippsConfigured()) throw new DomainError('vipps_unconfigured', 'Vipps-nøklene mangler i Render (VIPPS_CLIENT_ID, VIPPS_CLIENT_SECRET, VIPPS_SUBSCRIPTION_KEY, VIPPS_MSN).');
+    const r = await registerVippsWebhook().catch(e => { throw new DomainError('vipps_error', `Vipps svarte med feil: ${(e as Error).message.slice(0, 200)}`); });
+    await audit(null, actor, 'settings.vipps_webhook_registered', 'payment_method', null, undefined, { url: r.url });
+    return `Vipps-webhook registrert (${r.url}).`;
+  });
+}
 export async function togglePaymentMethodAction(f: FormData) {
   const { actor } = await admin();
   await run('/admin/innstillinger', async () => {

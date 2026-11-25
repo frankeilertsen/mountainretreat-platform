@@ -2,7 +2,9 @@ import { q } from '@/lib/db';
 import { getSettings } from '@/lib/settings';
 import { fmtDateTime } from '@/lib/format';
 import { Flash, Status } from '@/components/ui';
-import { saveSettingsAction, togglePaymentMethodAction, runJobsNowAction } from '../../actions/admin';
+import { saveSettingsAction, togglePaymentMethodAction, runJobsNowAction, registerVippsWebhookAction } from '../../actions/admin';
+import { vippsConfigured, vippsEnv, vippsWebhookInfo } from '@/lib/payments/vipps';
+import { stripeProvider } from '@/lib/domain/payments';
 import { saveCancellationTierAction } from '../../actions/properties';
 
 export const dynamic = 'force-dynamic';
@@ -18,7 +20,9 @@ const FIELDS: [string, string][] = [
 export default async function Settings({ searchParams }: { searchParams: Promise<Record<string, string>> }) {
   const sp = await searchParams;
   const s = await getSettings();
-  const methods = await q(`SELECT method, enabled FROM payment_method_settings ORDER BY method`);
+  const methods = await q(`SELECT method, enabled FROM payment_method_settings WHERE method <> 'invoice' ORDER BY method`);
+  const vippsHook = vippsConfigured() ? await vippsWebhookInfo() : null;
+  const ready: Record<string, boolean> = { stripe_card: stripeProvider.configured(), vipps: vippsConfigured() && !!vippsHook };
   const tiers = await q(`SELECT * FROM cancellation_policy_tiers WHERE active AND property_id IS NULL ORDER BY days_before_checkin_min DESC`);
   const jobs = await q(`SELECT DISTINCT ON (job) job, status, started_at, detail FROM job_runs ORDER BY job, started_at DESC`);
   return (
@@ -33,8 +37,12 @@ export default async function Settings({ searchParams }: { searchParams: Promise
         </form>
         <div className="stack">
           <div className="card"><h3>Betalingsmåter</h3>{methods.map(m => (
-            <form key={m.method} action={togglePaymentMethodAction} className="row between" style={{ padding: '6px 0' }}><span>{{ stripe_card: 'Kort (Stripe)', vipps: 'Vipps', invoice: 'Faktura' }[m.method as string]}</span>
-              <span className="row"><span className={`badge ${m.enabled ? 'b-ok' : ''}`}>{m.enabled ? 'På' : 'Av'}</span><input type="hidden" name="method" value={m.method} /><button className="btn ghost small">{m.enabled ? 'Slå av' : 'Slå på'}</button></span></form>))}</div>
+            <form key={m.method} action={togglePaymentMethodAction} className="row between" style={{ padding: '6px 0' }}><span>{{ stripe_card: 'Kort (Stripe)', vipps: 'Vipps' }[m.method as string]}<br /><small className="muted">{ready[m.method as string] ? 'Koblet til' : m.method === 'stripe_card' ? 'Mangler Stripe-nøkler (testbetaling brukes)' : !vippsConfigured() ? 'Mangler Vipps-nøkler – vises ikke for medlemmer' : 'Webhook ikke registrert'}</small></span>
+              <span className="row"><span className={`badge ${m.enabled ? 'b-ok' : ''}`}>{m.enabled ? 'På' : 'Av'}</span><input type="hidden" name="method" value={m.method} /><button className="btn ghost small">{m.enabled ? 'Slå av' : 'Slå på'}</button></span></form>))}
+            {vippsConfigured() && <div style={{ borderTop: '1px solid var(--line)', marginTop: 10, paddingTop: 10 }}>
+              <small className="muted">Vipps: {vippsEnv() === 'production' ? 'produksjon' : 'testmiljø'}{vippsHook ? ` · webhook registrert ${fmtDateTime(vippsHook.registered_at)}` : ' · webhook ikke registrert'}</small>
+              <form action={registerVippsWebhookAction} style={{ marginTop: 6 }}><button className="btn ghost small">{vippsHook ? 'Registrer webhook på nytt' : 'Registrer Vipps-webhook'}</button></form>
+            </div>}</div>
           <div className="card"><h3>Kanselleringsvilkår</h3>
             <ul className="list">{tiers.map(t => <li key={t.id} className="row between"><span>{t.days_before_checkin_min}{t.days_before_checkin_max != null ? `–${t.days_before_checkin_max}` : '+'} dager før: <strong>{Number(t.refund_percentage)} %</strong> refusjon{t.requires_admin_approval ? ' · må godkjennes' : ''}</span>
               <form action={saveCancellationTierAction}><input type="hidden" name="deactivate" value={t.id} /><button className="btn ghost small">Fjern</button></form></li>)}</ul>

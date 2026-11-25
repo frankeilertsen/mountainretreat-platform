@@ -8,6 +8,7 @@ import { addDays, todayOslo, fmtDate } from './format';
 import { audit, SYSTEM } from './audit';
 import { notifyHelper, sameDayCleaningReminders } from './domain/cleaning';
 import { helperMsg } from './i18n/cleaning';
+import { checkOpenVippsPayments } from './payments/vipps';
 
 type JobFn = () => Promise<unknown>;
 
@@ -25,6 +26,7 @@ export const JOBS: Record<string, JobFn> = {
   cleaning_same_day: async () => sameDayCleaningReminders(await getNum('cleaning_same_day_reminder_hour', 7)),
   checkin_reminders: checkinReminders,
   retry_refunds: () => processRefunds(),
+  vipps_check: () => checkOpenVippsPayments(),
   retention_purge: retentionPurge,
   deliver_notifications: () => deliverQueued(100),
 };
