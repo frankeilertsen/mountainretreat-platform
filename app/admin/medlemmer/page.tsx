@@ -1,3 +1,5 @@
+import { computeMemberDiscount, loyaltySettings } from '@/lib/domain/memberDiscount';
+import { pctNo } from '@/lib/format';
 import Link from 'next/link';
 import { q } from '@/lib/db';
 import { fmtDate } from '@/lib/format';
@@ -28,7 +30,7 @@ export default async function Members({ searchParams }: { searchParams: Promise<
     SELECT t.id, t.name, t.depth, r.status FROM t LEFT JOIN referrals r ON r.referred_user_id = t.id ORDER BY t.path`);
   const props = await q(`SELECT id, name FROM properties WHERE active ORDER BY name`);
   const s = await getSettings();
-  const std = Number(s.member_base_discount_pct), step = Number(s.member_loyalty_step_pct), lmax = Number(s.member_loyalty_max_pct);
+  const std = Number(s.member_base_discount_pct); const ls = await loyaltySettings();
   return (
     <>
       <div className="page-head"><h1>Medlemmer og ansatte</h1></div>
@@ -38,7 +40,7 @@ export default async function Members({ searchParams }: { searchParams: Promise<
           {users.map(u => (
             <tr key={u.id}><td><Link href={`/admin/medlemmer/${u.id}`}>{u.name}</Link><br /><small className="muted">{u.email}</small></td><td>{ROLE[u.system_role]}</td><td><small>{u.inviter ?? '–'}</small></td>
               <td><small>{u.system_role !== 'member' ? '–' : u.invite_tier === 'admin_invited' || u.loyalty_status === 'approved' ? 'Ja' : u.loyalty_status === 'applied' ? 'Søkt' : 'Nei'}</small></td>
-              <td>{u.stays}</td><td><small>{u.system_role === 'member' ? `${Math.min(100, (u.override ?? std) + Math.min(lmax, u.stays * step))} %${u.override != null ? ' *' : ''}` : '–'}</small></td><td>{u.referred ? `${u.qualified}/${u.referred}` : '–'}</td><td><Status s={u.status} /></td></tr>))}
+              <td>{u.stays}</td><td><small>{u.system_role === 'member' ? `${pctNo(computeMemberDiscount(std, u.override ?? null, u.stays, ls.steps.length ? ls.steps : ls.step, ls.max).totalPct)} %${u.override != null ? ' *' : ''}` : '–'}</small></td><td>{u.referred ? `${u.qualified}/${u.referred}` : '–'}</td><td><Status s={u.status} /></td></tr>))}
         </tbody></table></div>
       </div>
       <div className="grid g3" style={{ alignItems: 'start' }}>

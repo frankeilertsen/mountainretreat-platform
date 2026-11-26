@@ -1,3 +1,4 @@
+import { describeSteps } from '@/lib/domain/memberDiscount';
 import { pctL } from '@/lib/format';
 import Link from 'next/link';
 import { requireUser } from '@/lib/auth/current';
@@ -26,7 +27,7 @@ export default async function Benefits() {
   const maxLoy = Math.round(airbnbStay * disc.loyaltyMaxPct / 100);
   const yours = airbnbStay - baseDisc - loyDisc + ourCleaning;
   const yoursMax = airbnbStay - baseDisc - maxLoy + ourCleaning;
-  const steps = Array.from({ length: Math.ceil(disc.loyaltyMaxPct / Math.max(disc.stepPct, 0.0001) - 1e-9) + 1 }, (_, i) => i);
+  const steps = disc.ladder.map((_, i) => i);
   const Line = ({ l, v, gold, total }: { l: string; v: number; gold?: boolean; total?: boolean }) => (
     <div className={total ? 'row price-total' : 'row'} style={{ justifyContent: 'space-between', color: gold ? 'var(--gold-2)' : undefined, padding: total ? undefined : '5px 0' }}><span>{l}</span><span>{v < 0 ? '−' : ''}{nok(Math.abs(v))}</span></div>);
   return (
@@ -57,12 +58,12 @@ export default async function Benefits() {
         <div className="stack">
           <div className="card">
             <span className="eyebrow">{B.loyalty}</span>
-            <h3>{B.loyaltyTitle(disc.stepPct, disc.loyaltyMaxPct)}</h3>
-            <p className="muted">{B.loyaltyText(disc.stepPct)}</p>
+            <h3>{B.loyaltyTitle(disc.loyaltyMaxPct)}</h3>
+            <p className="muted">{B.loyaltyText(describeSteps(disc.steps, lang))}</p>
             <div className="row" style={{ gap: 6 }}>
               {steps.map(n => { const me = Math.min(disc.bookingsCounted, steps.length - 1) === n; return (
                 <div key={n} style={{ flex: 1, minWidth: 34, textAlign: 'center', padding: '8px 0', borderRadius: 8, border: `1px solid ${me ? 'var(--gold)' : 'var(--line-2)'}`, background: n <= disc.bookingsCounted ? 'var(--gold-soft)' : 'transparent' }}>
-                  <div style={{ fontSize: '.95rem', color: me ? 'var(--gold-2)' : 'var(--ink-2)' }}>{pctL(disc.basePct + Math.min(disc.loyaltyMaxPct, n * disc.stepPct), lang)}%</div>
+                  <div style={{ fontSize: '.95rem', color: me ? 'var(--gold-2)' : 'var(--ink-2)' }}>{pctL(disc.basePct + disc.ladder[n], lang)}%</div>
                   <small style={{ fontSize: '.62rem' }}>{n}{n === steps.length - 1 ? '+' : ''}</small></div>); })}
             </div>
             <small className="muted">{B.ladderNote(disc.bookingsCounted)}</small>

@@ -1,3 +1,5 @@
+import { computeMemberDiscount, describeSteps, loyaltySettings } from '@/lib/domain/memberDiscount';
+import { pctNo } from '@/lib/format';
 import Link from 'next/link';
 import { q, one } from '@/lib/db';
 import { fmtDate, nok } from '@/lib/format';
@@ -11,6 +13,7 @@ export const metadata = { title: 'Medlemsfordeler' };
 export default async function RewardsAdmin({ searchParams }: { searchParams: Promise<Record<string, string>> }) {
   const sp = await searchParams;
   const s = await getSettings();
+  const ls = await loyaltySettings(); const ld = computeMemberDiscount(0, null, 0, ls.steps.length ? ls.steps : ls.step, ls.max);
   const totals = await one(`SELECT COALESCE(sum(amount_ore),0)::bigint AS granted, COALESCE(sum(remaining_amount_ore) FILTER (WHERE status IN ('available','partially_used')),0)::bigint AS outstanding,
      COALESCE(sum(remaining_amount_ore) FILTER (WHERE status='pending_vest'),0)::bigint AS vesting, (SELECT COALESCE(sum(amount_applied_ore),0) FROM reward_redemptions WHERE reversed_at IS NULL)::bigint AS redeemed FROM reward_credits`);
   const referrals = await q(`SELECT r.status, r.created_at, r.qualified_at, a.name AS referrer, a.id AS aid, b.name AS referred, b.id AS bid FROM referrals r JOIN users a ON a.id=r.referrer_user_id JOIN users b ON b.id=r.referred_user_id ORDER BY r.created_at DESC LIMIT 50`);
@@ -32,10 +35,12 @@ export default async function RewardsAdmin({ searchParams }: { searchParams: Pro
           <div className="fields">
             <div><label>Airbnb-avgift gjesten betaler på toppen % (0 = ingen)</label><input name="airbnb_guest_fee_pct" defaultValue={s.airbnb_guest_fee_pct} /></div>
             <div><label>Medlemsrabatt %</label><input name="member_base_discount_pct" defaultValue={s.member_base_discount_pct} /></div>
-            <div><label>Økning per booking %</label><input name="member_loyalty_step_pct" defaultValue={s.member_loyalty_step_pct} /></div>
+            <div style={{ gridColumn: '1 / -1' }}><label>Lojalitet per booking % (én økning per booking, skilt med ;)</label><input name="member_loyalty_steps" defaultValue={(s.member_loyalty_steps ?? '').split(';').map((x: string) => x.replace('.', ',')).join('; ')} placeholder="tomt = lik økning hver gang" />
+              <small className="muted">Nå: {describeSteps(ld.steps)} – maks {pctNo(ld.loyaltyMaxPct)} % etter {ld.ladder.length - 1} bookinger.</small></div>
+            {!(s.member_loyalty_steps ?? '').trim() && <div><label>Lik økning per booking %</label><input name="member_loyalty_step_pct" defaultValue={s.member_loyalty_step_pct} /></div>}
             <div><label>Maks lojalitet %</label><input name="member_loyalty_max_pct" defaultValue={s.member_loyalty_max_pct} /></div>
           </div>
-          <small className="muted">Eksempel: {s.member_base_discount_pct} % ved første booking (lojalitet starter på 0 %), {Number(s.member_base_discount_pct) + Number(s.member_loyalty_max_pct)} % etter {Math.round(Number(s.member_loyalty_max_pct) / Math.max(Number(s.member_loyalty_step_pct), 0.0001))} bookinger.</small><br />
+          <small className="muted">Eksempel: {s.member_base_discount_pct} % ved første booking (lojalitet starter på 0 %), {pctNo(Number(s.member_base_discount_pct) + ld.loyaltyMaxPct)} % etter {ld.ladder.length - 1} bookinger.</small><br />
           <button className="btn" style={{ marginTop: 12 }}>Lagre rabatt</button>
         </form>
         <form action={saveSettingsAction} className="card">

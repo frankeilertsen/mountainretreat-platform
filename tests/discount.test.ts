@@ -9,10 +9,17 @@ const set = (k: string, v: string) => getPool().query(`UPDATE platform_settings 
 describe('member discount: standard + individual override + loyalty steps', () => {
   beforeAll(async () => { await set('member_base_discount_pct', '5'); await set('member_loyalty_step_pct', '1'); await set('member_loyalty_max_pct', '10'); });
 
-  it('pure rules: +1 % per booking, loyalty capped at 10 %', () => {
+  it('pure rules: +1 % per booking, loyalty capped at 10 %; tiered steps', async () => {
     expect(computeMemberDiscount(5, null, 0, 1, 10).totalPct).toBe(5);
     expect(computeMemberDiscount(5, null, 3, 1, 10).totalPct).toBe(8);
     expect(computeMemberDiscount(5, null, 25, 1, 10)).toMatchObject({ loyaltyPct: 10, totalPct: 15, atMax: true });
+    const tiers = [1, 1, 1, 1, 1, 1.5, 1.5, 1.5, 1.5, 2, 2];
+    expect(computeMemberDiscount(10, null, 5, tiers, 15)).toMatchObject({ loyaltyPct: 5, stepPct: 1.5, nextTotalPct: 16.5 });
+    expect(computeMemberDiscount(10, null, 9, tiers, 15)).toMatchObject({ loyaltyPct: 11, stepPct: 2 });
+    expect(computeMemberDiscount(10, null, 11, tiers, 15)).toMatchObject({ loyaltyPct: 15, totalPct: 25, atMax: true, stepPct: 0 });
+    expect(computeMemberDiscount(10, null, 30, tiers, 15).ladder).toHaveLength(12);
+    const { describeSteps } = await import('../lib/domain/memberDiscount');
+    expect(describeSteps(tiers)).toBe('1 % per booking for de 5 første, 1,5 % for de neste 4 og 2 % for de 2 siste');
     expect(computeMemberDiscount(5, 12, 2, 1, 10)).toMatchObject({ basePct: 12, baseIsOverride: true, totalPct: 14, nextTotalPct: 15 });
   });
 

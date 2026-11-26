@@ -14,7 +14,7 @@ export function BenefitCards(d: BenefitData & { lang?: Lang }) {
   const lang = d.lang ?? 'no';
   const B = dict[lang].benefits;
   const { disc } = d;
-  const steps = Math.ceil(disc.loyaltyMaxPct / Math.max(disc.stepPct, 0.0001) - 1e-9);
+  const steps = disc.ladder.length - 1;
   const done = Math.min(steps, disc.bookingsCounted);
   return (
     <div className="grid g4">

@@ -256,7 +256,7 @@ export async function revokeRewardAction(f: FormData) {
 // ------------------------------------------------ settings
 const SETTING_KEYS = ['company_org_nr', 'company_address', 'company_phone', 'company_email', 'booking_hold_duration_hours', 'invoice_due_date_days', 'cancellation_approval_timeout_hours', 'ical_poll_interval_minutes', 'ical_failure_alert_threshold',
   'invitation_validity_days', 'referral_reward_type', 'referral_reward_referrer_ore', 'referral_reward_referred_ore', 'referral_reward_percentage', 'referral_reward_max_ore',
-  'referral_reward_vesting_days', 'referral_reward_validity_days', 'referral_reward_validity_months', 'referral_reward_max_per_booking', 'referral_min_qualifying_amount_ore', 'audit_log_retention_days', 'notification_log_retention_days', 'short_turnaround_hours', 'invoice_bank_account', 'company_name', 'member_base_discount_pct', 'airbnb_guest_fee_pct', 'referral_reward_max_unused', 'member_loyalty_step_pct', 'member_loyalty_max_pct', 'cleaning_same_day_reminder_hour', 'long_term_contact_email', 'invitation_weekly_limit'];
+  'referral_reward_vesting_days', 'referral_reward_validity_days', 'referral_reward_validity_months', 'referral_reward_max_per_booking', 'referral_min_qualifying_amount_ore', 'audit_log_retention_days', 'notification_log_retention_days', 'short_turnaround_hours', 'invoice_bank_account', 'company_name', 'member_base_discount_pct', 'airbnb_guest_fee_pct', 'referral_reward_max_unused', 'member_loyalty_step_pct', 'member_loyalty_max_pct', 'member_loyalty_steps', 'cleaning_same_day_reminder_hour', 'long_term_contact_email', 'invitation_weekly_limit'];
 export async function saveSettingsAction(f: FormData) {
   const { actor } = await admin();
   await run(str(f, 'back') || '/admin/innstillinger', async () => {
@@ -267,10 +267,11 @@ export async function saveSettingsAction(f: FormData) {
         if (k.endsWith('_ore')) v = String(Math.round(Number(v.replace(',', '.')) * 100));
         if (k === 'referral_reward_type' && !['fixed', 'percentage'].includes(v)) throw new DomainError('bad', 'Ugyldig bonustype.');
         if (k === 'long_term_contact_email' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) throw new DomainError('bad', 'Ugyldig e-postadresse.');
-        if (!['referral_reward_type', 'invoice_bank_account', 'company_name', 'long_term_contact_email', 'company_org_nr', 'company_address', 'company_phone', 'company_email'].includes(k)) v = v.replace(',', '.');
+        if (k === 'member_loyalty_steps') { const { parseSteps } = await import('@/lib/domain/memberDiscount'); const st = parseSteps(v); if (v.trim() && !st.length) throw new DomainError('bad', 'Skriv én økning per booking, skilt med semikolon, f.eks. 1;1;1;1,5;2'); v = st.join(';'); }
+        else if (!['referral_reward_type', 'invoice_bank_account', 'company_name', 'long_term_contact_email', 'company_org_nr', 'company_address', 'company_phone', 'company_email'].includes(k)) v = v.replace(',', '.');
         if (k === 'company_email' && v && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) throw new DomainError('bad', 'Ugyldig e-postadresse.');
         if (k === 'company_org_nr' && v && !/^\d{3} ?\d{3} ?\d{3}$/.test(v)) throw new DomainError('bad', 'Organisasjonsnummer må være 9 siffer.');
-        if (!['referral_reward_type', 'invoice_bank_account', 'company_name', 'long_term_contact_email', 'company_org_nr', 'company_address', 'company_phone', 'company_email'].includes(k) && (!Number.isFinite(Number(v)) || Number(v) < 0)) throw new DomainError('bad', `Ugyldig verdi for ${k}.`);
+        if (!['member_loyalty_steps', 'referral_reward_type', 'invoice_bank_account', 'company_name', 'long_term_contact_email', 'company_org_nr', 'company_address', 'company_phone', 'company_email'].includes(k) && (!Number.isFinite(Number(v)) || Number(v) < 0)) throw new DomainError('bad', `Ugyldig verdi for ${k}.`);
         const before = await one<{ value: string }>('SELECT value FROM platform_settings WHERE key=$1', [k], c);
         if (before?.value === v) continue;
         await c.query(`INSERT INTO platform_settings (key, value, updated_by_user_id, updated_at) VALUES ($1,$2,$3,now()) ON CONFLICT (key) DO UPDATE SET value=$2, updated_by_user_id=$3, updated_at=now()`, [k, v, actor.id]);
