@@ -18,13 +18,13 @@ export default async function Benefits() {
   const presentations = await listPresentations({ activeOnly: true });
   const { disc, terms } = b;
   // Worked example: 3 nights at 2 000 kr + 1 200 kr cleaning
-  const nightly = 200000, nights = 3, cleaning = 120000;
+  const nightly = 300000, nights = 3, cleaning = b.cleaning?.airbnb ?? 125000, ourCleaning = b.cleaning?.ours ?? cleaning;
   const airbnbStay = nightly * nights, airbnbTotal = Math.round((airbnbStay + cleaning) * (1 + b.airbnbFeePct / 100));
   const fee = airbnbTotal - airbnbStay - cleaning;
   const baseDisc = Math.round(airbnbStay * disc.basePct / 100), loyDisc = Math.round(airbnbStay * disc.loyaltyPct / 100);
   const maxLoy = Math.round(airbnbStay * disc.loyaltyMaxPct / 100);
-  const yours = airbnbStay - baseDisc - loyDisc + cleaning;
-  const yoursMax = airbnbStay - baseDisc - maxLoy + cleaning;
+  const yours = airbnbStay - baseDisc - loyDisc + ourCleaning;
+  const yoursMax = airbnbStay - baseDisc - maxLoy + ourCleaning;
   const steps = Array.from({ length: Math.round(disc.loyaltyMaxPct / Math.max(disc.stepPct, 0.0001)) + 1 }, (_, i) => i);
   const Line = ({ l, v, gold, total }: { l: string; v: number; gold?: boolean; total?: boolean }) => (
     <div className={total ? 'row price-total' : 'row'} style={{ justifyContent: 'space-between', color: gold ? 'var(--gold-2)' : undefined, padding: total ? undefined : '5px 0' }}><span>{l}</span><span>{v < 0 ? '−' : ''}{nok(Math.abs(v))}</span></div>);
@@ -41,11 +41,11 @@ export default async function Benefits() {
           <div className="price-lines">
             <div className="kpi-label" style={{ marginBottom: 4 }}>{B.onAirbnb}</div>
             <Line l={B.nightsCleaning(nights)} v={airbnbStay + cleaning} />
-            <Line l={B.serviceFee(b.airbnbFeePct)} v={fee} />
+            {fee > 0 && <Line l={B.serviceFee(b.airbnbFeePct)} v={fee} />}
             <Line l={B.totalAirbnb} v={airbnbTotal} />
             <div className="kpi-label" style={{ margin: '14px 0 4px' }}>{B.withUs}</div>
-            <Line l={B.nightsCleaning(nights)} v={airbnbStay + cleaning} />
-            <Line gold l={B.noServiceFee} v={0} />
+            <Line l={B.nightsCleaning(nights)} v={airbnbStay + ourCleaning} />
+            {fee > 0 && <Line gold l={B.noServiceFee} v={0} />}
             <Line gold l={B.memberDisc(disc.basePct)} v={-baseDisc} />
             {loyDisc > 0 && <Line gold l={B.yourLoyalty(disc.loyaltyPct)} v={-loyDisc} />}
             <Line total l={B.yourPrice} v={yours} />

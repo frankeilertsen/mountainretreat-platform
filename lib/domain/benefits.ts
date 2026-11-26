@@ -11,6 +11,7 @@ export async function loadBenefits(userId: string, lang: 'no' | 'en' = 'no'): Pr
     getNum('airbnb_guest_fee_pct', 15), getNum('referral_reward_max_unused', 10),
     one<{ n: number }>(`SELECT count(*)::int AS n FROM reward_credits WHERE user_id=$1 AND status IN ('pending_vest','available','partially_used') AND expires_at > now() AND remaining_amount_ore > 0`, [userId], getPool()),
   ]);
-  return { disc, airbnbFeePct: fee, balance: bal.available, pending: bal.pending, invited: invites.length, qualified: invites.filter(i => i.stage === 'qualified').length,
+  const cl = await one<{ ours: number; airbnb: number | null; linen: number }>(`SELECT cleaning_fee_ore AS ours, airbnb_cleaning_fee_ore AS airbnb, own_linen_discount_ore AS linen FROM properties WHERE active ORDER BY created_at LIMIT 1`, [], getPool());
+  return { cleaning: cl ? { ours: cl.ours, airbnb: cl.airbnb ?? cl.ours, linen: cl.linen } : null, disc, airbnbFeePct: fee, balance: bal.available, pending: bal.pending, invited: invites.length, qualified: invites.filter(i => i.stage === 'qualified').length,
     terms, unusedBonuses: unused?.n ?? 0, maxUnused, invites };
 }

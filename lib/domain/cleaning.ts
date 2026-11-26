@@ -184,7 +184,7 @@ export async function tasksForHelper(user: UserLike & { cleaning_scope?: string 
     `SELECT t.id, t.task_type, t.status, t.channel_name, to_char(t.checkout_date,'YYYY-MM-DD') AS date, to_char(t.next_checkin_date,'YYYY-MM-DD') AS next_checkin,
             t.deadline_at, t.checkout_guests, t.notes, t.assigned_to_user_id, p.name AS property_name, p.address, p.id AS property_id,
             to_char(p.check_out_time,'HH24:MI') AS check_out_time, to_char(p.check_in_time,'HH24:MI') AS check_in_time,
-            sp.adults AS next_adults, sp.children AS next_children, sp.infants AS next_infants, sp.comment_for_cleaner, sp.own_linen, to_char(sp.expected_arrival_time,'HH24:MI') AS expected_arrival,
+            sp.adults AS next_adults, sp.children AS next_children, sp.infants AS next_infants, sp.comment_for_cleaner, sp.own_linen, (SELECT string_agg(a.name || ' × ' || ba.quantity, ', ' ORDER BY a.name) FROM booking_add_ons ba JOIN add_on_items a ON a.id=ba.add_on_item_id WHERE ba.booking_id = sp.booking_id) AS next_add_ons, to_char(sp.expected_arrival_time,'HH24:MI') AS expected_arrival,
             hu.name AS assignee_name,
             (t.next_checkin_date IS NOT NULL AND t.next_checkin_date = t.checkout_date) AS same_day
      FROM cleaning_tasks t JOIN properties p ON p.id=t.property_id

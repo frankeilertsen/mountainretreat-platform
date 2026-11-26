@@ -24,15 +24,15 @@ export function SavingsBreakdown({ quote, rewardOre = 0, rewardEstimated = false
   const Sub = ({ children }: { children: React.ReactNode }) => <div className="kpi-label" style={{ marginTop: 14, marginBottom: 4 }}>{children}</div>;
   return (
     <div className="price-lines">
-      {fee > 0 && <>
+      {comparison > ordinaryStay + q.cleaning_fee_ore + (q.extra_guest_fee_ore ?? 0) - 1 || fee > 0 ? <>
         <Sub>{S.sameOnAirbnb}</Sub>
         <Row l={S.nights(q.nights)} v={nok(ordinaryStay)} />
         <Row l={S.cleaning} v={nok(q.airbnb_cleaning_fee_ore ?? q.cleaning_fee_ore)} />
         {q.extra_guest_fee_ore > 0 && <Row l={S.extraGuests(q.extra_guests)} v={nok(q.extra_guest_fee_ore)} />}
-        <Row l={S.airbnbFee(q.airbnb_fee_pct)} v={nok(fee)} />
+        {fee > 0 && <Row l={S.airbnbFee(q.airbnb_fee_pct)} v={nok(fee)} />}
         <Row strong l={S.totalAirbnb} v={nok(comparison)} />
         <Sub>{S.yourPriceAsMember}</Sub>
-      </>}
+      </> : null}
       <Row l={q.pricing_mode === 'airbnb' ? S.nightsAirbnb(q.nights) : S.nightsOrdinary(q.nights)} v={nok(ordinaryStay)} />
       {base > 0 && <Row gold l={S.memberDisc(basePct)} v={`−${nok(base)}`} />}
       {loyalty > 0 && <Row gold l={S.loyaltyDisc(loyaltyPct)} v={`−${nok(loyalty)}`} />}
@@ -45,7 +45,7 @@ export function SavingsBreakdown({ quote, rewardOre = 0, rewardEstimated = false
       <div className="row price-total"><span>{S.yourPrice}</span><span>{nok(q.subtotal_ore - rewardOre)}</span></div>
       {saved > 0 && (
         <div className="note" style={{ marginTop: 12 }}>
-          {S.youSave(nok(saved), savedPct)}{fee > 0 ? S.breakdown(nok(fee), nok(base + loyalty + linen + Math.max(0, (q.airbnb_cleaning_fee_ore ?? q.cleaning_fee_ore) - q.cleaning_fee_ore)), rewardOre ? nok(rewardOre) : null) : ''}.
+          {S.youSave(nok(saved), savedPct)}{saved > 0 ? S.breakdown(fee > 0 ? nok(fee) : null, nok(base + loyalty + linen + Math.max(0, (q.airbnb_cleaning_fee_ore ?? q.cleaning_fee_ore) - q.cleaning_fee_ore)), rewardOre ? nok(rewardOre) : null) : ''}.
         </div>
       )}
     </div>

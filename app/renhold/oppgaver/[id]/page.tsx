@@ -26,7 +26,7 @@ export default async function TaskPage({ params, searchParams }: { params: Promi
   const t = await one(`SELECT t.id, t.task_type, t.status, t.channel_name, to_char(t.checkout_date,'YYYY-MM-DD') AS date, to_char(t.next_checkin_date,'YYYY-MM-DD') AS next_checkin,
       t.deadline_at, t.checkout_guests, t.notes, t.started_at, t.completed_at, t.completion_notes, t.next_preparation_id, t.property_id,
       p.name AS property, p.address, to_char(p.check_in_time,'HH24:MI') AS cin, to_char(p.check_out_time,'HH24:MI') AS cout,
-      sp.adults, sp.children, sp.infants, sp.comment_for_cleaner, sp.own_linen, to_char(sp.expected_arrival_time,'HH24:MI') AS arrival, hu.name AS assignee
+      sp.adults, sp.children, sp.infants, sp.comment_for_cleaner, sp.own_linen, (SELECT string_agg(a.name || ' × ' || ba.quantity, ', ' ORDER BY a.name) FROM booking_add_ons ba JOIN add_on_items a ON a.id=ba.add_on_item_id WHERE ba.booking_id = sp.booking_id) AS next_add_ons, to_char(sp.expected_arrival_time,'HH24:MI') AS arrival, hu.name AS assignee
     FROM cleaning_tasks t JOIN properties p ON p.id=t.property_id LEFT JOIN stay_preparations sp ON sp.id=t.next_preparation_id LEFT JOIN users hu ON hu.id=t.assigned_to_user_id WHERE t.id=$1`, [id]);
   if (!t) notFound();
   const plan = await roomPlanForPreparation(t.next_preparation_id, t.property_id);
@@ -53,6 +53,7 @@ export default async function TaskPage({ params, searchParams }: { params: Promi
           {t.next_checkin && <><dt>{C.guests}</dt><dd>{t.adults != null && (t.adults + t.children + t.infants) > 0 ? C.guestList(t.adults, t.children, t.infants) : C.noGuestInfo}</dd></>}
           <dt>{C.responsible}</dt><dd>{t.assignee ?? C.notAssigned}</dd>
         </dl>
+        {t.next_add_ons && t.next_checkin && <div className="note" style={{ marginTop: 14 }}>🧺 <strong>{lang === 'en' ? 'Have ready for the next guests:' : 'Gjør klart til neste gjester:'}</strong> {t.next_add_ons}</div>}
         {t.own_linen && t.next_checkin && <div className="note" style={{ marginTop: 14, borderColor: 'var(--gold)' }}>🛏️ <strong>{lang === 'en' ? 'The next guests bring their own bed linen and towels' : 'Neste gjester tar med eget sengetøy og håndklær'}</strong> – {lang === 'en' ? 'do not make up the beds or put out towels.' : 'ikke re opp sengene eller legg ut håndklær.'}</div>}
         {(t.notes || t.comment_for_cleaner) && <div className="note" style={{ marginTop: 14 }}>{t.notes && <div>📋 {t.notes}</div>}{t.comment_for_cleaner && <div>💬 {t.comment_for_cleaner}</div>}</div>}
       </div>

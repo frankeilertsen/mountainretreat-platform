@@ -4,7 +4,7 @@ import { dict, type Lang } from '@/lib/i18n/dict';
 import { nokL } from '@/lib/i18n/format';
 
 export type BenefitData = {
-  disc: MemberDiscount; airbnbFeePct: number; balance: number; pending: number; invited: number; qualified: number;
+  disc: MemberDiscount; airbnbFeePct: number; cleaning?: { ours: number; airbnb: number; linen: number } | null; balance: number; pending: number; invited: number; qualified: number;
   terms: { referrer: string; referred: string }; unusedBonuses: number; maxUnused: number;
 };
 
@@ -17,11 +17,15 @@ export function BenefitCards(d: BenefitData & { lang?: Lang }) {
   const done = Math.min(steps, disc.bookingsCounted);
   return (
     <div className="grid g4">
-      <div className="card kpi-card">
+      {d.airbnbFeePct > 0 ? <div className="card kpi-card">
         <span className="kpi-label">{B.noFee}</span>
         <div className="kpi">≈ {d.airbnbFeePct} %</div>
         <small>{B.noFeeText}</small>
-      </div>
+      </div> : d.cleaning && <div className="card kpi-card">
+        <span className="kpi-label">{B.cleaningTitle}</span>
+        <div className="kpi">{nokL(d.cleaning.ours, lang)}</div>
+        <small>{B.cleaningText(nokL(d.cleaning.airbnb, lang), d.cleaning.linen ? nokL(d.cleaning.linen, lang) : null)}</small>
+      </div>}
       <div className="card kpi-card">
         <span className="kpi-label">{B.member}</span>
         <div className="kpi" style={{ color: 'var(--gold-2)' }}>{disc.basePct} %</div>

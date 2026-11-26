@@ -22,6 +22,7 @@ export function TaskCard({ t, lang = 'no' }: { t: any; lang?: Lang }) {
         {t.next_checkin && <span>⬇ {C.nextIn} <strong>{t.next_checkin === t.date ? `${sameDayLabel} ${t.check_in_time}` : fmtDateL(t.next_checkin, lang, true)}</strong>{guests ? ` · ${C.guests(guests)}` : ''}{t.next_infants ? ` ${C.infants(t.next_infants)}` : ''}</span>}
       </div>
       {urgent && t.status !== 'done' && <div style={{ marginTop: 8 }}><span className="badge b-danger">{C.shortTurn(t.check_in_time)}</span></div>}
+      {t.next_add_ons && t.next_checkin && <div style={{ marginTop: 8, fontSize: '.88rem' }}>🧺 {lang === 'en' ? 'Have ready:' : 'Gjør klart:'} {t.next_add_ons}</div>}
       {t.own_linen && t.next_checkin && <div style={{ marginTop: 8, fontSize: '.88rem', color: 'var(--gold-2)' }}>🛏️ {lang === 'en' ? 'Guests bring own bed linen – do not make up beds' : 'Gjestene tar med eget sengetøy – ikke re opp sengene'}</div>}
       {(t.notes || t.comment_for_cleaner) && <div style={{ marginTop: 8, fontSize: '.88rem' }}>💬 {t.notes ?? t.comment_for_cleaner}</div>}
       <small className="muted">{t.channel_name}{t.assignee_name ? ` · ${t.assignee_name}` : ` · ${C.unassigned}`}</small>

@@ -50,7 +50,8 @@ describe('PDF presentations attached to invitations', () => {
     expect(n1!.payload.attachPresentationId).toBe(pres);
     expect(n1!.body).toMatch(/Som medlem får du:/);
     expect(n1!.body).toMatch(/medlemsrabatt/);
-    expect(n1!.body).toMatch(/Ingen Airbnb-avgift/);
+    expect(n1!.body).toMatch(/Samme nattpris – lavere vask/);
+    expect(n1!.body).not.toMatch(/serviceavgift/);
     expect(n1!.body).toMatch(/presentasjonen som er lagt ved/);
     const inv = await getInvitationByToken(token(r1.link));
     expect(inv!.presentation_id).toBe(pres);
