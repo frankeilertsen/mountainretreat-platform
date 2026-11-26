@@ -82,7 +82,7 @@ export async function requestBooking(member: UserLike & { email: string; name: s
       await audit(c, actor, 'booking.requested', 'booking', b!.id, undefined, { ...input, total: quote.subtotal_ore });
       const prop = await propertyName(c, input.propertyId);
       await notifyAdmins({ type: 'booking_requested', dedupeKey: `booking_requested:${b!.id}`, subject: `Ny bookingforespørsel ${b!.reference}`,
-        body: `${member.name} ønsker ${prop} ${fmtDate(input.startDate)} – ${fmtDate(input.endDate)} (${guests} gjester${input.infants ? ` + ${input.infants} spedbarn` : ''}).\nEstimert pris: ${nok(quote.subtotal_ore)}\n\nBehandle: ${appUrl('/admin/bookinger/' + b!.id)}` }, c);
+        body: `${member.name} ønsker ${prop} ${fmtDate(input.startDate)} – ${fmtDate(input.endDate)} (${guests} gjester${input.infants ? ` + ${input.infants} spedbarn` : ''}).\nEstimert pris: ${nok(quote.subtotal_ore)}${input.specialRequests?.trim() ? `\n\nKommentar fra medlemmet:\n${input.specialRequests.trim()}` : ''}\n\nBehandle: ${appUrl('/admin/bookinger/' + b!.id)}` }, c);
       await enqueue({ userId: member.id, to: member.email, type: 'booking_request_received', dedupeKey: `booking_request_received:${b!.id}`,
         subject: `Vi har mottatt forespørselen din (${b!.reference})`,
         body: `Hei ${member.name}!\n\nTakk for forespørselen om ${prop} ${fmtDate(input.startDate)} – ${fmtDate(input.endDate)}. Du får beskjed så snart den er behandlet.` }, c);
@@ -96,6 +96,49 @@ export async function requestBooking(member: UserLike & { email: string; name: s
     }
     throw e;
   }
+}
+
+// ---------------------------------------------------------------- manual price adjustment
+/**
+ * The administrator sets the price the member pays (after any bonus). Before approval the adjustment is stored and
+ * kept when the price is locked; while awaiting payment the locked price is changed directly (open checkouts are
+ * cancelled so the member pays the new amount, a draft invoice is updated).
+ */
+export async function adjustBookingPrice(bookingId: string, newTotalOre: number | null, note: string, actor: Actor) {
+  return tx(async c => {
+    const b = await lockBooking(c, bookingId);
+    if (!['pending_review', 'awaiting_payment'].includes(b.status)) throw new DomainError('bad_state', 'Prisen kan bare justeres før bookingen er betalt.');
+    const oldAdj = (await one<{ a: number }>(`SELECT price_adjustment_ore AS a FROM bookings WHERE id=$1`, [b.id], c))!.a;
+    let baseSubtotal: number, reward: number;
+    if (b.status === 'pending_review') {
+      // the estimate the member saw when requesting (the price is re-calculated and locked at approval, keeping the adjustment)
+      baseSubtotal = Number(b.price_breakdown?.quote?.subtotal_ore ?? b.price_total_ore); reward = 0;
+    } else {
+      baseSubtotal = b.price_total_ore + b.reward_discount_ore - oldAdj; reward = b.reward_discount_ore;
+    }
+    const adj = newTotalOre == null ? 0 : newTotalOre + reward - baseSubtotal;
+    if (newTotalOre != null && newTotalOre < 0) throw new DomainError('bad_amount', 'Prisen kan ikke være negativ.');
+    await c.query(`UPDATE bookings SET price_adjustment_ore=$2, price_adjustment_note=$3, updated_at=now() WHERE id=$1`, [b.id, adj, adj ? (note.trim().slice(0, 300) || null) : null]);
+    if (b.status === 'awaiting_payment') {
+      const total = baseSubtotal + adj - reward;
+      await c.query(`UPDATE bookings SET price_total_ore=$2,
+          price_breakdown = jsonb_set(jsonb_set(jsonb_set(price_breakdown, '{quote,subtotal_ore}', to_jsonb($3::int)), '{quote,price_adjustment_ore}', to_jsonb($4::int)), '{quote,price_adjustment_note}', to_jsonb($5::text)),
+          updated_at=now() WHERE id=$1`, [b.id, total, baseSubtotal + adj, adj, adj ? note.trim() : '']);
+      await c.query(`UPDATE payments SET status='cancelled', updated_at=now() WHERE booking_id=$1 AND status='pending' AND method <> 'invoice'`, [b.id]);
+      await c.query(`UPDATE payments SET amount_ore=$2, updated_at=now() WHERE booking_id=$1 AND status='pending' AND method='invoice'`, [b.id, total]);
+      await c.query(`UPDATE invoices SET amount_ore=$2 WHERE status='draft' AND payment_id IN (SELECT id FROM payments WHERE booking_id=$1)`, [b.id, total]);
+      const m = await memberOf(c, b.member_id);
+      await enqueue({ userId: m.id, to: m.email, type: 'price_adjusted', subject: `Ny pris på bookingen din (${b.reference})`,
+        body: `Hei ${m.name}!
+
+Prisen for oppholdet ${fmtDate(b.start_date)} – ${fmtDate(b.end_date)} er justert til ${nok(total)}.${note.trim() ? `
+${note.trim()}` : ''}
+
+Betal her: ${appUrl('/medlem/bookinger/' + b.id)}` }, c);
+    }
+    await audit(c, actor, 'booking.price_adjusted', 'booking', b.id, { adjustment: oldAdj }, { adjustment: adj, newTotal: newTotalOre, note });
+    return { adjustment: adj, baseSubtotal, reward };
+  });
 }
 
 // ---------------------------------------------------------------- approve / reject

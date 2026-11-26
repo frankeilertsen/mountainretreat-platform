@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getPool, one } from '../lib/db';
+import { getPool, one, q } from '../lib/db';
 import { user, property, d } from './factory';
 import { approveBooking, rejectBooking, requestBooking, handlePaymentSucceeded, expireHolds, requestCancellation, startPayment, completeStays, decideCancellation, autoResolveCancellations } from '../lib/domain/bookings';
 import { createManualBlock } from '../lib/domain/availability';
@@ -174,5 +174,30 @@ describe('booking workflow', () => {
     await getPool().query(`UPDATE bookings SET start_date = current_date - 5, end_date = current_date - 2 WHERE id=$1`, [b.id]);
     await completeStays();
     expect((await one('SELECT status FROM bookings WHERE id=$1', [b.id])).status).toBe('completed');
+  });
+});
+
+describe('manual price adjustment', () => {
+  it('admin sets a new price before approval (kept when locked) and while awaiting payment', async () => {
+    const { adjustBookingPrice } = await import('../lib/domain/bookings');
+    const pid = await property();
+    const admin = await user('admin');
+    const m = await user('member', { invite_tier: 'admin_invited' });
+    const b = await requestBooking(m, { propertyId: pid, startDate: d(60), endDate: d(63), adults: 2, children: 0, infants: 0, addOns: [], specialRequests: 'Er prisen mulig å justere?' }, { id: m.id, type: 'member' });
+    expect((await q(`SELECT 1 FROM notifications WHERE type='booking_requested' AND body LIKE '%Er prisen mulig å justere?%'`)).length).toBeGreaterThan(0);
+    await adjustBookingPrice(b.id, 200000, 'Avtalt pris', { id: admin.id, type: 'admin' });
+    await approveBooking(b.id, { id: admin.id, type: 'admin' });
+    const row = (await one<any>(`SELECT price_total_ore, status, price_breakdown FROM bookings WHERE id=$1`, [b.id]))!;
+    expect(row.status).toBe('awaiting_payment');
+    expect(row.price_breakdown.quote.price_adjustment_note).toBe('Avtalt pris');
+    // live re-quote at approval: same rules → exactly the agreed price
+    expect(row.price_total_ore).toBe(200000);
+    await adjustBookingPrice(b.id, 180000, 'Ny avtale', { id: admin.id, type: 'admin' });
+    expect((await one<any>(`SELECT price_total_ore FROM bookings WHERE id=$1`, [b.id]))!.price_total_ore).toBe(180000);
+    expect((await q(`SELECT 1 FROM notifications WHERE type='price_adjusted' AND user_id=$1`, [m.id])).length).toBe(1);
+    await adjustBookingPrice(b.id, null, '', { id: admin.id, type: 'admin' });
+    const reset = (await one<any>(`SELECT price_total_ore, price_adjustment_ore FROM bookings WHERE id=$1`, [b.id]))!;
+    expect(reset.price_adjustment_ore).toBe(0);
+    expect(reset.price_total_ore).toBeGreaterThan(180000);
   });
 });

@@ -33,6 +33,17 @@ export async function adminCancelAction(f: FormData) {
   const { actor } = await admin(); const id = str(f, 'id');
   await run(`/admin/bookinger/${id}`, async () => { if (str(f, 'confirm') !== 'ja') throw new DomainError('confirm', 'Kryss av for å bekrefte.'); const fee = str(f, 'fee') === '1'; await adminCancel(id, actor, 'admin_action', undefined, fee); return fee ? 'Bookingen er kansellert. Refusjon er satt i gang med fradrag for betalingsgebyret.' : 'Bookingen er kansellert og full refusjon er satt i gang.'; });
 }
+export async function adjustPriceAction(f: FormData) {
+  const { actor } = await admin(); const id = str(f, 'id');
+  await run(`/admin/bookinger/${id}`, async () => {
+    const { adjustBookingPrice } = await import('@/lib/domain/bookings');
+    if (str(f, 'reset') === '1') { await adjustBookingPrice(id, null, '', actor); return 'Prisjusteringen er fjernet.'; }
+    const ore = kr(f, 'price');
+    if (ore == null) throw new DomainError('bad_amount', 'Skriv inn ny pris i kroner.');
+    await adjustBookingPrice(id, ore, str(f, 'note'), actor);
+    return 'Ny pris er lagret.';
+  });
+}
 export async function decideCancellationAction(f: FormData) {
   const { actor } = await admin(); const id = str(f, 'id');
   await run(`/admin/bookinger/${id}`, async () => { await decideCancellation(id, str(f, 'decision') === 'approve', actor); return 'Behandlet.'; });

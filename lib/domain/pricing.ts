@@ -46,6 +46,7 @@ export type Quote = {
   extra_guests: number; extra_guest_fee_ore: number; extra_guest_unit_ore: number; extra_guest_basis: 'per_stay' | 'per_night'; included_guests: number;
   member_discount_pct: number; member_discount_ore: number;
   base_discount_ore: number; loyalty_discount_ore: number; launch_discount_ore?: number;
+  price_adjustment_ore?: number; price_adjustment_note?: string | null;
   pricing_mode: 'airbnb' | 'manual';
   /** What the same nights + cleaning would cost a guest on Airbnb (incl. service fee). */
   airbnb_comparison_ore: number; airbnb_fee_pct: number; airbnb_fee_saved_ore: number;
@@ -213,5 +214,13 @@ export async function quoteFor(propertyId: string, memberId: string, startDate: 
     pricingMode: ctx.property.pricing_mode, externalRates: ctx.rates, defaultMinNights: ctx.property.default_min_nights, airbnbGuestFeePct: ctx.airbnbFee,
     airbnbCleaningFeeOre: ctx.property.airbnb_cleaning_fee_ore, ownLinen: !!ownLinen, ownLinenDiscountOre: ctx.property.own_linen_discount_ore,
   });
+  // Manual adjustment agreed with the administrator (stays when the price is re-calculated at approval)
+  if (excludeBookingId) {
+    const adj = await one<{ ore: number; note: string | null }>(`SELECT price_adjustment_ore AS ore, price_adjustment_note AS note FROM bookings WHERE id=$1`, [excludeBookingId], db);
+    if (adj && adj.ore) {
+      const applied = Math.max(adj.ore, -quote.subtotal_ore);
+      return { ...quote, subtotal_ore: quote.subtotal_ore + applied, price_adjustment_ore: applied, price_adjustment_note: adj.note, member_discount: discount };
+    }
+  }
   return { ...quote, member_discount: discount };
 }

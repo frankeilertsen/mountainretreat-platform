@@ -14,7 +14,8 @@ export function SavingsBreakdown({ quote, rewardOre = 0, rewardEstimated = false
   const fee = q.airbnb_fee_saved_ore ?? 0;
   const comparison = q.airbnb_comparison_ore ?? ordinaryStay + q.cleaning_fee_ore + (q.extra_guest_fee_ore ?? 0);
   const linen = q.own_linen_discount_ore ?? 0;
-  const yourStayAndCleaning = q.stay_ore + q.cleaning_fee_ore + (q.extra_guest_fee_ore ?? 0) - linen - rewardOre;
+  const adj = q.price_adjustment_ore ?? 0;
+  const yourStayAndCleaning = q.stay_ore + q.cleaning_fee_ore + (q.extra_guest_fee_ore ?? 0) - linen - rewardOre + adj;
   const saved = Math.max(0, comparison - yourStayAndCleaning);
   const savedPct = comparison > 0 ? Math.round(saved / comparison * 100) : 0;
   const base = q.base_discount_ore ?? q.member_discount_ore ?? 0, loyalty = q.loyalty_discount_ore ?? 0, launch = q.launch_discount_ore ?? 0;
@@ -49,6 +50,7 @@ export function SavingsBreakdown({ quote, rewardOre = 0, rewardEstimated = false
       {linen > 0 && <Row gold l={S.ownLinen(Math.round(linen / (q.own_linen_unit_ore || linen)), nok(q.own_linen_unit_ore ?? linen))} v={`−${nok(linen)}`} />}
       {fee > 0 && <Row gold l={S.noFee} v={nok(0)} />}
       {!compact && q.add_ons?.map(a => <Row key={a.id} l={`${a.name}${a.quantity > 1 ? ` × ${a.quantity}` : ''}`} v={nok(a.total_ore)} />)}
+      {adj !== 0 && <Row gold={adj < 0} l={<>{S.adjustment}{q.price_adjustment_note ? <small className="muted"> ({q.price_adjustment_note})</small> : null}</>} v={`${adj < 0 ? '−' : '+'}${nok(Math.abs(adj))}`} />}
       {rewardOre > 0 && <Row gold l={`${S.bonus}${rewardEstimated ? S.bonusEstimated : ''}`} v={`−${nok(rewardOre)}`} />}
       <div className="row price-total"><span>{S.yourPrice}</span><span>{nok(q.subtotal_ore - rewardOre)}</span></div>
       {saved > 0 && (

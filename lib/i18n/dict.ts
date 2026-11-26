@@ -103,6 +103,7 @@ const no = {
     memberDiscMixed: (n: number | null, h: number | null) => `Medlemsrabatt ${n != null && h != null && n !== h ? `${pc(n)} % / ${pc(h)} % i ferie` : `${pc((n ?? h)!)} %${n == null ? ' (ferie)' : ''}`}`,
     notInHoliday: ' (ikke i ferie)', launchDisc: (p?: number) => `Lanseringsrabatt${p != null ? ` ${pc(p)} %` : ''}`, extraGuestsDetail: (n: number, unit: string, nights: number | null, inc: number) => `(${n} × ${unit}${nights ? ` × ${nights} netter` : ''}, over ${inc} pers.)`,
     ownLinen: (n: number, unit: string) => `Eget sengetøy (${n} × ${unit})`,
+    adjustment: 'Avtalt prisjustering',
     noFee: 'Ingen serviceavgift', bonus: 'Vervebonus', bonusEstimated: ' (trekkes ved godkjenning)', yourPrice: 'Din pris',
     youSave: (a: string, p: number) => `Du sparer ${a} (${pc(p)} %) sammenlignet med å booke samme opphold på Airbnb`,
     breakdown: (fee: string | null, disc: string, bonus: string | null) => ` – ${fee ? `${fee} i avgift, ` : ''}${disc} i rabatter og lavere vask${bonus ? ` og ${bonus} i bonus` : ''}`,
@@ -118,7 +119,7 @@ const no = {
     request: 'Send forespørsel', checkInDate: 'Innsjekk', checkOutDate: 'Utsjekk', adults: 'Voksne', children: 'Barn (2–17)', infants: 'Spedbarn', addOns: 'Tillegg', mandatory: 'obligatorisk',
     priceTypes: { flat: 'per opphold', per_night: 'per natt', per_unit: 'per stk/sett', per_guest: 'per gjest' } as Record<string, string>,
     calc: 'Beregn pris', lockNote: 'Endelig pris låses når forespørselen godkjennes.', useBonus: (a: string, exp: string, used: number, n: number) => `Bruk bonus: −${a} (${used === 1 ? '1 bonus' : `${used} bonuser`}, den første må brukes innen ${exp})${n > used ? ` · du har ${n} bonuser, maks 3 kan brukes per booking` : ''}`,
-    comment: 'Kommentar / spesielle ønsker', commentPh: 'F.eks. forventet ankomsttid, barneseng, allergier …', availability: 'Tilgjengelighet', free: 'Ledig', busy: 'Opptatt',
+    comment: 'Kommentar, spørsmål eller ønsker', commentPh: 'F.eks. forventet ankomsttid, barneseng, allergier – eller noe du lurer på …', availability: 'Tilgjengelighet', free: 'Ledig', busy: 'Opptatt',
     calNote: (t: string) => `Innsjekk fra kl. ${t}. Kalenderen oppdateres fortløpende fra alle kanaler.`, datesBusy: 'Noen av datoene er opptatt. Velg andre datoer.', quoteFailed: 'Kunne ikke beregne pris.',
   },
   bookings: {
@@ -283,6 +284,7 @@ const en: Dict = {
     memberDiscMixed: (n: number | null, h: number | null) => `Member discount ${n != null && h != null && n !== h ? `${pcEn(n)} % / ${pcEn(h)} % in holidays` : `${pcEn((n ?? h)!)} %${n == null ? ' (holiday)' : ''}`}`,
     notInHoliday: ' (not in holidays)', launchDisc: (p?: number) => `Launch discount${p != null ? ` ${pcEn(p)} %` : ''}`, extraGuestsDetail: (n: number, unit: string, nights: number | null, inc: number) => `(${n} × ${unit}${nights ? ` × ${nights} nights` : ''}, above ${inc} people)`,
     ownLinen: (n: number, unit: string) => `Own bed linen (${n} × ${unit})`,
+    adjustment: 'Agreed price adjustment',
     noFee: 'No service fee', bonus: 'Referral bonus', bonusEstimated: ' (deducted on approval)', yourPrice: 'Your price',
     youSave: (a: string, p: number) => `You save ${a} (${pcEn(p)} %) compared with booking the same stay on Airbnb`,
     breakdown: (fee: string | null, disc: string, bonus: string | null) => ` – ${fee ? `${fee} in fees, ` : ''}${disc} in discounts and lower cleaning${bonus ? ` and ${bonus} in bonus` : ''}`,
@@ -298,7 +300,7 @@ const en: Dict = {
     request: 'Send a request', checkInDate: 'Check-in', checkOutDate: 'Check-out', adults: 'Adults', children: 'Children (2–17)', infants: 'Infants', addOns: 'Extras', mandatory: 'mandatory',
     priceTypes: { flat: 'per stay', per_night: 'per night', per_unit: 'per item/set', per_guest: 'per guest' },
     calc: 'Calculate price', lockNote: 'The final price is locked when your request is approved.', useBonus: (a: string, exp: string, used: number, n: number) => `Use bonus: −${a} (${used === 1 ? '1 bonus' : `${used} bonuses`}, the first must be used by ${exp})${n > used ? ` · you have ${n} bonuses, up to 3 can be used per booking` : ''}`,
-    comment: 'Comments / special requests', commentPh: 'E.g. expected arrival time, cot, allergies …', availability: 'Availability', free: 'Available', busy: 'Booked',
+    comment: 'Comments, questions or requests', commentPh: 'E.g. expected arrival time, cot, allergies – or anything you are wondering about …', availability: 'Availability', free: 'Available', busy: 'Booked',
     calNote: (t: string) => `Check-in from ${t}. The calendar is kept up to date from all channels.`, datesBusy: 'Some of the dates are taken. Please choose other dates.', quoteFailed: 'Could not calculate the price.',
   },
   bookings: {

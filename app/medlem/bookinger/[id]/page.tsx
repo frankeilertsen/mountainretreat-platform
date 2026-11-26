@@ -17,6 +17,9 @@ import { SavingsBreakdown } from '@/components/Savings';
 
 export const dynamic = 'force-dynamic';
 
+const withAdjustment = (bk: any, qt: any) => bk.status === 'pending_review' && qt && Number(bk.price_adjustment_ore)
+  ? { ...qt, subtotal_ore: qt.subtotal_ore + Number(bk.price_adjustment_ore), price_adjustment_ore: Number(bk.price_adjustment_ore), price_adjustment_note: bk.price_adjustment_note } : qt;
+
 export default async function BookingDetail({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<Record<string, string>> }) {
   const { id } = await params;
   const sp = await searchParams;
@@ -40,7 +43,7 @@ export default async function BookingDetail({ params, searchParams }: { params: 
   const preview = b.status === 'confirmed' ? await cancellationPreview(id, u as any) : null;
   const editable = ['pending_review', 'awaiting_payment', 'confirmed'].includes(b.status) && nightsBetween(todayOslo(), b.start) >= 7;
   const cardLabel = stripeProvider.configured() ? T.payCard : mockProvider.configured() ? T.payCardTest : null;
-  const quote = b.price_breakdown?.quote;
+  const quote = withAdjustment(b, b.price_breakdown?.quote);
   const bankAccount = await getStr('invoice_bank_account', '');
 
   return (
@@ -84,7 +87,7 @@ export default async function BookingDetail({ params, searchParams }: { params: 
         <div className="stack">
           <div className="card">
             <h3>{T.price}</h3>
-            {quote ? <SavingsBreakdown quote={{ ...quote, stay_ore: b.stay_price_ore, cleaning_fee_ore: b.cleaning_fee_ore, subtotal_ore: b.price_total_ore + b.reward_discount_ore }} rewardOre={b.reward_discount_ore} lang={lang} />
+            {quote ? <SavingsBreakdown quote={{ ...quote, stay_ore: b.stay_price_ore, cleaning_fee_ore: b.cleaning_fee_ore, subtotal_ore: b.price_total_ore + b.reward_discount_ore + (b.status === 'pending_review' ? Number(b.price_adjustment_ore ?? 0) : 0) }} rewardOre={b.reward_discount_ore} lang={lang} />
               : <div className="row price-total"><span>{T.total}</span><span>{nok(b.price_total_ore)}</span></div>}
             {!b.price_locked_at && b.price_breakdown?.use_rewards && <small className="muted">{T.bonusOnApproval}</small>}
           </div>

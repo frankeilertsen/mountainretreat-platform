@@ -7,10 +7,13 @@ import { roomPlanForPreparation } from '@/lib/domain/cleaning';
 import { BED_LABELS } from '@/lib/domain/beds';
 import { Flash, Status } from '@/components/ui';
 import { RoomPlan } from '@/components/RoomPlan';
-import { approveAction, rejectAction, adminCancelAction, decideCancellationAction, adminPreparationAction, sleepingPlanAction, markInvoicePaidAction, goodwillRefundAction, bookingCleaningSelfAction } from '../../../actions/admin';
+import { adjustPriceAction, approveAction, rejectAction, adminCancelAction, decideCancellationAction, adminPreparationAction, sleepingPlanAction, markInvoicePaidAction, goodwillRefundAction, bookingCleaningSelfAction } from '../../../actions/admin';
 import { ValueButton } from '@/components/ValueButton';
 
 export const dynamic = 'force-dynamic';
+
+const withAdjustment = (bk: any, qt: any) => bk.status === 'pending_review' && qt && Number(bk.price_adjustment_ore)
+  ? { ...qt, subtotal_ore: qt.subtotal_ore + Number(bk.price_adjustment_ore), price_adjustment_ore: Number(bk.price_adjustment_ore), price_adjustment_note: bk.price_adjustment_note } : qt;
 
 export default async function AdminBooking({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<Record<string, string>> }) {
   const { id } = await params;
@@ -34,7 +37,7 @@ export default async function AdminBooking({ params, searchParams }: { params: P
   const plan = b.prep_id ? await roomPlanForPreparation(b.prep_id, b.pid) : null;
   const allBeds = plan ? plan.rooms.flatMap(r => r.beds.map(bd => ({ ...bd, room: r.name }))) : [];
   const back = `/admin/bookinger/${id}`;
-  const quote = b.price_breakdown?.quote;
+  const quote = withAdjustment(b, b.price_breakdown?.quote);
   return (
     <>
       <Link href="/admin/bookinger" className="muted">← Bookinger</Link>
@@ -49,7 +52,7 @@ export default async function AdminBooking({ params, searchParams }: { params: P
               <dt>Datoer</dt><dd>{fmtDate(b.start, true)} – {fmtDate(b.end, true)} ({quote?.nights ?? '–'} netter)</dd>
               <dt>Gjester</dt><dd>{b.adults} voksne, {b.children} barn, {b.infants} spedbarn</dd>
               <dt>Medlem</dt><dd><Link href={`/admin/medlemmer/${b.member_id}`}>{b.member}</Link> · {b.email}{b.phone ? ` · ${b.phone}` : ''}</dd>
-              <dt>Ønsker</dt><dd>{b.special_requests ?? '–'}</dd>
+              <dt>Kommentar</dt><dd>{b.special_requests ? <span style={{ whiteSpace: 'pre-wrap' }}>{b.special_requests}</span> : '–'}</dd>
               <dt>Forespurt</dt><dd>{fmtDateTime(b.requested_at)}</dd>
               {b.approved_at && <><dt>Godkjent</dt><dd>{fmtDateTime(b.approved_at)} av {b.reviewer}</dd></>}
               {b.hold_expires && <><dt>Holdes til</dt><dd>{fmtDateTime(b.hold_expires)}</dd></>}
@@ -57,6 +60,21 @@ export default async function AdminBooking({ params, searchParams }: { params: P
               {b.cancelled_reason && <><dt>Kansellert</dt><dd>{b.cancelled_reason} · {fmtDateTime(b.cancelled_at)}</dd></>}
             </dl>
           </div>
+          {['pending_review', 'awaiting_payment'].includes(b.status) && (() => {
+            const adjNow = Number(b.price_adjustment_ore ?? 0);
+            const current = b.status === 'awaiting_payment' ? b.price_total_ore : (quote?.subtotal_ore ?? b.price_total_ore);
+            return (
+              <div className="card flat">
+                <h3>Juster pris</h3>
+                <p className="muted" style={{ fontSize: '.88rem' }}>Nå: <strong>{nok(current)}</strong>{adjNow ? <> (inkl. justering {adjNow < 0 ? '−' : '+'}{nok(Math.abs(adjNow))})</> : null}{b.status === 'pending_review' ? ' – før eventuell bonus, som trekkes ved godkjenning.' : ' – det medlemmet skal betale.'} {b.status === 'awaiting_payment' ? 'Medlemmet får e-post med den nye prisen.' : 'Justeringen beholdes når du godkjenner.'}</p>
+                <form action={adjustPriceAction} className="stack" style={{ gap: 8 }}><input type="hidden" name="id" value={id} />
+                  <div className="fields"><div><label>Ny pris (kr)</label><input name="price" inputMode="decimal" placeholder={String(Math.round(current / 100))} required /></div>
+                    <div><label>Kommentar til medlemmet (valgfri)</label><input name="note" maxLength={300} defaultValue={b.price_adjustment_note ?? ''} placeholder="F.eks. Avtalt pris" /></div></div>
+                  <div className="row"><button className="btn small">Lagre ny pris</button></div>
+                </form>
+                {adjNow !== 0 && <form action={adjustPriceAction} style={{ marginTop: 6 }}><input type="hidden" name="id" value={id} /><input type="hidden" name="reset" value="1" /><button className="btn ghost small">Fjern justeringen</button></form>}
+              </div>);
+          })()}
           {b.status === 'pending_review' && (
             <div className="card" style={{ borderColor: 'var(--sand)' }}>
               <h3>Behandle forespørsel</h3>
@@ -114,8 +132,9 @@ export default async function AdminBooking({ params, searchParams }: { params: P
               {b.extra_guest_fee_ore > 0 && <div className="row"><span>Ekstra gjester ({quote?.extra_guests})</span><span>{nok(b.extra_guest_fee_ore)}</span></div>}
               {addOns.map((a, i) => <div key={i} className="row"><span>{a.name} × {a.quantity}</span><span>{nok(a.total_price_ore)}</span></div>)}
               {quote?.own_linen_discount_ore > 0 && <div className="row"><span>Eget sengetøy</span><span>−{nok(quote.own_linen_discount_ore)}</span></div>}
+              {Number(b.price_adjustment_ore) !== 0 && <div className="row" style={{ color: 'var(--gold-2)' }}><span>Prisjustering{b.price_adjustment_note ? ` (${b.price_adjustment_note})` : ''}</span><span>{Number(b.price_adjustment_ore) < 0 ? '−' : '+'}{nok(Math.abs(Number(b.price_adjustment_ore)))}</span></div>}
               {b.reward_discount_ore > 0 && <div className="row"><span>Bonus</span><span>−{nok(b.reward_discount_ore)}</span></div>}
-              <div className="row price-total"><span>Totalt</span><span>{nok(b.price_total_ore)}</span></div>
+              <div className="row price-total"><span>Totalt</span><span>{nok(b.status === 'pending_review' ? b.price_total_ore + Number(b.price_adjustment_ore ?? 0) : b.price_total_ore)}</span></div>
             </div>
           </div>
           <div className="card">
