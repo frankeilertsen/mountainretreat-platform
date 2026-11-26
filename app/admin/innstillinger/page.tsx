@@ -12,7 +12,8 @@ export const metadata = { title: 'Innstillinger' };
 const FIELDS: [string, string][] = [
   ['company_name', 'Firmanavn'], ['company_org_nr', 'Organisasjonsnummer'], ['company_address', 'Forretningsadresse'], ['company_phone', 'Telefon'], ['company_email', 'E-post for kunder'],
   ['booking_hold_duration_hours', 'Betalingsfrist etter godkjenning (timer)'],
-  ['cancellation_approval_timeout_hours', 'Frist for å behandle kansellering (timer)'], ['invitation_validity_days', 'Invitasjon gyldig (dager)'],
+  ['cancellation_approval_timeout_hours', 'Frist for å behandle kansellering (timer)'],
+  ['cancellation_payment_fee_pct', 'Betalingsgebyr som trekkes ved avbestilling (%)'], ['cancellation_payment_fee_fixed_ore', 'Betalingsgebyr, fast del (i øre – 200 = 2 kr)'], ['invitation_validity_days', 'Invitasjon gyldig (dager)'],
   ['ical_poll_interval_minutes', 'Hent kanalkalendere hvert (minutt)'], ['ical_failure_alert_threshold', 'Varsle etter antall feilede synker'],
   ['short_turnaround_hours', 'Kort snutid – varsle renhold (timer)'], ['cleaning_same_day_reminder_hour', 'Påminnelse til renholder samme dag (klokkeslett, time)'], ['audit_log_retention_days', 'Revisjonslogg lagres (dager)'],
   ['notification_log_retention_days', 'Varsellogg lagres (dager)'], ['long_term_contact_email', 'E-post for forespørsler om fast leie'],

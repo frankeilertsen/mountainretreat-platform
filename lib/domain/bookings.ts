@@ -343,17 +343,30 @@ async function tierFor(c: Db, propertyId: string, startDate: string) {
   return t ? { id: t.id, pct: Number(t.refund_percentage), needsApproval: t.requires_admin_approval, days } : { id: null, pct: 0, needsApproval: true, days };
 }
 
+/** Payment fee kept back when the guest cancels (card and Vipps): pct of the amount paid + fixed, per payment. */
+export async function paymentFeeFor(amountOre: number, db: Db = getPool()) {
+  const pct = await getNum('cancellation_payment_fee_pct', 2.99, db), fixed = await getNum('cancellation_payment_fee_fixed_ore', 200, db);
+  return amountOre > 0 ? Math.round(amountOre * pct / 100) + Math.round(fixed) : 0;
+}
+const FEE_METHODS = `('stripe_card','vipps')`;
+
 export async function cancellationPreview(bookingId: string, user: UserLike) {
   const b = await one<BookingRow>(`SELECT ${BOOKING_COLS} FROM bookings WHERE id=$1`, [bookingId]);
   if (!b) throw new DomainError('not_found', 'Fant ikke bookingen.');
   if (b.member_id !== user.id && !isAdmin(user)) throw forbidden();
-  const paid = await one<{ amount: number }>(`SELECT COALESCE(SUM(amount_ore - refunded_amount_ore),0)::int AS amount FROM payments WHERE booking_id=$1 AND status IN ('succeeded','partially_refunded')`, [b.id]);
+  const pays = await q<{ amount: number; remaining: number; feeable: boolean }>(`SELECT amount_ore AS amount, (amount_ore - refunded_amount_ore) AS remaining, method IN ${FEE_METHODS} AS feeable FROM payments WHERE booking_id=$1 AND status IN ('succeeded','partially_refunded')`, [b.id]);
   const t = await tierFor(getPool(), b.property_id, b.start_date);
-  return { ...t, paidOre: paid?.amount ?? 0, refundOre: Math.round((paid?.amount ?? 0) * t.pct / 100) };
+  let refundOre = 0, feeOre = 0;
+  for (const p of pays) {
+    const gross = Math.round(p.remaining * t.pct / 100);
+    const fee = gross > 0 && p.feeable ? Math.min(gross, await paymentFeeFor(p.amount)) : 0;
+    refundOre += gross - fee; feeOre += fee;
+  }
+  return { ...t, paidOre: pays.reduce((s, p) => s + p.remaining, 0), refundOre, feeOre };
 }
 
 /** Core cancellation: block removed, hold released, rewards restored, refund queued, cleaning reconciled. */
-async function doCancel(c: PoolClient, b: BookingRow, reason: string, refundPct: number, refundReason: string, tierId: string | null, actor: Actor): Promise<string[]> {
+async function doCancel(c: PoolClient, b: BookingRow, reason: string, refundPct: number, refundReason: string, tierId: string | null, actor: Actor, deductFee = false): Promise<string[]> {
   await c.query(`UPDATE bookings SET status='cancelled', cancelled_reason=$2, cancelled_at=now(), updated_at=now() WHERE id=$1`, [b.id, reason]);
   await removeBlocksFor(c, 'platform_booking', b.id);
   await c.query(`UPDATE booking_holds SET released_at=now() WHERE booking_id=$1 AND released_at IS NULL`, [b.id]);
@@ -370,22 +383,26 @@ async function doCancel(c: PoolClient, b: BookingRow, reason: string, refundPct:
   }
   await reverseRedemptions(c, b.id);
   const refundIds: string[] = [];
+  let feeTotal = 0;
   if (refundPct > 0) {
-    const pays = await q<{ id: string; remaining: number }>(`SELECT id, (amount_ore - refunded_amount_ore) AS remaining FROM payments WHERE booking_id=$1 AND status IN ('succeeded','partially_refunded')`, [b.id], c);
+    const pays = await q<{ id: string; amount: number; remaining: number; feeable: boolean }>(`SELECT id, amount_ore AS amount, (amount_ore - refunded_amount_ore) AS remaining, method IN ${FEE_METHODS} AS feeable FROM payments WHERE booking_id=$1 AND status IN ('succeeded','partially_refunded')`, [b.id], c);
     for (const p of pays) {
-      const amt = Math.round(p.remaining * refundPct / 100);
+      const gross = Math.round(p.remaining * refundPct / 100);
+      const fee = deductFee && gross > 0 && p.feeable ? Math.min(gross, await paymentFeeFor(p.amount, c)) : 0;
+      feeTotal += fee;
+      const amt = gross - fee;
       if (amt > 0) {
-        const r = await one<{ id: string }>(`INSERT INTO refunds (payment_id, amount_ore, reason, policy_tier_id, initiated_by_user_id) VALUES ($1,$2,$3,$4,$5) RETURNING id`,
-          [p.id, amt, refundReason, tierId, actor.id], c);
+        const r = await one<{ id: string }>(`INSERT INTO refunds (payment_id, amount_ore, reason, policy_tier_id, initiated_by_user_id, fee_deducted_ore) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`,
+          [p.id, amt, refundReason, tierId, actor.id, fee], c);
         refundIds.push(r!.id);
       }
     }
   }
   await reconcileCleaningTasks(c, b.property_id);
-  await audit(c, actor, 'booking.cancelled', 'booking', b.id, { status: b.status }, { status: 'cancelled', reason, refundPct });
+  await audit(c, actor, 'booking.cancelled', 'booking', b.id, { status: b.status }, { status: 'cancelled', reason, refundPct, feeDeducted: feeTotal });
   const m = await memberOf(c, b.member_id);
   await enqueue({ userId: m.id, to: m.email, type: 'booking_cancelled', dedupeKey: `booking_cancelled:${b.id}`, subject: `Bookingen er kansellert (${b.reference})`,
-    body: `Hei ${m.name}.\n\nBookingen ${fmtDate(b.start_date)} – ${fmtDate(b.end_date)} er kansellert.${refundPct > 0 ? ` Du får refundert ${refundPct} % av innbetalt beløp.` : ''}` }, c);
+    body: `Hei ${m.name}.\n\nBookingen ${fmtDate(b.start_date)} – ${fmtDate(b.end_date)} er kansellert.${refundPct > 0 ? ` Du får refundert ${pctNo(refundPct)} % av innbetalt beløp${feeTotal > 0 ? `, med fradrag av betalingsgebyret på ${nok(feeTotal)} (gebyret Stripe/Vipps tar for betalingen, og som ikke betales tilbake)` : ''}.` : ''}` }, c);
   return refundIds;
 }
 
@@ -406,7 +423,7 @@ export async function requestCancellation(bookingId: string, user: UserLike, act
       await notifyAdmins({ type: 'cancellation_requested', dedupeKey: `cancellation_requested:${b.id}`, subject: `Kanselleringsforespørsel ${b.reference}`, body: `Må behandles innen fristen, ellers godkjennes den automatisk med full refusjon.\n${appUrl('/admin/bookinger/' + b.id)}` }, c);
       return 'requested' as const;
     }
-    refundIds = await doCancel(c, b, 'member_request', t.pct, 'cancellation_tier', t.id, actor);
+    refundIds = await doCancel(c, b, 'member_request', t.pct, 'cancellation_tier', t.id, actor, true);
     return 'cancelled' as const;
   });
   if (refundIds.length) await processRefunds(refundIds);
@@ -426,16 +443,17 @@ export async function decideCancellation(bookingId: string, approve: boolean, ac
       return;
     }
     const t = await tierFor(c, b.property_id, b.start_date);
-    refundIds = await doCancel(c, b, 'member_request', t.pct, 'cancellation_tier', t.id, actor);
+    refundIds = await doCancel(c, b, 'member_request', t.pct, 'cancellation_tier', t.id, actor, true);
   });
   if (refundIds.length) await processRefunds(refundIds);
 }
 
-export async function adminCancel(bookingId: string, actor: Actor, reason: 'admin_action' | 'membership_revoked' = 'admin_action', c?: PoolClient) {
+/** deductFee: the guest asked for the cancellation, so the payment fee is kept back (full refund otherwise). */
+export async function adminCancel(bookingId: string, actor: Actor, reason: 'admin_action' | 'membership_revoked' = 'admin_action', c?: PoolClient, deductFee = false) {
   const run = async (cl: PoolClient) => {
     const b = await lockBooking(cl, bookingId);
     if (!['pending_review', 'awaiting_payment', 'confirmed', 'cancellation_requested'].includes(b.status)) throw new DomainError('bad_state', 'Bookingen kan ikke kanselleres.');
-    return doCancel(cl, b, reason, 100, reason === 'membership_revoked' ? 'membership_revoked' : 'admin_cancellation', null, actor);
+    return doCancel(cl, b, deductFee ? 'member_request' : reason, 100, reason === 'membership_revoked' ? 'membership_revoked' : 'admin_cancellation', null, actor, deductFee && reason === 'admin_action');
   };
   const ids = c ? await run(c) : await tx(run);
   if (!c && ids.length) await processRefunds(ids);

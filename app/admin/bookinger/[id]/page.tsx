@@ -1,3 +1,4 @@
+import { getNum } from '@/lib/settings';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { one, q } from '@/lib/db';
@@ -19,6 +20,7 @@ export default async function AdminBooking({ params, searchParams }: { params: P
       sp.adults AS p_adults, sp.children AS p_children, sp.infants AS p_infants
     FROM bookings b JOIN users u ON u.id=b.member_id JOIN properties p ON p.id=b.property_id LEFT JOIN booking_holds h ON h.booking_id=b.id AND h.released_at IS NULL
     LEFT JOIN users r ON r.id=b.admin_reviewer_id LEFT JOIN stay_preparations sp ON sp.booking_id=b.id WHERE b.id=$1`, [id]);
+  const feeText = `${String(await getNum('cancellation_payment_fee_pct', 2.99)).replace('.', ',')} % + ${Math.round(await getNum('cancellation_payment_fee_fixed_ore', 200) / 100)} kr`;
   const cTasks = await q(`SELECT t.id, t.task_type, t.status, t.checkout_date, u.name AS helper FROM cleaning_tasks t LEFT JOIN users u ON u.id=t.assigned_to_user_id WHERE t.booking_id=$1 AND t.status <> 'cancelled' ORDER BY t.checkout_date`, [id]);
   if (!b) notFound();
   const [overlaps, payments, refunds, addOns, log] = await Promise.all([
@@ -142,8 +144,10 @@ export default async function AdminBooking({ params, searchParams }: { params: P
           </div>
           {['pending_review', 'awaiting_payment', 'confirmed', 'cancellation_requested'].includes(b.status) && (
             <div className="card flat" style={{ borderColor: 'var(--danger-soft)' }}>
-              <h3>Kanseller som administrator</h3><p className="muted">Full refusjon, datoene frigjøres og renholdsoppgaven avlyses.</p>
-              <form action={adminCancelAction} className="row"><input type="hidden" name="id" value={id} /><label className="check" style={{ margin: 0 }}><input type="checkbox" name="confirm" value="ja" /> Bekreft</label><button className="btn danger small">Kanseller</button></form>
+              <h3>Kanseller som administrator</h3><p className="muted">Datoene frigjøres og renholdsoppgaven avlyses. Alt innbetalt refunderes, med mindre du krysser av for at gjesten selv ønsket å avbestille – da trekkes betalingsgebyret ({feeText}) fra refusjonen.</p>
+              <form action={adminCancelAction} className="stack" style={{ gap: 8 }}><input type="hidden" name="id" value={id} />
+                <label className="check" style={{ margin: 0 }}><input type="checkbox" name="fee" value="1" /> Gjesten ønsket å avbestille – trekk betalingsgebyret</label>
+                <div className="row"><label className="check" style={{ margin: 0 }}><input type="checkbox" name="confirm" value="ja" /> Bekreft</label><button className="btn danger small">Kanseller</button></div></form>
             </div>
           )}
           <div className="card flat"><h3>Historikk</h3><ul className="list">{log.map((l, i) => <li key={i}><small>{fmtDateTime(l.created_at)} · {l.action} · {l.name ?? l.actor_type}</small></li>)}</ul></div>

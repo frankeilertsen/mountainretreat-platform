@@ -183,3 +183,35 @@ describe('referral bonus cap', () => {
     } finally { await getPool().query(`UPDATE platform_settings SET value='10' WHERE key='referral_reward_max_unused'`); }
   });
 });
+
+describe('payment fee on cancellation', () => {
+  it('guest cancelling keeps back 2.99 % + 2 kr; admin cancel refunds in full unless the fee box is ticked', async () => {
+    const { requestBooking, approveBooking, handlePaymentSucceeded, requestCancellation, adminCancel } = await import('../lib/domain/bookings');
+    const pid = await property();
+    const admin = await user('admin');
+    const mk = async (start: number) => {
+      const m = await user('member', { invite_tier: 'admin_invited' });
+      const b = await requestBooking(m, { propertyId: pid, startDate: d(start), endDate: d(start + 2), adults: 2, children: 0, infants: 0, addOns: [] }, { id: m.id, type: 'member' });
+      await approveBooking(b.id, { id: admin.id, type: 'admin' });
+      const total = (await one<{ t: number }>(`SELECT price_total_ore AS t FROM bookings WHERE id=$1`, [b.id]))!.t;
+      const p = await one<{ id: string }>(`INSERT INTO payments (booking_id, method, provider, amount_ore, idempotency_key) VALUES ($1,'stripe_card','mock',$2,$3) RETURNING id`, [b.id, total, `fee_${b.id}`]);
+      await handlePaymentSucceeded(p!.id);
+      return { m, b, total };
+    };
+    await getPool().query(`UPDATE cancellation_policy_tiers SET requires_admin_approval=false WHERE property_id IS NULL`);
+    const g = await mk(120);
+    await requestCancellation(g.b.id, g.m, { id: g.m.id, type: 'member' });
+    const r1 = (await one<any>(`SELECT r.amount_ore, r.fee_deducted_ore FROM refunds r JOIN payments p ON p.id=r.payment_id WHERE p.booking_id=$1`, [g.b.id]))!;
+    const tier = (await one<{ pct: string }>(`SELECT refund_percentage AS pct FROM cancellation_policy_tiers WHERE active AND property_id IS NULL AND days_before_checkin_min <= 119 AND (days_before_checkin_max IS NULL OR days_before_checkin_max >= 119)`))!;
+    const fee = Math.round(g.total * 2.99 / 100) + 200;
+    expect(r1.fee_deducted_ore).toBe(fee);
+    expect(r1.amount_ore).toBe(Math.round(g.total * Number(tier.pct) / 100) - fee);
+
+    const a = await mk(130);
+    await adminCancel(a.b.id, { id: admin.id, type: 'admin' });
+    expect((await one<any>(`SELECT r.amount_ore, r.fee_deducted_ore FROM refunds r JOIN payments p ON p.id=r.payment_id WHERE p.booking_id=$1`, [a.b.id]))).toMatchObject({ amount_ore: a.total, fee_deducted_ore: 0 });
+    const a2 = await mk(140);
+    await adminCancel(a2.b.id, { id: admin.id, type: 'admin' }, 'admin_action', undefined, true);
+    expect((await one<any>(`SELECT r.amount_ore, r.fee_deducted_ore FROM refunds r JOIN payments p ON p.id=r.payment_id WHERE p.booking_id=$1`, [a2.b.id]))).toMatchObject({ amount_ore: a2.total - (Math.round(a2.total * 2.99 / 100) + 200) });
+  });
+});

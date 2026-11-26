@@ -126,7 +126,7 @@ const no = {
     payTitle: 'Betal for å bekrefte', heldUntil: (d: string) => `Datoene holdes av til ${d}.`, payCard: 'Betal med kort', payCardTest: 'Betal med kort (testmodus)', payVipps: 'Betal med Vipps', payInvoice: 'Betal med faktura',
     cardNote: 'Kortbetaling skjer hos Stripe. Vi lagrer aldri kortopplysninger.', payments: 'Betalinger', invoice: 'Faktura', card: 'Kort',
     kidLine: (kid: string, due: string, acc: string) => `KID ${kid} · forfall ${due} · kontonr. ${acc}`, refunded: (a: string) => `Refundert ${a}`,
-    cancelTitle: 'Kansellering', needsApproval: 'Mindre enn 10 dager før ankomst – kanselleringen må godkjennes. ', refundTerms: (p: number, a: string) => `Etter vilkårene får du refundert ${pc(p)} % (${a}).`,
+    cancelTitle: 'Kansellering', needsApproval: 'Mindre enn 10 dager før ankomst – kanselleringen må godkjennes. ', refundTerms: (p: number, a: string, fee?: string | null) => `Etter vilkårene får du refundert ${pc(p)} %${fee ? `, minus betalingsgebyret på ${fee}` : ''} (${a}).`,
     freeCancel: 'Bookingen er ikke betalt ennå og kan kanselleres kostnadsfritt.', cancel: 'Kanseller booking', bonusOnApproval: 'Bonus trekkes fra når forespørselen godkjennes.',
   },
   invites: {
@@ -300,7 +300,7 @@ const en: Dict = {
     payTitle: 'Pay to confirm', heldUntil: (d: string) => `The dates are held for you until ${d}.`, payCard: 'Pay by card', payCardTest: 'Pay by card (test mode)', payVipps: 'Pay with Vipps', payInvoice: 'Pay by invoice',
     cardNote: 'Card payments are handled by Stripe. We never store card details.', payments: 'Payments', invoice: 'Invoice', card: 'Card',
     kidLine: (kid: string, due: string, acc: string) => `KID ${kid} · due ${due} · account no. ${acc}`, refunded: (a: string) => `Refunded ${a}`,
-    cancelTitle: 'Cancellation', needsApproval: 'Less than 10 days before arrival – the cancellation must be approved. ', refundTerms: (p: number, a: string) => `Under the terms you will be refunded ${pcEn(p)} % (${a}).`,
+    cancelTitle: 'Cancellation', needsApproval: 'Less than 10 days before arrival – the cancellation must be approved. ', refundTerms: (p: number, a: string, fee?: string | null) => `Under the terms you will be refunded ${pcEn(p)} %${fee ? `, less the payment fee of ${fee}` : ''} (${a}).`,
     freeCancel: 'The booking has not been paid yet and can be cancelled free of charge.', cancel: 'Cancel booking', bonusOnApproval: 'The bonus is deducted when the request is approved.',
   },
   invites: {

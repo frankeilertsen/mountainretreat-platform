@@ -8,7 +8,7 @@ import type { Lang } from './dict';
  */
 export type TermsInput = {
   company: string; orgNr: string; address: string; phone: string; email: string;
-  holdHours: number; cancelTimeoutHours: number;
+  holdHours: number; cancelTimeoutHours: number; feePct?: number; feeFixedKr?: number;
   tiers: { min: number; max: number | null; pct: number; approval: boolean }[];
   checkIn: string; checkOut: string;
 };
@@ -59,6 +59,7 @@ export function termsSections(lang: Lang, i: TermsInput): { title: string; lead:
         'Cancellation by you: you cancel from your booking in the member portal. The refund depends on how long before check-in you cancel:',
         tiers,
         `Requests that require our approval are processed within ${i.cancelTimeoutHours} hours; if we have not processed the request by then, it is approved automatically in your favour. Bookings that have not yet been paid can be cancelled at no cost.`,
+        `Payment fee on cancellation: when you cancel a paid booking, the payment fee for card or Vipps (${(i.feePct ?? 2.99).toLocaleString('en-GB')} % of the amount paid + NOK ${i.feeFixedKr ?? 2}) is deducted from the refund. The fee is charged by the payment provider and is not returned to us when a payment is refunded. Bookings paid by invoice, and cancellations made by us, have no such deduction.`,
         'Cancellation by us: if we must cancel your stay (for example due to damage to the property or force majeure), you get a full refund of everything you have paid. We are not liable for indirect losses such as travel costs.',
         'End of the rental: the rental is for a limited period and ends automatically at check-out on the day of departure – no notice is required. The rental is not a tenancy for residential purposes and is not covered by the Tenancy Act. Long-term rentals are agreed separately in writing.',
         'Termination for breach: we may terminate the rental with immediate effect if the house rules are seriously breached, for example if there are more guests than agreed, in the case of parties or deliberate damage. In such cases there is no refund for the remaining period.',
@@ -120,6 +121,7 @@ export function termsSections(lang: Lang, i: TermsInput): { title: string; lead:
         'Avbestilling fra deg: Du avbestiller fra bookingen din i medlemsportalen. Refusjonen avhenger av hvor lenge før innsjekk du avbestiller:',
         tiers,
         `Forespørsler som krever vår godkjenning, behandles innen ${i.cancelTimeoutHours} timer. Har vi ikke behandlet forespørselen innen fristen, godkjennes den automatisk i din favør. Bookinger som ikke er betalt ennå, kan avbestilles kostnadsfritt.`,
+        `Betalingsgebyr ved avbestilling: Avbestiller du en betalt booking, trekkes betalingsgebyret for kort eller Vipps (${(i.feePct ?? 2.99).toLocaleString('nb-NO')} % av innbetalt beløp + ${i.feeFixedKr ?? 2} kr) fra refusjonen. Gebyret tas av betalingsleverandøren og betales ikke tilbake til oss når en betaling refunderes. Ved betaling med faktura, og når vi avlyser oppholdet, trekkes det ikke noe gebyr.`,
         'Avbestilling fra oss: Må vi avlyse oppholdet ditt (for eksempel på grunn av skade på boligen eller force majeure), får du full refusjon av alt du har betalt. Vi er ikke ansvarlige for indirekte tap som for eksempel reisekostnader.',
         'Avslutning av leieforholdet: Leieforholdet gjelder for en avgrenset periode og avsluttes automatisk ved utsjekk på avreisedagen – det er ikke nødvendig med oppsigelse. Leieforholdet er ikke en leie av bolig til boformål og omfattes ikke av husleieloven. Langtidsleie avtales særskilt og skriftlig.',
         'Heving ved mislighold: Vi kan heve leieforholdet med umiddelbar virkning ved vesentlige brudd på husreglene, for eksempel flere gjester enn avtalt, fester eller forsettlig skade. I slike tilfeller gis det ikke refusjon for gjenværende periode.',

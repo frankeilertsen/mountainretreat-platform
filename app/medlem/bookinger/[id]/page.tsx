@@ -117,7 +117,7 @@ export default async function BookingDetail({ params, searchParams }: { params: 
           {cancellable && (
             <div className="card flat">
               <h3>{T.cancelTitle}</h3>
-              {preview ? <p className="muted">{preview.needsApproval ? T.needsApproval : ''}{T.refundTerms(preview.pct, nok(preview.refundOre))}</p>
+              {preview ? <p className="muted">{preview.needsApproval ? T.needsApproval : ''}{T.refundTerms(preview.pct, nok(preview.refundOre), preview.feeOre > 0 ? nok(preview.feeOre) : null)}</p>
                 : <p className="muted">{T.freeCancel}</p>}
               <form action={cancelAction}><input type="hidden" name="id" value={id} /><button className="btn danger small">{T.cancel}</button></form>
             </div>

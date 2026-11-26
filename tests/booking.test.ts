@@ -123,7 +123,7 @@ describe('booking workflow', () => {
     expect(await requestCancellation(b.id, m1, actorOf(m1))).toBe('cancelled');
     expect(await one(`SELECT 1 FROM availability_blocks WHERE reference_id=$1`, [b.id])).toBeNull();
     const r = await one<{ amount_ore: number; status: string }>(`SELECT r.amount_ore, r.status FROM refunds r JOIN payments p ON p.id=r.payment_id WHERE p.booking_id=$1`, [b.id]);
-    expect(r).toMatchObject({ amount_ore: 320000, status: 'succeeded' });
+    expect(r).toMatchObject({ amount_ore: 320000 - (Math.round(320000 * 2.99 / 100) + 200), status: 'succeeded' });
     expect((await one(`SELECT status FROM cleaning_tasks WHERE booking_id=$1 AND task_type='turnover'`, [b.id])).status).toBe('cancelled');
 
     const late = await req(m1, pid, 3, 5);
