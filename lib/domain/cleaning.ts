@@ -27,7 +27,7 @@ async function ensureExternalPreparation(c: PoolClient, eventId: string, propert
 
 // ------------------------------------------------------------------ task generation
 type Stay = { key: string; source: 'platform_booking' | 'external_event'; refId: string; start: string; end: string; guests: number | null;
-  channel: string; prepId: string; exempt: boolean };
+  channel: string; prepId: string; exempt: boolean; blocked?: boolean };
 
 /**
  * Idempotent reconciliation of cleaning tasks for one property from every channel.
@@ -44,14 +44,19 @@ export async function reconcileCleaningTasks(c: PoolClient, propertyId: string):
             (b.cleaning_self OR EXISTS (SELECT 1 FROM member_cleaning_exemptions e WHERE e.user_id=b.member_id AND e.active AND (e.property_id IS NULL OR e.property_id=b.property_id))) AS exempt
      FROM bookings b JOIN stay_preparations sp ON sp.booking_id=b.id
      WHERE b.property_id=$1 AND b.status IN ('confirmed','completed','cancellation_requested') AND b.end_date >= $2`, [propertyId, horizonStart], c);
-  const extStays = await q<{ id: string; start: string; end: string; channel: string }>(
-    `SELECT e.id, to_char(e.start_date,'YYYY-MM-DD') AS start, to_char(e.end_date,'YYYY-MM-DD') AS "end", cc.display_name AS channel
+  // Blocked dates ("Not available") also get cleaning jobs – they are often own stays or bookings from elsewhere.
+  // Airbnb's own 1-night blocks (advance notice, preparation time) and the long "outside booking window" block are skipped.
+  // Jobs from blocks are not sent to a cleaner automatically: the administrator assigns or switches them off.
+  const extStays = await q<{ id: string; start: string; end: string; channel: string; blocked: boolean }>(
+    `SELECT e.id, to_char(e.start_date,'YYYY-MM-DD') AS start, to_char(e.end_date,'YYYY-MM-DD') AS "end", cc.display_name AS channel, e.block_kind = 'owner_block' AS blocked
      FROM external_calendar_events e JOIN channel_connections cc ON cc.id=e.connection_id
-     WHERE e.property_id=$1 AND e.sync_state IN ('active','conflict') AND e.block_kind <> 'owner_block' AND e.end_date >= $2`, [propertyId, horizonStart], c);
+     WHERE e.property_id=$1 AND e.sync_state IN ('active','conflict') AND e.end_date >= $2
+       AND (e.block_kind <> 'owner_block' OR (e.end_date - e.start_date) BETWEEN 2 AND 60)`, [propertyId, horizonStart], c);
 
   const stays: Stay[] = [];
   for (const b of bookingStays) stays.push({ key: 'b:' + b.id, source: 'platform_booking', refId: b.id, start: b.start, end: b.end, guests: b.guests, channel: 'mountainretreat.no', prepId: b.prep_id, exempt: b.exempt });
-  for (const e of extStays) stays.push({ key: 'e:' + e.id, source: 'external_event', refId: e.id, start: e.start, end: e.end, guests: null, channel: e.channel, prepId: await ensureExternalPreparation(c, e.id, propertyId), exempt: false });
+  for (const e of extStays) stays.push({ key: 'e:' + e.id, source: 'external_event', refId: e.id, start: e.start, end: e.end, guests: null,
+    channel: e.blocked ? `${e.channel} – blokkert` : e.channel, prepId: await ensureExternalPreparation(c, e.id, propertyId), exempt: false, blocked: e.blocked });
   stays.sort((a, b) => a.start.localeCompare(b.start));
 
   type Desired = { task_type: 'turnover' | 'preparation'; stay: Stay; date: string; nextCheckin: string | null; nextPrep: string | null };
@@ -85,7 +90,8 @@ export async function reconcileCleaningTasks(c: PoolClient, propertyId: string):
     const deadlineSql = `CASE WHEN $3::date IS NULL THEN NULL ELSE ($3::date + $4::time) AT TIME ZONE 'Europe/Oslo' END`;
     if (!ex) {
       if (d.date < todayOslo()) continue; // don't create tasks in the past
-      const status = d.stay.exempt && d.task_type === 'turnover' ? 'not_needed' : autoAssignee ? 'assigned' : 'open';
+      const assignee = d.stay.blocked ? null : autoAssignee;
+      const status = d.stay.exempt && d.task_type === 'turnover' ? 'not_needed' : assignee ? 'assigned' : 'open';
       const t = await one<{ id: string }>(
         `INSERT INTO cleaning_tasks (property_id, task_type, source_type, booking_id, external_event_id, channel_name, checkout_date, next_checkin_date,
            deadline_at, next_preparation_id, checkout_guests, status, not_needed_reason, assigned_to_user_id)
@@ -93,9 +99,9 @@ export async function reconcileCleaningTasks(c: PoolClient, propertyId: string):
         [propertyId, d.date, d.nextCheckin, prop!.check_in_time, d.task_type, d.stay.source,
          d.stay.source === 'platform_booking' ? d.stay.refId : null, d.stay.source === 'external_event' ? d.stay.refId : null,
          d.stay.channel, d.nextPrep, d.task_type === 'turnover' ? d.stay.guests : null, status,
-         status === 'not_needed' ? 'Gjesten vasker selv' : null, status === 'assigned' ? autoAssignee : null], c);
+         status === 'not_needed' ? 'Gjesten vasker selv' : null, status === 'assigned' ? assignee : null], c);
       created++;
-      if (status !== 'not_needed') {
+      if (status !== 'not_needed' && !d.stay.blocked) {
         for (const h of helpers.map(x => x.helper_user_id)) {
           await notifyHelper(c, h, helperMsg.newBooking(d.stay.channel, prop!.name, d.task_type, d.date, d.stay.guests, h === autoAssignee, !!d.nextCheckin && d.nextCheckin === d.date), t!.id,
             { dedupe: `cleaning_new:${t!.id}` });

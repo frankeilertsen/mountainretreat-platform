@@ -34,6 +34,9 @@ export default async function CleaningAdmin({ searchParams }: { searchParams: Pr
               {r.photos && <div className="row">{r.photos.map((ph: string) => <a key={ph} href={`/api/photos/${ph}`} target="_blank"><img src={`/api/photos/${ph}`} alt="" style={{ width: 90, height: 70, objectFit: 'cover', borderRadius: 6 }} /></a>)}</div>}</li>))}</ul>
         </div>
       )}
+      {(() => { const n = tasks.filter(t => t.status === 'open' && !t.assigned_to_user_id && String(t.channel_name ?? '').endsWith('– blokkert')).length;
+        return n > 0 ? <div className="card" style={{ borderColor: 'var(--gold-line)', marginBottom: 20 }}><strong>{n} vaskejobb{n > 1 ? 'er' : ''} fra blokkerte dager på Airbnb venter på deg.</strong>
+          <p className="muted" style={{ margin: '6px 0 0' }}>Blokkerte dager kan være eget opphold eller en booking fra et annet sted, så de sendes ikke automatisk. Tildel en renholder (hun eller han får beskjed med en gang) eller slett jobben.</p></div> : null; })()}
       <div className="card">
         <h3>Oppgaver (siste 7 og neste 60 dager)</h3>
         {tasks.length === 0 ? <Empty>Ingen oppgaver.</Empty> : <div className="table-wrap"><table><thead><tr><th>Dato</th><th>Bolig</th><th>Type</th><th>Neste ankomst</th><th>Renholder</th><th>Status</th><th></th></tr></thead><tbody>
@@ -54,7 +57,7 @@ export default async function CleaningAdmin({ searchParams }: { searchParams: Pr
                 <td>{['open', 'assigned'].includes(t.status) ? (
                   <form action={skipTaskAction} className="row" style={{ flexWrap: 'nowrap', gap: 6 }}><input type="hidden" name="id" value={t.id} />
                     <input name="reason" placeholder="Vasker selv" style={{ width: 120 }} aria-label="Grunn" />
-                    <button className="btn ghost small" title="Slå av denne vaskejobben">Slå av</button></form>
+                    <button className="btn ghost small" title="Slett denne vaskejobben – renholderen får beskjed">Slett</button></form>
                 ) : t.status === 'not_needed' ? (
                   <form action={reactivateTaskAction}><input type="hidden" name="id" value={t.id} /><button className="btn ghost small">Slå på igjen</button></form>
                 ) : null}</td>

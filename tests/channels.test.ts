@@ -99,7 +99,7 @@ describe('Airbnb "Not available" is a closed date, not a stay', () => {
     expect(classifyEvent(null)).toBe('unknown');
   });
 
-  it('a "Not available" event still closes the dates but creates no cleaning task; a reservation does', async () => {
+  it('a "Not available" event still closes the dates but creates no cleaning task when it is a 1-night Airbnb block; a reservation does', async () => {
     const pid = await property();
     const c = await conn(pid);
     const feed = ['BEGIN:VCALENDAR', 'VERSION:2.0',
@@ -111,5 +111,22 @@ describe('Airbnb "Not available" is a closed date, not a stay', () => {
     const tasks = await getPool().query(`SELECT e.uid, t.task_type FROM cleaning_tasks t JOIN external_calendar_events e ON e.id=t.external_event_id WHERE t.property_id=$1 AND t.status<>'cancelled'`, [pid]);
     expect(tasks.rows.every(r => r.uid === 'res1')).toBe(true);
     expect(tasks.rows.some(r => r.uid === 'res1' && r.task_type === 'turnover')).toBe(true);
+  });
+
+  it('a blocked period of 2+ nights gets cleaning jobs, but they are not sent to the cleaner automatically', async () => {
+    const pid = await property();
+    const helper = await user('helper', { name: 'Vaskehjelp' });
+    await getPool().query(`INSERT INTO helper_property_assignments (helper_user_id, property_id) VALUES ($1,$2)`, [helper.id, pid]);
+    const c = await conn(pid);
+    const ev = (s: number, e: number, uid: string, sum: string) => ['BEGIN:VEVENT', `DTSTART;VALUE=DATE:${d(s).replace(/-/g, '')}`, `DTEND;VALUE=DATE:${d(e).replace(/-/g, '')}`, `UID:${uid}`, `SUMMARY:${sum}`, 'END:VEVENT'];
+    const feed = ['BEGIN:VCALENDAR', 'VERSION:2.0', ...ev(5, 6, 'na1', 'Airbnb (Not available)'), ...ev(20, 23, 'own', 'Airbnb (Not available)'),
+      ...ev(10, 13, 'res1', 'Reserved'), ...ev(100, 400, 'window', 'Airbnb (Not available)'), 'END:VCALENDAR'].join('\r\n');
+    await applySnapshot(c, parseIcal(feed));
+    const rows = (await getPool().query(`SELECT e.uid, t.task_type, t.status, t.assigned_to_user_id, t.channel_name FROM cleaning_tasks t JOIN external_calendar_events e ON e.id=t.external_event_id WHERE t.property_id=$1 AND t.status<>'cancelled'`, [pid])).rows;
+    expect(rows.some(r => r.uid === 'na1' || r.uid === 'window')).toBe(false);
+    const own = rows.find(r => r.uid === 'own' && r.task_type === 'turnover');
+    expect(own).toMatchObject({ status: 'open', assigned_to_user_id: null });
+    expect(own.channel_name).toMatch(/blokkert/);
+    expect(rows.find(r => r.uid === 'res1' && r.task_type === 'turnover')).toMatchObject({ status: 'assigned', assigned_to_user_id: helper.id });
   });
 });
