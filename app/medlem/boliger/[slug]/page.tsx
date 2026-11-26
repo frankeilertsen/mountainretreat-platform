@@ -11,6 +11,7 @@ import { fmtDateL, nokL } from '@/lib/i18n/format';
 import { translateMessage } from '@/lib/i18n/messages';
 import { DomainError } from '@/lib/errors';
 import { Flash, PropertyMedia } from '@/components/ui';
+import { PropertyGallery } from '@/components/PropertyGallery';
 import { MonthCalendar } from '@/components/MonthCalendar';
 import { SavingsBreakdown } from '@/components/Savings';
 import { BED_LABELS } from '@/lib/domain/beds';
@@ -33,6 +34,9 @@ export default async function PropertyPage({ params, searchParams }: { params: P
      (SELECT ph.id FROM photos ph WHERE ph.entity_type='property' AND ph.entity_id=properties.id ORDER BY ph.created_at LIMIT 1) AS photo_id
      FROM properties WHERE slug=$1 AND active`, [slug]);
   if (!p) notFound();
+  const gallery = await q<{ id: string; caption: string | null }>(`SELECT ph.id, NULL::text AS caption, 0 AS grp, ph.created_at, 0 AS so FROM photos ph WHERE ph.entity_type='property' AND ph.entity_id=$1
+    UNION ALL SELECT ph.id, r.name, 1, ph.created_at, r.sort_order FROM photos ph JOIN rooms r ON r.id=ph.entity_id AND r.active WHERE ph.entity_type='room' AND r.property_id=$1
+    ORDER BY 3, 5, 4`, [p.id]);
   const today = todayOslo();
   const blocks = await blocksForRange(p.id, today, addDays(today, 400));
   const seasons = await q(`SELECT name, price_per_night_ore, weekend_price_per_night_ore AS wk, min_nights, color FROM season_categories WHERE property_id=$1 AND active ORDER BY price_per_night_ore`, [p.id]);
@@ -60,7 +64,7 @@ export default async function PropertyPage({ params, searchParams }: { params: P
     <>
       <div className="grid g2" style={{ alignItems: 'start' }}>
         <div className="stack">
-          <PropertyMedia photoId={p.photo_id} alt={p.name} />
+          {gallery.length ? <PropertyGallery photos={gallery} alt={p.name} labels={{ all: lang === 'en' ? 'Show all {n} photos' : 'Vis alle {n} bilder', close: lang === 'en' ? 'Close' : 'Lukk', prev: lang === 'en' ? 'Previous' : 'Forrige', next: lang === 'en' ? 'Next' : 'Neste' }} /> : <PropertyMedia photoId={null} alt={p.name} />}
           <div>
             <span className="eyebrow">{p.address}</span>
             <h1>{p.name}</h1>

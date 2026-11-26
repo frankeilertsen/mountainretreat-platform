@@ -37,14 +37,15 @@ export default async function MemberHome({ searchParams }: { searchParams: Promi
       <BenefitCards {...benefits} lang={lang} />
 
       <h2 style={{ marginTop: 40 }}>{H.properties}</h2>
-      <div className="grid g3">
+      <div className="prop-list">
         {props.map(p => (
-          <Link key={p.id} href={`/medlem/boliger/${p.slug}`} className="card" style={{ textDecoration: 'none', padding: 14 }}>
+          <Link key={p.id} href={`/medlem/boliger/${p.slug}`} className="card prop-row">
             <PropertyMedia photoId={p.photo_id} alt={p.name} />
-            <div style={{ padding: '14px 6px 4px' }}>
-              <h3 style={{ marginBottom: 4 }}>{p.name}</h3>
-              <p className="muted" style={{ marginBottom: 8 }}>{p.short_description}</p>
+            <div>
+              <h3>{p.name}</h3>
+              {p.short_description && <p className="muted">{p.short_description}</p>}
               <small>{H.upTo(p.max_guests)}{p.from_price ? <> · {H.fromPrice} <span style={{ color: 'var(--gold-2)' }}>{nok(p.from_price * (1 - disc.totalPct / 100))}</span> {H.withDiscount}</> : ''}</small>
+              <div className="go">{lang === 'en' ? 'View and book →' : 'Se og book →'}</div>
             </div>
           </Link>
         ))}
