@@ -41,7 +41,7 @@ export default async function CleaningAdmin({ searchParams }: { searchParams: Pr
       <div className="card">
         <div className="row between" style={{ flexWrap: 'wrap', gap: 8 }}><h3 style={{ margin: 0 }}>Oppgaver ({range === '60' ? 'siste 7 og neste 60 dager' : 'siste 7 dager og alle kommende'})</h3>
           <span className="row" style={{ gap: 6 }}><Link href="/admin/renhold" className={`btn small ${range === 'alle' ? '' : 'ghost'}`}>Alle kommende</Link><Link href="/admin/renhold?vis=60" className={`btn small ${range === '60' ? '' : 'ghost'}`}>Neste 60 dager</Link></span></div>
-        {tasks.length === 0 ? <Empty>Ingen oppgaver.</Empty> : <div className="table-wrap"><table><thead><tr><th>Dato</th><th>Bolig</th><th>Type</th><th>Neste ankomst</th><th>Renholder</th><th>Status</th><th></th></tr></thead><tbody>
+        {tasks.length === 0 ? <Empty>Ingen oppgaver.</Empty> : <div className="table-wrap scroll-y"><table><thead><tr><th>Dato</th><th>Bolig</th><th>Type</th><th>Neste ankomst</th><th>Renholder</th><th>Status</th><th></th></tr></thead><tbody>
           {tasks.map(t => {
             const same = t.next_checkin === t.date;
             return (

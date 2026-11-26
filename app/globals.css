@@ -369,3 +369,7 @@ main { padding: 44px 0 90px; }
 .cal .day .cal-dot { position: absolute; bottom: 12%; left: 50%; transform: translateX(-50%); width: 6px; height: 6px; border-radius: 50%; }
 .cal .day.sel .cal-dot { box-shadow: 0 0 0 1.5px #15130e; }
 .cal .day.busy .cal-dot { opacity: .35; }
+
+/* Long lists that scroll inside their card, header stays visible */
+.table-wrap.scroll-y { max-height: 70vh; overflow-y: auto; }
+.table-wrap.scroll-y thead th { position: sticky; top: 0; z-index: 1; background: var(--surface); }
