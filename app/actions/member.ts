@@ -22,7 +22,7 @@ export async function requestBookingAction(f: FormData) {
     const b = await requestBooking(u, {
       propertyId: str(f, 'propertyId'), startDate: str(f, 'fra'), endDate: str(f, 'til'),
       adults: int(f, 'voksne', 1), children: int(f, 'barn'), infants: int(f, 'sped'), addOns,
-      specialRequests: str(f, 'requests'), useRewards: !!f.get('useRewards'), idempotencyKey: str(f, 'idem') || undefined,
+      specialRequests: str(f, 'requests'), useRewards: !!f.get('useRewards'), idempotencyKey: str(f, 'idem') || undefined, ownLinen: str(f, 'eget_sengetoy') === '1',
     }, actor);
     return { redirect: `/medlem/bookinger/${b.id}`, ok: 'Forespørselen er sendt. Du får beskjed når den er behandlet.' };
   });

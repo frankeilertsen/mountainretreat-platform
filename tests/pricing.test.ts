@@ -127,3 +127,15 @@ describe('weekend prices and season painting', () => {
     expect(await list()).toEqual([{ s: '2030-01-01', e: '2030-01-30', k: 'low_season' }]);
   });
 });
+
+describe('Airbnb cleaning fee and own bed linen', () => {
+  it('compares with Airbnb’s cleaning fee and takes 50 kr per guest off for own linen', () => {
+    const q = computeQuote(base({ cleaningFeeOre: 62500, airbnbCleaningFeeOre: 125000, ownLinen: true, ownLinenDiscountOre: 5000, guests: 4, airbnbGuestFeePct: 0 }));
+    const plain = computeQuote(base({ cleaningFeeOre: 62500, airbnbCleaningFeeOre: 125000, guests: 4, airbnbGuestFeePct: 0 }));
+    expect(q.own_linen_discount_ore).toBe(20000);
+    expect(q.subtotal_ore).toBe(plain.subtotal_ore - 20000);
+    expect(q.airbnb_cleaning_fee_ore).toBe(125000);
+    expect(q.airbnb_comparison_ore - plain.stay_ore - plain.member_discount_ore).toBe(125000 + (plain.extra_guest_fee_ore));
+    expect(computeQuote(base({ ownLinen: true, ownLinenDiscountOre: 0 })).own_linen_discount_ore).toBe(0);
+  });
+});

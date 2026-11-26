@@ -18,7 +18,7 @@ export default async function InvoiceDraft({ params, searchParams }: { params: P
   const { id } = await params; const sp = await searchParams;
   const i = await one<any>(`SELECT i.*, to_char(i.due_date,'YYYY-MM-DD') AS due, to_char(p.created_at AT TIME ZONE 'Europe/Oslo','YYYY-MM-DD') AS issued, p.id AS pid, p.status AS pay_status,
       b.id AS bid, b.reference, to_char(b.start_date,'YYYY-MM-DD') AS start, to_char(b.end_date,'YYYY-MM-DD') AS "end", (b.end_date - b.start_date) AS nights,
-      b.stay_price_ore, b.cleaning_fee_ore, b.extra_guest_fee_ore, b.reward_discount_ore, b.price_total_ore, b.adults, b.children, b.infants, b.status AS booking_status,
+      b.stay_price_ore, b.price_breakdown, b.cleaning_fee_ore, b.extra_guest_fee_ore, b.reward_discount_ore, b.price_total_ore, b.adults, b.children, b.infants, b.status AS booking_status,
       u.name, u.email, u.phone, pr.name AS property
     FROM invoices i JOIN payments p ON p.id=i.payment_id JOIN bookings b ON b.id=p.booking_id JOIN users u ON u.id=b.member_id JOIN properties pr ON pr.id=b.property_id WHERE i.id=$1`, [id]);
   if (!i) notFound();
@@ -31,6 +31,7 @@ export default async function InvoiceDraft({ params, searchParams }: { params: P
     ...(i.cleaning_fee_ore > 0 ? [{ text: 'Sluttrengjøring', qty: 1, unit: i.cleaning_fee_ore, total: i.cleaning_fee_ore }] : []),
     ...(i.extra_guest_fee_ore > 0 ? [{ text: 'Tillegg for ekstra gjester', qty: 1, unit: i.extra_guest_fee_ore, total: i.extra_guest_fee_ore }] : []),
     ...addOns.map(a => ({ text: a.name, qty: a.quantity, unit: a.unit, total: a.total })),
+    ...(i.price_breakdown?.quote?.own_linen_discount_ore > 0 ? [{ text: 'Rabatt eget sengetøy', qty: 1, unit: -i.price_breakdown.quote.own_linen_discount_ore, total: -i.price_breakdown.quote.own_linen_discount_ore }] : []),
     ...(i.reward_discount_ore > 0 ? [{ text: 'Vervebonus (rabatt)', qty: 1, unit: -i.reward_discount_ore, total: -i.reward_discount_ore }] : []),
   ];
   const sum = lines.reduce((s, l) => s + l.total, 0);

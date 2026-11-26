@@ -30,7 +30,7 @@ export default async function PropertyPage({ params, searchParams }: { params: P
   const T = t.property;
   const nok = (o: number) => nokL(o, lang), fmtDate = (d: string, w?: boolean) => fmtDateL(d, lang, w);
   const bedLabel = (k: string) => lang === 'en' ? (BED_LABELS_EN[k] ?? k) : (BED_LABELS[k] ?? k);
-  const p = await one(`SELECT id, name, address, description, pricing_mode, included_guests, extra_guest_fee_ore, extra_guest_fee_basis, extra_guest_fee_includes, amenities, house_rules, max_guests, to_char(check_in_time,'HH24:MI') AS cin, to_char(check_out_time,'HH24:MI') AS cout, cleaning_fee_ore,
+  const p = await one(`SELECT id, name, address, description, pricing_mode, included_guests, extra_guest_fee_ore, extra_guest_fee_basis, extra_guest_fee_includes, amenities, house_rules, max_guests, to_char(check_in_time,'HH24:MI') AS cin, to_char(check_out_time,'HH24:MI') AS cout, cleaning_fee_ore, own_linen_discount_ore,
      (SELECT ph.id FROM photos ph WHERE ph.entity_type='property' AND ph.entity_id=properties.id ORDER BY ph.created_at LIMIT 1) AS photo_id
      FROM properties WHERE slug=$1 AND active`, [slug]);
   if (!p) notFound();
@@ -51,11 +51,12 @@ export default async function PropertyPage({ params, searchParams }: { params: P
   const fra = sp.fra, til = sp.til;
   const adults = Math.max(1, parseInt(sp.voksne ?? '2', 10) || 1), children = Math.max(0, parseInt(sp.barn ?? '0', 10) || 0), infants = Math.max(0, parseInt(sp.sped ?? '0', 10) || 0);
   const selected = addOns.filter(a => sp['a_' + a.id]).map(a => ({ id: a.id, quantity: Math.max(1, parseInt(sp['q_' + a.id] ?? '1', 10) || 1) }));
+  const ownLinen = p.own_linen_discount_ore > 0 && sp.eget_sengetoy === '1';
   let quote: Quote | null = null, quoteErr: string | null = null;
   if (fra && til) {
     try {
       if (blocks.some(b => b.start < til && b.end > fra)) throw new DomainError('unavailable', T.datesBusy);
-      quote = await quoteFor(p.id, u.id, fra, til, adults + children, selected);
+      quote = await quoteFor(p.id, u.id, fra, til, adults + children, selected, undefined, null, ownLinen);
     } catch (e) { quoteErr = e instanceof DomainError ? translateMessage(e.message, lang) : T.quoteFailed; }
   }
   const PT = T.priceTypes;
@@ -108,6 +109,7 @@ export default async function PropertyPage({ params, searchParams }: { params: P
                   {a.price_type === 'per_unit' && <input type="number" name={'q_' + a.id} min={1} max={20} defaultValue={sp['q_' + a.id] ?? 1} style={{ width: 70 }} />}
                 </div>))}
             </div>}
+            {p.own_linen_discount_ore > 0 && <label className="check" style={{ marginTop: 12 }}><input type="checkbox" name="eget_sengetoy" value="1" defaultChecked={ownLinen} /> <span>{lang === 'en' ? `We bring our own bed linen and towels` : `Vi tar med eget sengetøy og håndklær`} <small className="muted">{lang === 'en' ? `−${nok(p.own_linen_discount_ore)} per person` : `−${nok(p.own_linen_discount_ore)} per person`}</small></span></label>}
             <button className="btn secondary block" style={{ marginTop: 10 }}>{T.calc}</button>
           </form>
 
@@ -119,7 +121,7 @@ export default async function PropertyPage({ params, searchParams }: { params: P
               <input type="hidden" name="propertyId" value={p.id} /><input type="hidden" name="slug" value={slug} />
               <input type="hidden" name="fra" value={fra} /><input type="hidden" name="til" value={til} />
               <input type="hidden" name="voksne" value={adults} /><input type="hidden" name="barn" value={children} /><input type="hidden" name="sped" value={infants} />
-              <input type="hidden" name="addons" value={JSON.stringify(selected)} />
+              <input type="hidden" name="addons" value={JSON.stringify(selected)} />{ownLinen && <input type="hidden" name="eget_sengetoy" value="1" />}
               <input type="hidden" name="idem" value={crypto.randomUUID()} />
               {bal.available > 0 && <label className="check field"><input type="checkbox" name="useRewards" defaultChecked /> {T.useBonus(nok(Math.min(bal.available, quote.subtotal_ore)), nok(bal.available))}</label>}
               <div className="field"><label>{T.comment}</label><textarea name="requests" maxLength={2000} placeholder={T.commentPh} /></div>

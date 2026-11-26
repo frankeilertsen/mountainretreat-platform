@@ -41,10 +41,10 @@ export async function updatePropertyAction(f: FormData) {
     const before = await one('SELECT name, max_guests, cleaning_fee_ore, check_in_time, check_out_time, active FROM properties WHERE id=$1', [id]);
     const amenities = str(f, 'amenities').split(',').map(s => s.trim()).filter(Boolean);
     await getPool().query(`UPDATE properties SET name=$2, address=$3, short_description=$4, description=$5, amenities=$6, house_rules=$7, max_guests=max_guests, max_guests_mode=max_guests_mode, default_min_nights=GREATEST(default_min_nights,$8),
-        check_in_time=$9, check_out_time=$10, cleaning_fee_ore=$11, active=$12, included_guests=$13, extra_guest_fee_ore=$14, extra_guest_fee_basis=$15, extra_guest_fee_includes=$16, airbnb_listing_url=$17, updated_at=now() WHERE id=$1`,
+        check_in_time=$9, check_out_time=$10, cleaning_fee_ore=$11, active=$12, included_guests=$13, extra_guest_fee_ore=$14, extra_guest_fee_basis=$15, extra_guest_fee_includes=$16, airbnb_listing_url=$17, airbnb_cleaning_fee_ore=$18, own_linen_discount_ore=$19, updated_at=now() WHERE id=$1`,
       [id, str(f, 'name'), str(f, 'address') || null, str(f, 'short_description') || null, str(f, 'description') || null, amenities, str(f, 'house_rules') || null,
        1, str(f, 'check_in_time') || '15:00', str(f, 'check_out_time') || '11:00', kr(f, 'cleaning_fee') ?? 0, !!f.get('active'), Math.max(1, int(f, 'included_guests', 4)), kr(f, 'extra_guest_fee') ?? 0,
-       str(f, 'extra_guest_fee_basis') === 'per_night' ? 'per_night' : 'per_stay', str(f, 'extra_guest_fee_includes') || null, airbnbUrl(str(f, 'airbnb_listing_url'))]);
+       str(f, 'extra_guest_fee_basis') === 'per_night' ? 'per_night' : 'per_stay', str(f, 'extra_guest_fee_includes') || null, airbnbUrl(str(f, 'airbnb_listing_url')), kr(f, 'airbnb_cleaning_fee') ?? null, kr(f, 'own_linen_discount') ?? 0]);
     const cap = await setMaxGuests(getPool(), id, str(f, 'max_guests_mode') === 'manual' ? 'manual' : 'auto', int(f, 'max_guests', 1));
     await audit(null, actor, 'property.updated', 'property', id, before, Object.fromEntries(f.entries()));
     return `Lagret. Maks ${cap.maxGuests} personer (${cap.places} sengeplasser).`;

@@ -55,6 +55,10 @@ async function Details({ p }: { p: any }) {
           <div><label>Utsjekk innen</label><input type="time" name="check_out_time" defaultValue={p.cout} /></div>
           <div><label>Sluttrengjøring (kr)</label><input name="cleaning_fee" defaultValue={p.cleaning_fee_ore / 100} /></div>
         </div>
+        <div className="fields">
+          <div><label>Sluttrengjøring på Airbnb (kr)</label><input name="airbnb_cleaning_fee" defaultValue={p.airbnb_cleaning_fee_ore != null ? p.airbnb_cleaning_fee_ore / 100 : ''} placeholder="samme som over" /><small className="muted">Brukes i prissammenligningen med Airbnb.</small></div>
+          <div><label>Rabatt for eget sengetøy (kr per person)</label><input name="own_linen_discount" defaultValue={p.own_linen_discount_ore ? p.own_linen_discount_ore / 100 : ''} placeholder="0 = ikke tilbudt" /><small className="muted">Gjesten kan krysse av for å ta med eget sengetøy. Spedbarn telles ikke.</small></div>
+        </div>
         <h4 style={{ marginTop: 20 }}>Maks personer</h4>
         <p className="muted" style={{ fontSize: '.85rem', margin: '0 0 10px' }}>Boligen har <strong style={{ color: 'var(--gold-2)' }}>{cap.total} sengeplasser</strong> fra {cap.rooms.length} rom (se fanen Rom og senger). Spedbarn i barneseng telles ikke.</p>
         <div className="fields">

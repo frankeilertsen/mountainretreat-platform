@@ -16,7 +16,7 @@ import { memberDiscount } from './memberDiscount';
 
 export type BookingRequestInput = {
   propertyId: string; startDate: string; endDate: string; adults: number; children: number; infants: number;
-  addOns: { id: string; quantity: number }[]; specialRequests?: string; useRewards?: boolean; idempotencyKey?: string;
+  addOns: { id: string; quantity: number }[]; specialRequests?: string; useRewards?: boolean; idempotencyKey?: string; ownLinen?: boolean;
 };
 
 type BookingRow = {
@@ -58,7 +58,7 @@ export async function requestBooking(member: UserLike & { email: string; name: s
   const guests = input.adults + input.children; // infants don't count toward occupancy
   if (input.adults < 1) throw new DomainError('bad_guests', 'Minst én voksen må være med.');
   if (input.startDate < todayOslo()) throw new DomainError('past', 'Innreise kan ikke være tilbake i tid.');
-  const quote = await quoteFor(input.propertyId, member.id, input.startDate, input.endDate, guests, input.addOns);
+  const quote = await quoteFor(input.propertyId, member.id, input.startDate, input.endDate, guests, input.addOns, getPool(), null, !!input.ownLinen);
   // Friendly early check; authoritative check happens at approval via the exclusion constraint
   if (!(await isRangeFree(input.propertyId, input.startDate, input.endDate))) {
     throw new DomainError('unavailable', 'Datoene er ikke ledige.');
@@ -68,17 +68,17 @@ export async function requestBooking(member: UserLike & { email: string; name: s
     return await tx(async c => {
       const b = await one<{ id: string; reference: string }>(
         `INSERT INTO bookings (reference, property_id, member_id, start_date, end_date, adults, children, infants,
-           stay_price_ore, cleaning_fee_ore, add_ons_price_ore, extra_guest_fee_ore, reward_discount_ore, price_total_ore, price_breakdown, special_requests, request_idempotency_key)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$16,0,$12,$13,$14,$15) RETURNING id, reference`,
+           stay_price_ore, cleaning_fee_ore, add_ons_price_ore, extra_guest_fee_ore, reward_discount_ore, price_total_ore, price_breakdown, special_requests, request_idempotency_key, own_linen)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$16,0,$12,$13,$14,$15,$17) RETURNING id, reference`,
         ['MR-' + humanCode(6), input.propertyId, member.id, input.startDate, input.endDate, input.adults, input.children, input.infants,
          quote.stay_ore, quote.cleaning_fee_ore, quote.add_ons_ore, quote.subtotal_ore,
          JSON.stringify({ quote, use_rewards: !!input.useRewards, estimated_reward_ore: estimatedReward }),
-         input.specialRequests?.trim().slice(0, 2000) || null, input.idempotencyKey ?? null, quote.extra_guest_fee_ore], c);
+         input.specialRequests?.trim().slice(0, 2000) || null, input.idempotencyKey ?? null, quote.extra_guest_fee_ore, !!quote.own_linen], c);
       for (const a of quote.add_ons) {
         await c.query(`INSERT INTO booking_add_ons (booking_id, add_on_item_id, quantity, unit_price_at_selection_ore, total_price_ore) VALUES ($1,$2,$3,$4,$5)`,
           [b!.id, a.id, a.quantity, a.unit_price_ore, a.total_ore]);
       }
-      await upsertBookingPreparation(c, b!.id, input.propertyId, { adults: input.adults, children: input.children, infants: input.infants });
+      await upsertBookingPreparation(c, b!.id, input.propertyId, { adults: input.adults, children: input.children, infants: input.infants, ownLinen: !!quote.own_linen });
       await audit(c, actor, 'booking.requested', 'booking', b!.id, undefined, { ...input, total: quote.subtotal_ore });
       const prop = await propertyName(c, input.propertyId);
       await notifyAdmins({ type: 'booking_requested', dedupeKey: `booking_requested:${b!.id}`, subject: `Ny bookingforespørsel ${b!.reference}`,

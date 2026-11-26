@@ -11,11 +11,11 @@ import { putObject } from '../storage';
 import { helperMsg, helperEmailBody, HelperMessage } from '../i18n/cleaning';
 
 // ------------------------------------------------------------------ stay preparation
-export async function upsertBookingPreparation(c: PoolClient, bookingId: string, propertyId: string, g: { adults: number; children: number; infants: number }) {
+export async function upsertBookingPreparation(c: PoolClient, bookingId: string, propertyId: string, g: { adults: number; children: number; infants: number; ownLinen?: boolean }) {
   await c.query(
-    `INSERT INTO stay_preparations (property_id, booking_id, adults, children, infants) VALUES ($1,$2,$3,$4,$5)
-     ON CONFLICT (booking_id) DO UPDATE SET adults=EXCLUDED.adults, children=EXCLUDED.children, infants=EXCLUDED.infants, updated_at=now()`,
-    [propertyId, bookingId, g.adults, g.children, g.infants]);
+    `INSERT INTO stay_preparations (property_id, booking_id, adults, children, infants, own_linen) VALUES ($1,$2,$3,$4,$5,COALESCE($6,false))
+     ON CONFLICT (booking_id) DO UPDATE SET adults=EXCLUDED.adults, children=EXCLUDED.children, infants=EXCLUDED.infants, own_linen=COALESCE($6, stay_preparations.own_linen), updated_at=now()`,
+    [propertyId, bookingId, g.adults, g.children, g.infants, g.ownLinen ?? null]);
 }
 
 async function ensureExternalPreparation(c: PoolClient, eventId: string, propertyId: string): Promise<string> {
@@ -184,7 +184,7 @@ export async function tasksForHelper(user: UserLike & { cleaning_scope?: string 
     `SELECT t.id, t.task_type, t.status, t.channel_name, to_char(t.checkout_date,'YYYY-MM-DD') AS date, to_char(t.next_checkin_date,'YYYY-MM-DD') AS next_checkin,
             t.deadline_at, t.checkout_guests, t.notes, t.assigned_to_user_id, p.name AS property_name, p.address, p.id AS property_id,
             to_char(p.check_out_time,'HH24:MI') AS check_out_time, to_char(p.check_in_time,'HH24:MI') AS check_in_time,
-            sp.adults AS next_adults, sp.children AS next_children, sp.infants AS next_infants, sp.comment_for_cleaner, to_char(sp.expected_arrival_time,'HH24:MI') AS expected_arrival,
+            sp.adults AS next_adults, sp.children AS next_children, sp.infants AS next_infants, sp.comment_for_cleaner, sp.own_linen, to_char(sp.expected_arrival_time,'HH24:MI') AS expected_arrival,
             hu.name AS assignee_name,
             (t.next_checkin_date IS NOT NULL AND t.next_checkin_date = t.checkout_date) AS same_day
      FROM cleaning_tasks t JOIN properties p ON p.id=t.property_id
