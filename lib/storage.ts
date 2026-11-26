@@ -25,7 +25,7 @@ const localDir = () => path.resolve(process.env.STORAGE_DIR || './storage');
 const objPath = (key: string) => key.split('/').map(encodeURIComponent).join('/');
 
 function checkKey(key: string) {
-  if (!/^[a-z_]+\/[0-9a-f-]{36}\.(pdf|jpeg|jpg|png|webp)$/i.test(key)) throw new Error('Invalid storage key');
+  if (!/^[a-z_]+\/[0-9a-f-]{36}\.(pdf|jpeg|jpg|png|webp|gif|bin)$/i.test(key)) throw new Error('Invalid storage key');
 }
 
 export async function putObject(key: string, data: Buffer, contentType: string): Promise<void> {

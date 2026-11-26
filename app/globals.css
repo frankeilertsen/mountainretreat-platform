@@ -375,3 +375,14 @@ main { padding: 44px 0 90px; }
 .table-wrap.scroll-y thead th { position: sticky; top: 0; z-index: 1; background: var(--surface); }
 
 .launch-banner { border-color: var(--gold) !important; background: linear-gradient(90deg, rgba(200,169,107,.16), rgba(200,169,107,.04)) !important; }
+
+/* E-mail to members (admin) */
+.mail-thumbs { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 10px; margin-bottom: 12px; }
+.mail-thumb { display: flex; flex-direction: column; gap: 4px; }
+.mail-thumb img { width: 100%; aspect-ratio: 4/3; object-fit: cover; border-radius: 8px; border: 1px solid var(--line); }
+.pick-list { max-height: 280px; overflow-y: auto; border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; margin-top: 8px; display: grid; gap: 4px; }
+.mail-preview { border-radius: 10px; overflow: hidden; max-height: 80vh; overflow-y: auto; }
+.mail-preview img { max-width: 100%; }
+.mail-preview h1, .mail-preview p, .mail-preview li { color: #2b2a27; }
+.mail-preview a { color: #8a6d2f; }
+.mail-preview a[style*='background'] { color: #fff; }
