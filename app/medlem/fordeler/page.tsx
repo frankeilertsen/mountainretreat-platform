@@ -20,7 +20,7 @@ export default async function Benefits() {
   const presentations = await listPresentations({ activeOnly: true });
   const { disc, terms } = b;
   // Worked example: 3 nights at 2 000 kr + 1 200 kr cleaning
-  const nightly = 300000, nights = 3, cleaning = b.cleaning?.airbnb ?? 125000, ourCleaning = b.cleaning?.ours ?? cleaning;
+  const nightly = 300000, nights = 3, cleaning = b.cleaning?.airbnb ?? 150000, ourCleaning = b.cleaning?.ours ?? cleaning;
   const airbnbStay = nightly * nights, airbnbTotal = Math.round((airbnbStay + cleaning) * (1 + b.airbnbFeePct / 100));
   const fee = airbnbTotal - airbnbStay - cleaning;
   // Example in low/high season, after the total cap
