@@ -25,7 +25,7 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
     one(`SELECT (SELECT count(*) FROM bookings WHERE status='awaiting_payment')::int AS awaiting,
                 (SELECT count(*) FROM bookings WHERE status='confirmed' AND start_date >= current_date)::int AS confirmed,
                 (SELECT count(*) FROM users WHERE system_role='member' AND status='active')::int AS members,
-                (SELECT COALESCE(sum(amount_ore - refunded_amount_ore),0) FROM payments WHERE status IN ('succeeded','partially_refunded') AND created_at >= date_trunc('year', now()))::bigint AS revenue`),
+                (SELECT COALESCE(sum(amount_ore - refunded_amount_ore),0) FROM payments WHERE status IN ('succeeded','partially_refunded') AND NOT test_mode AND created_at >= date_trunc('year', now()))::bigint AS revenue`),
     q(`SELECT p.name, (SELECT COALESCE(sum(upper(ab.date_range * daterange($1::date,$2::date)) - lower(ab.date_range * daterange($1::date,$2::date))),0) FROM availability_blocks ab WHERE ab.property_id=p.id AND ab.date_range && daterange($1::date,$2::date) AND ab.block_type <> 'manual_admin')::int AS nights
        FROM properties p WHERE p.active ORDER BY p.name`, [today, in30]),
     q(`SELECT cc.id, cc.display_name, cc.integration_mode, cc.last_sync_status, cc.last_synced_at, cc.last_fetched_at, cc.consecutive_failures, p.name AS property,

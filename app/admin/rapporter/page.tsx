@@ -9,7 +9,7 @@ const M = ['jan', 'feb', 'mar', 'apr', 'mai', 'jun', 'jul', 'aug', 'sep', 'okt',
 export default async function Reports() {
   const revenue = await q(`SELECT to_char(m, 'YYYY-MM') AS month, COALESCE(sum(p.amount_ore - p.refunded_amount_ore),0)::bigint AS amount
     FROM generate_series(date_trunc('month', now()) - interval '11 months', date_trunc('month', now()), interval '1 month') m
-    LEFT JOIN payments p ON date_trunc('month', p.created_at) = m AND p.status IN ('succeeded','partially_refunded','refunded') GROUP BY m ORDER BY m`);
+    LEFT JOIN payments p ON date_trunc('month', p.created_at) = m AND p.status IN ('succeeded','partially_refunded','refunded') AND NOT p.test_mode GROUP BY m ORDER BY m`);
   const nights = await q(`SELECT to_char(m,'YYYY-MM') AS month,
       COALESCE(sum(CASE WHEN ab.block_type='platform_booking' THEN upper(ab.date_range * daterange(m::date,(m+interval '1 month')::date)) - lower(ab.date_range * daterange(m::date,(m+interval '1 month')::date)) END),0)::int AS own,
       COALESCE(sum(CASE WHEN ab.block_type='external_sync' THEN upper(ab.date_range * daterange(m::date,(m+interval '1 month')::date)) - lower(ab.date_range * daterange(m::date,(m+interval '1 month')::date)) END),0)::int AS external

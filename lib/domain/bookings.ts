@@ -177,8 +177,8 @@ export async function startPayment(bookingId: string, user: UserLike & { email: 
   if (open) return { checkoutUrl: open.checkout_url };
   const idem = `pay_${b.id}_${Date.now()}`;
   const pay = await one<{ id: string }>(
-    `INSERT INTO payments (booking_id, method, provider, amount_ore, idempotency_key) VALUES ($1,$2,$3,$4,$5) RETURNING id`,
-    [b.id, method, provider.id, b.price_total_ore, idem]);
+    `INSERT INTO payments (booking_id, method, provider, amount_ore, idempotency_key, test_mode) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`,
+    [b.id, method, provider.id, b.price_total_ore, idem, isTestPayment(method, provider.id)]);
   try {
     const res = await provider.createCheckout({ paymentId: pay!.id, bookingRef: b.reference, amountOre: b.price_total_ore,
       description: `Opphold ${b.reference} (${fmtDate(b.start_date)} – ${fmtDate(b.end_date)})`, customerEmail: user.email, idempotencyKey: idem });
@@ -329,6 +329,13 @@ export async function markManualRefundDone(refundId: string, actor: Actor) {
     await c.query(`UPDATE payments SET refunded_amount_ore = refunded_amount_ore + $2, status = CASE WHEN refunded_amount_ore + $2 >= amount_ore THEN 'refunded' ELSE 'partially_refunded' END WHERE id=$1`, [r.payment_id, r.amount_ore]);
     await audit(c, actor, 'refund.marked_done_manually', 'refund', refundId);
   });
+}
+
+/** Sandbox / test-environment payments are left out of revenue figures. */
+function isTestPayment(method: string, providerId: string) {
+  if (providerId === 'mock') return true;
+  if (method === 'vipps') return process.env.VIPPS_ENV !== 'production';
+  return (process.env.STRIPE_SECRET_KEY ?? '').startsWith('sk_test');
 }
 
 // ---------------------------------------------------------------- cancellation

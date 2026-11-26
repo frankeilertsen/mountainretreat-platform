@@ -13,7 +13,7 @@ export default async function Payments({ searchParams }: { searchParams: Promise
   const pays = await q(`SELECT p.*, b.reference, b.id AS bid, u.name FROM payments p JOIN bookings b ON b.id=p.booking_id JOIN users u ON u.id=b.member_id ORDER BY p.created_at DESC LIMIT 200`);
   const invoices = await q(`SELECT i.*, to_char(i.due_date,'YYYY-MM-DD') AS due, p.id AS pid, b.reference, b.id AS bid, u.name FROM invoices i JOIN payments p ON p.id=i.payment_id JOIN bookings b ON b.id=p.booking_id JOIN users u ON u.id=b.member_id WHERE i.status IN ('draft','sent','overdue') ORDER BY (i.status='draft') DESC, i.due_date`);
   const refunds = await q(`SELECT r.*, b.reference, b.id AS bid, u.name, p.provider FROM refunds r JOIN payments p ON p.id=r.payment_id JOIN bookings b ON b.id=p.booking_id JOIN users u ON u.id=b.member_id ORDER BY (r.status<>'succeeded') DESC, r.created_at DESC LIMIT 100`);
-  const t = await one(`SELECT COALESCE(sum(amount_ore) FILTER (WHERE status IN ('succeeded','partially_refunded','refunded')),0)::bigint AS paid, COALESCE(sum(refunded_amount_ore),0)::bigint AS refunded FROM payments`);
+  const t = await one(`SELECT COALESCE(sum(amount_ore) FILTER (WHERE status IN ('succeeded','partially_refunded','refunded')),0)::bigint AS paid, COALESCE(sum(refunded_amount_ore),0)::bigint AS refunded FROM payments WHERE NOT test_mode`);
   const prov = [['Stripe (kort)', stripeProvider.configured() ? 'Aktiv' : 'Mangler nøkler'], ['Vipps', vippsProvider.configured() ? 'Aktiv' : 'Ikke koblet til'], ['Testleverandør', mockProvider.configured() ? 'PÅ (kun utvikling)' : 'Av']];
   return (
     <>
@@ -34,7 +34,7 @@ export default async function Payments({ searchParams }: { searchParams: Promise
           <td><div className="row">{r.status === 'failed' && <form action={retryRefundAction}><input type="hidden" name="id" value={r.id} /><button className="btn ghost small">Prøv igjen</button></form>}
             {r.status !== 'succeeded' && <form action={manualRefundDoneAction}><input type="hidden" name="id" value={r.id} /><button className="btn ghost small">Utført manuelt</button></form>}</div></td></tr>))}</tbody></table></div>}
       <div className="card"><h3>Alle betalinger</h3><div className="table-wrap"><table><thead><tr><th>Tid</th><th>Booking</th><th>Metode</th><th>Beløp</th><th>Refundert</th><th>Status</th></tr></thead><tbody>
-        {pays.map(p => <tr key={p.id}><td><small>{fmtDateTime(p.created_at)}</small></td><td><Link href={`/admin/bookinger/${p.bid}`}>{p.reference}</Link> · {p.name}</td><td>{p.method}{p.provider === 'mock' ? ' (test)' : ''}</td><td>{nok(p.amount_ore)}</td><td>{p.refunded_amount_ore ? nok(p.refunded_amount_ore) : ''}</td><td><Status s={p.status} /></td></tr>)}
+        {pays.map(p => <tr key={p.id}><td><small>{fmtDateTime(p.created_at)}</small></td><td><Link href={`/admin/bookinger/${p.bid}`}>{p.reference}</Link> · {p.name}</td><td>{p.method}{p.test_mode ? <span className="badge" style={{ marginLeft: 6 }}>Test</span> : ''}</td><td>{nok(p.amount_ore)}</td><td>{p.refunded_amount_ore ? nok(p.refunded_amount_ore) : ''}</td><td><Status s={p.status} /></td></tr>)}
       </tbody></table></div></div>
     </>
   );
