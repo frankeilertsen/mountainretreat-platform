@@ -39,7 +39,23 @@ export default async function PropertyPage({ params, searchParams }: { params: P
     ORDER BY 3, 5, 4`, [p.id]);
   const today = todayOslo();
   const blocks = await blocksForRange(p.id, today, addDays(today, 400));
-  const seasons = await q(`SELECT name, price_per_night_ore, weekend_price_per_night_ore AS wk, min_nights, color FROM season_categories WHERE property_id=$1 AND active ORDER BY price_per_night_ore`, [p.id]);
+  // Season colours with the price span (weekday–weekend, all coming periods) – exact price comes with the quote
+  const seasonRows = await q<{ id: string; name: string; color: string | null; min: number; max: number }>(
+    `SELECT c.id, c.name, c.color, min(v)::int AS min, max(v)::int AS max
+     FROM season_categories c JOIN pricing_periods pp ON pp.season_category_id=c.id AND pp.active AND pp.end_date >= current_date,
+     LATERAL (VALUES (COALESCE(pp.price_per_night_ore, c.price_per_night_ore)),
+                     (COALESCE(pp.weekend_price_per_night_ore, pp.price_per_night_ore, c.weekend_price_per_night_ore, c.price_per_night_ore))) x(v)
+     WHERE c.property_id=$1 AND c.active GROUP BY c.id, c.name, c.color ORDER BY min(v)`, [p.id]);
+  const seasons = seasonRows;
+  const dayPeriods = await q<{ s: string; e: string; color: string | null; name: string; priority: number }>(
+    `SELECT to_char(pp.start_date,'YYYY-MM-DD') s, to_char(pp.end_date,'YYYY-MM-DD') e, c.color, c.name, pp.priority
+     FROM pricing_periods pp JOIN season_categories c ON c.id=pp.season_category_id
+     WHERE pp.property_id=$1 AND pp.active AND pp.end_date >= current_date AND pp.start_date <= current_date + 200`, [p.id]);
+  const seasonDots: Record<string, { color: string; name: string }> = {};
+  if (p.pricing_mode !== 'airbnb') for (let dd = todayOslo().slice(0, 8) + '01', i = 0; i < 200; i++, dd = addDays(dd, 1)) {
+    const hit = dayPeriods.filter(x => x.s <= dd && x.e >= dd).sort((a, b) => b.priority - a.priority)[0];
+    if (hit?.color) seasonDots[dd] = { color: hit.color, name: hit.name };
+  }
   const addOns = await q(`SELECT id, name, description, price_type, unit_price_ore, mandatory FROM add_on_items WHERE (property_id=$1 OR property_id IS NULL) AND active ORDER BY mandatory DESC, name`, [p.id]);
   const bal = await rewardBalance(u.id);
   const sleeping = await q<{ room: string; beds: string }>(`SELECT r.name AS room, string_agg(b.bed_type || '|' || COALESCE(b.width_cm::text,''), ',' ORDER BY b.allocation_priority) AS beds
@@ -75,7 +91,7 @@ export default async function PropertyPage({ params, searchParams }: { params: P
           <dl className="dl"><dt>{T.guests}</dt><dd>{T.upTo(p.max_guests)}</dd>{sleeping.length > 0 && <><dt>{T.bedrooms}</dt><dd>{sleeping.map(s => <div key={s.room}>{s.room}: <span className="muted">{s.beds.split(',').map(x => { const [t, w] = x.split('|'); return `${bedLabel(t)}${w ? ` ${w} cm` : ''}`; }).join(', ')}</span></div>)}</dd></>}<dt>{T.checkIn}</dt><dd>{T.from(p.cin)}</dd><dt>{T.checkOut}</dt><dd>{T.by(p.cout)}</dd><dt>{T.cleaning}</dt><dd>{nok(p.cleaning_fee_ore)}</dd><dt>{T.included}</dt><dd>{T.priceFor(p.included_guests)}</dd>{p.extra_guest_fee_ore > 0 && <><dt>{T.extraPerson}</dt><dd>{nok(p.extra_guest_fee_ore)} {T.perPerson(p.extra_guest_fee_basis)}{p.extra_guest_fee_includes ? <><br /><small className="muted">{p.extra_guest_fee_includes}</small></> : null}</dd></>}</dl>
           {p.house_rules && <p className="muted"><strong>{T.houseRules}</strong> {p.house_rules}</p>}
           <div className="card flat">
-            <h3>{T.prices}</h3>
+            <h3>{p.pricing_mode === 'airbnb' ? T.prices : (lang === 'en' ? 'Seasons' : 'Sesonger')}</h3>
             {p.pricing_mode === 'airbnb' ? (
               rateStats?.min ? <>
                 <div className="row between"><span>{T.airbnb3m}</span><span>{T.fromP} {nok(rateStats.min)} <small>{t.common.perNight}</small></span></div>
@@ -83,8 +99,10 @@ export default async function PropertyPage({ params, searchParams }: { params: P
                 <small className="muted">{T.followsAirbnb(airbnbFee, disc.totalPct, disc.loyaltyPct)} <a href="/medlem/fordeler">{T.howCalc}</a></small>
               </> : <p className="muted">{T.notEntered}</p>
             ) : <>
-              {seasons.map(s => <div key={s.name} className="row between"><span><i style={{ display: 'inline-block', width: 10, height: 10, borderRadius: 3, background: s.color ?? '#ccc', marginRight: 8 }} />{s.name} <small>· {T.minNights(s.min_nights)}</small></span><span><small className="muted" style={{ textDecoration: 'line-through', marginRight: 8 }}>{nok(s.price_per_night_ore)}</small>{nok(s.price_per_night_ore * (1 - disc.totalPct / 100))} <small>{t.common.perNight}</small>{s.wk != null && s.wk !== s.price_per_night_ore && <><br /><small className="muted">{lang === 'en' ? 'Fri–Sat' : 'fre–lør'} {nok(s.wk * (1 - disc.totalPct / 100))}</small></>}</span></div>)}
-              <small className="muted">{T.discountApplied(disc.totalPct, disc.atMax ? null : disc.nextTotalPct)}</small>
+              {seasons.map(s => { const f = 1 - disc.totalPct / 100; const span = (a: number, b: number) => a === b ? nok(a) : `${nok(a).replace(/\s?kr$/, '')}–${nok(b)}`;
+                return <div key={s.id} className="row between season-row"><span><i className="season-dot" style={{ background: s.color ?? '#ccc' }} />{s.name}</span>
+                  <span style={{ textAlign: 'right' }}><strong>{span(Math.round(s.min * f / 100) * 100, Math.round(s.max * f / 100) * 100)}</strong> <small>{t.common.perNight}</small><br /><small className="muted" style={{ textDecoration: 'line-through' }}>{span(s.min, s.max)}</small></span></div>; })}
+              <small className="muted">{T.discountApplied(disc.totalPct, disc.atMax ? null : disc.nextTotalPct)} {lang === 'en' ? 'The exact price for your dates is shown when you calculate the price.' : 'Nøyaktig pris for dine datoer ser du når du beregner pris.'}</small>
             </>}
           </div>
         </div>
@@ -131,8 +149,8 @@ export default async function PropertyPage({ params, searchParams }: { params: P
         </div>
       </div>
       <hr className="divider" />
-      <div className="row between"><h2>{T.availability}</h2><div className="legend"><span><i style={{ background: 'var(--surface-2)', border: '1px solid var(--line-2)' }} />{T.free}</span><span><i style={{ background: '#121210', border: '1px solid #2c2b26' }} />{T.busy}</span></div></div>
-      <MonthCalendar blocks={blocks} months={6} selStart={fra} selEnd={til} lang={lang} />
+      <div className="row between"><h2>{T.availability}</h2><div className="legend"><span><i style={{ background: 'var(--surface-2)', border: '1px solid var(--line-2)' }} />{T.free}</span><span><i style={{ background: '#121210', border: '1px solid #2c2b26' }} />{T.busy}</span>{seasons.map(s => <span key={s.id}><i className="season-dot" style={{ background: s.color ?? '#ccc', border: 0 }} />{s.name}</span>)}</div></div>
+      <MonthCalendar blocks={blocks} months={6} selStart={fra} selEnd={til} lang={lang} dots={seasonDots} />
       <p className="muted" style={{ marginTop: 12, fontSize: '.85rem' }}>{T.calNote(fmtTime(p.cin))}</p>
     </>
   );

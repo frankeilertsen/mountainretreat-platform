@@ -361,3 +361,11 @@ main { padding: 44px 0 90px; }
 .prop-row p { margin: 0 0 6px; font-size: .88rem; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .prop-row .go { color: var(--gold-2); font-size: .85rem; }
 @media (max-width: 480px) { .prop-list { grid-template-columns: 1fr; } .prop-row { grid-template-columns: 96px 1fr; } }
+
+/* Season dots (member property page) */
+.season-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 8px; vertical-align: middle; }
+.season-row { padding: 6px 0; }
+.cal .day { position: relative; }
+.cal .day .cal-dot { position: absolute; bottom: 12%; left: 50%; transform: translateX(-50%); width: 6px; height: 6px; border-radius: 50%; }
+.cal .day.sel .cal-dot { box-shadow: 0 0 0 1.5px #15130e; }
+.cal .day.busy .cal-dot { opacity: .35; }
