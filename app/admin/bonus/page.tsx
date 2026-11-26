@@ -51,6 +51,7 @@ export default async function RewardsAdmin({ searchParams }: { searchParams: Pro
             <div><label>Opptjening (dager)</label><input name="referral_reward_vesting_days" defaultValue={s.referral_reward_vesting_days} /></div>
             <div><label>Gyldighet (måneder fra opptjent)</label><input name="referral_reward_validity_months" defaultValue={s.referral_reward_validity_months ?? '24'} /></div>
             <div><label>Maks ubrukte bonuser</label><input name="referral_reward_max_unused" defaultValue={s.referral_reward_max_unused} /></div>
+            <div><label>Maks bonuser per booking</label><input name="referral_reward_max_per_booking" defaultValue={s.referral_reward_max_per_booking ?? '5'} /></div>
             <div><label>Maks invitasjoner per uke</label><input name="invitation_weekly_limit" defaultValue={s.invitation_weekly_limit ?? '50'} /></div>
           </div>
           <button className="btn" style={{ marginTop: 12 }}>Lagre regler</button>

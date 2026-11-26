@@ -88,7 +88,7 @@ const no = {
     loyaltyText: (step: number) => `Hver gjennomførte booking gir ${step} prosentpoeng ekstra rabatt på alle fremtidige opphold. Kansellerte bookinger teller ikke.`,
     ladderNote: (n: number) => `Total medlemsrabatt etter antall bookinger (du har ${n}).`,
     refTitle: 'Dere får begge bonus',
-    refText: (a: string, b: string, max: number) => `Når noen du inviterer fullfører sitt første opphold, får du ${a} og vedkommende ${b}. Bonusen blir tilgjengelig etter noen dager og trekkes fra prisen på neste booking. Hver bonus er gyldig i 24 måneder fra den er opptjent og må brukes innen utløpsdatoen. Du kan bruke én bonus per booking og ha opptil ${max} ubrukte bonuser – bruk dem for å kunne tjene nye. Her begynner det å bli både hyggelig og lønnsomt å være ambassadør – så lenge du selv er fornøyd og har tro på det vi leverer.`,
+    refText: (a: string, b: string, max: number) => `Når noen du inviterer fullfører sitt første opphold, får du ${a} og vedkommende ${b}. Bonusen blir tilgjengelig etter noen dager og trekkes fra prisen på neste booking. Hver bonus er gyldig i 24 måneder fra den er opptjent og må brukes innen utløpsdatoen. Du kan ha opptil ${max} ubrukte bonuser og bruke opptil 5 per booking – bruk dem for å kunne tjene nye. Her begynner det å bli både hyggelig og lønnsomt å være ambassadør – så lenge du selv er fornøyd og har tro på det vi leverer.`,
     inviteCta: 'Inviter noen',
   },
   savings: {
@@ -110,7 +110,7 @@ const no = {
     discountApplied: (p: number, next: number | null) => `Din medlemsrabatt på ${p} % er trukket fra${next != null ? ` – neste booking gir ${next} %` : ''}.`,
     request: 'Send forespørsel', checkInDate: 'Innsjekk', checkOutDate: 'Utsjekk', adults: 'Voksne', children: 'Barn (2–17)', infants: 'Spedbarn', addOns: 'Tillegg', mandatory: 'obligatorisk',
     priceTypes: { flat: 'per opphold', per_night: 'per natt', per_unit: 'per stk/sett', per_guest: 'per gjest' } as Record<string, string>,
-    calc: 'Beregn pris', lockNote: 'Endelig pris låses når forespørselen godkjennes.', useBonus: (a: string, exp: string, n: number) => `Bruk én bonus: −${a} (må brukes innen ${exp})${n > 1 ? ` · du har ${n} bonuser, én kan brukes per booking` : ''}`,
+    calc: 'Beregn pris', lockNote: 'Endelig pris låses når forespørselen godkjennes.', useBonus: (a: string, exp: string, used: number, n: number) => `Bruk bonus: −${a} (${used === 1 ? '1 bonus' : `${used} bonuser`}, den første må brukes innen ${exp})${n > used ? ` · du har ${n} bonuser, maks 5 kan brukes per booking` : ''}`,
     comment: 'Kommentar / spesielle ønsker', commentPh: 'F.eks. forventet ankomsttid, barneseng, allergier …', availability: 'Tilgjengelighet', free: 'Ledig', busy: 'Opptatt',
     calNote: (t: string) => `Innsjekk fra kl. ${t}. Kalenderen oppdateres fortløpende fra alle kanaler.`, datesBusy: 'Noen av datoene er opptatt. Velg andre datoer.', quoteFailed: 'Kunne ikke beregne pris.',
   },
@@ -140,7 +140,7 @@ const no = {
     stage: { pending: 'Invitert – ikke registrert ennå', expired: 'Invitasjonen utløp', revoked: 'Trukket tilbake', member_no_booking: 'Medlem – har ikke booket', booked: 'Har booket – bonus etter oppholdet', qualified: 'Første opphold fullført – bonus gitt' } as Record<string, string>,
   },
   wallet: {
-    eyebrow: 'Bonuslommebok', lead: (pending: string | null) => `tilgjengelig til bruk${pending ? ` · ${pending} blir tilgjengelig snart` : ''}. Bonus kan brukes som rabatt på bookinger, én bonus per booking, men ikke tas ut i penger. Hver bonus er gyldig i 24 måneder fra den er opptjent.`,
+    eyebrow: 'Bonuslommebok', lead: (pending: string | null) => `tilgjengelig til bruk${pending ? ` · ${pending} blir tilgjengelig snart` : ''}. Bonus kan brukes som rabatt på bookinger, opptil 5 bonuser per booking, men ikke tas ut i penger. Hver bonus er gyldig i 24 måneder fra den er opptjent.`,
     credits: 'Bonuser', none: 'Ingen bonuser ennå.', fromAdmin: 'Fra administrator', youReferred: (n: string) => `Du vervet ${n}`, welcome: (n: string) => `Velkomstbonus (invitert av ${n})`, aMember: 'et medlem',
     remaining: (a: string) => `gjenstår ${a}`, expires: (d: string) => `må brukes innen ${d}`, earned: (d: string) => `opptjent ${d}`, availableOn: (d: string) => `tilgjengelig ${d}`, tx: 'Transaksjoner', noTx: 'Ingen transaksjoner.',
     kind: { granted: 'Opptjent', vested: 'Tilgjengelig', redeemed: 'Brukt', redemption_reversed: 'Tilbakeført', expired: 'Utløpt', revoked: 'Trukket tilbake', adjusted: 'Justering' } as Record<string, string>,
@@ -262,7 +262,7 @@ const en: Dict = {
     loyaltyText: (step: number) => `Each completed booking adds ${step} percentage point${step === 1 ? '' : 's'} of extra discount to all future stays. Cancelled bookings don’t count.`,
     ladderNote: (n: number) => `Total member discount by number of bookings (you have ${n}).`,
     refTitle: 'You both get a bonus',
-    refText: (a: string, b: string, max: number) => `When someone you invite completes their first stay, you receive ${a} and they receive ${b}. The bonus becomes available after a few days and is deducted from the price of your next booking. Each bonus is valid for 24 months from the date it is earned and must be used before it expires. You can use one bonus per booking and hold up to ${max} unused bonuses – use them to earn new ones. This is where being an ambassador becomes both enjoyable and rewarding – as long as you are happy yourself and believe in what we offer.`,
+    refText: (a: string, b: string, max: number) => `When someone you invite completes their first stay, you receive ${a} and they receive ${b}. The bonus becomes available after a few days and is deducted from the price of your next booking. Each bonus is valid for 24 months from the date it is earned and must be used before it expires. You can hold up to ${max} unused bonuses and use up to 5 per booking – use them to earn new ones. This is where being an ambassador becomes both enjoyable and rewarding – as long as you are happy yourself and believe in what we offer.`,
     inviteCta: 'Invite someone',
   },
   savings: {
@@ -284,7 +284,7 @@ const en: Dict = {
     discountApplied: (p: number, next: number | null) => `Your member discount of ${p} % has been deducted${next != null ? ` – your next booking gives ${next} %` : ''}.`,
     request: 'Send a request', checkInDate: 'Check-in', checkOutDate: 'Check-out', adults: 'Adults', children: 'Children (2–17)', infants: 'Infants', addOns: 'Extras', mandatory: 'mandatory',
     priceTypes: { flat: 'per stay', per_night: 'per night', per_unit: 'per item/set', per_guest: 'per guest' },
-    calc: 'Calculate price', lockNote: 'The final price is locked when your request is approved.', useBonus: (a: string, exp: string, n: number) => `Use one bonus: −${a} (must be used by ${exp})${n > 1 ? ` · you have ${n} bonuses, one can be used per booking` : ''}`,
+    calc: 'Calculate price', lockNote: 'The final price is locked when your request is approved.', useBonus: (a: string, exp: string, used: number, n: number) => `Use bonus: −${a} (${used === 1 ? '1 bonus' : `${used} bonuses`}, the first must be used by ${exp})${n > used ? ` · you have ${n} bonuses, up to 5 can be used per booking` : ''}`,
     comment: 'Comments / special requests', commentPh: 'E.g. expected arrival time, cot, allergies …', availability: 'Availability', free: 'Available', busy: 'Booked',
     calNote: (t: string) => `Check-in from ${t}. The calendar is kept up to date from all channels.`, datesBusy: 'Some of the dates are taken. Please choose other dates.', quoteFailed: 'Could not calculate the price.',
   },
@@ -314,7 +314,7 @@ const en: Dict = {
     stage: { pending: 'Invited – not registered yet', expired: 'Invitation expired', revoked: 'Withdrawn', member_no_booking: 'Member – has not booked', booked: 'Has booked – bonus after the stay', qualified: 'First stay completed – bonus paid' },
   },
   wallet: {
-    eyebrow: 'Bonus wallet', lead: (pending: string | null) => `available to use${pending ? ` · ${pending} becomes available soon` : ''}. Bonuses can be used as a discount on bookings, one bonus per booking, but cannot be paid out as cash. Each bonus is valid for 24 months from the date it is earned.`,
+    eyebrow: 'Bonus wallet', lead: (pending: string | null) => `available to use${pending ? ` · ${pending} becomes available soon` : ''}. Bonuses can be used as a discount on bookings, up to 5 bonuses per booking, but cannot be paid out as cash. Each bonus is valid for 24 months from the date it is earned.`,
     credits: 'Bonuses', none: 'No bonuses yet.', fromAdmin: 'From the administrator', youReferred: (n: string) => `You referred ${n}`, welcome: (n: string) => `Welcome bonus (invited by ${n})`, aMember: 'a member',
     remaining: (a: string) => `${a} remaining`, earned: (d: string) => `earned ${d}`, expires: (d: string) => `must be used by ${d}`, availableOn: (d: string) => `available ${d}`, tx: 'Transactions', noTx: 'No transactions.',
     kind: { granted: 'Earned', vested: 'Available', redeemed: 'Used', redemption_reversed: 'Returned', expired: 'Expired', revoked: 'Withdrawn', adjusted: 'Adjustment' },

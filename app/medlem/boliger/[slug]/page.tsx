@@ -123,7 +123,7 @@ export default async function PropertyPage({ params, searchParams }: { params: P
               <input type="hidden" name="voksne" value={adults} /><input type="hidden" name="barn" value={children} /><input type="hidden" name="sped" value={infants} />
               <input type="hidden" name="addons" value={JSON.stringify(selected)} />{ownLinen && <input type="hidden" name="eget_sengetoy" value="1" />}
               <input type="hidden" name="idem" value={crypto.randomUUID()} />
-              {bal.next && <label className="check field"><input type="checkbox" name="useRewards" defaultChecked /> {T.useBonus(nok(Math.min(bal.next.amount, quote.subtotal_ore)), fmtDate(bal.next.expiresAt), bal.unused)}</label>}
+              {bal.next && <label className="check field"><input type="checkbox" name="useRewards" defaultChecked /> {T.useBonus(nok(Math.min(bal.next.amount, quote.subtotal_ore)), fmtDate(bal.next.expiresAt), bal.next.count, bal.unused)}</label>}
               <div className="field"><label>{T.comment}</label><textarea name="requests" maxLength={2000} placeholder={T.commentPh} /></div>
               <button className="btn block">{T.request}</button>
             </form>

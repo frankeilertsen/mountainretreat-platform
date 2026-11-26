@@ -84,7 +84,7 @@ describe('referral rewards', () => {
     expect(await one(`SELECT 1 FROM reward_credits WHERE user_id=$1`, [b.id])).toBeTruthy();
   });
 
-  it('only ONE bonus is used per booking (the one expiring first) and it is returned on rejection/expiry', async () => {
+  it('up to 5 bonuses are used per booking (those expiring first) and they are returned on rejection/expiry', async () => {
     const pid = await property();
     const admin = await user('admin');
     const m = await user('member', { invite_tier: 'admin_invited' });
@@ -93,10 +93,13 @@ describe('referral rewards', () => {
     await getPool().query(`UPDATE reward_credits SET expires_at = expires_at - interval '1 month' WHERE user_id=$1 AND amount_ore=20000`, [m.id]);
     const bal0 = await rewardBalance(m.id);
     expect(bal0).toMatchObject({ available: 50000, unused: 2 });
-    expect(bal0.next!.amount).toBe(20000);
+    expect(bal0.next!.amount).toBe(50000);
+    await getPool().query(`UPDATE platform_settings SET value='1' WHERE key='referral_reward_max_per_booking'`);
+    expect((await rewardBalance(m.id)).next!.amount).toBe(20000);
     const b = await requestBooking(m, { propertyId: pid, startDate: d(10), endDate: d(12), adults: 2, children: 0, infants: 0, addOns: [], useRewards: true }, { id: m.id, type: 'member' });
     await approveBooking(b.id, { id: admin.id, type: 'admin' });
     const row = await one<{ price_total_ore: number; reward_discount_ore: number }>('SELECT price_total_ore, reward_discount_ore FROM bookings WHERE id=$1', [b.id]);
+    await getPool().query(`UPDATE platform_settings SET value='5' WHERE key='referral_reward_max_per_booking'`);
     expect(row!.reward_discount_ore).toBe(20000);
     expect(row!.price_total_ore).toBe(2 * 90000 + 50000 - 20000);
     expect((await rewardBalance(m.id)).available).toBe(30000);
@@ -177,6 +180,6 @@ describe('referral bonus cap', () => {
       const n = await one<{ n: number }>(`SELECT count(*)::int AS n FROM reward_credits WHERE user_id=$1`, [inviter.id]);
       expect(n!.n).toBe(2);
       expect(await one(`SELECT 1 FROM notifications WHERE user_id=$1 AND type='reward_cap'`, [inviter.id])).toBeTruthy();
-    } finally { await getPool().query(`UPDATE platform_settings SET value='5' WHERE key='referral_reward_max_unused'`); }
+    } finally { await getPool().query(`UPDATE platform_settings SET value='10' WHERE key='referral_reward_max_unused'`); }
   });
 });

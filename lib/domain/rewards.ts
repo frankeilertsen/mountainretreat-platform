@@ -10,8 +10,8 @@ import { nok } from '../format';
 export const UNUSED_STATUSES = `('pending_vest','available','partially_used')`;
 
 /**
- * available = sum of usable bonuses; next = the bonus that will be used on the next booking
- * (only ONE bonus per booking – the one that expires first).
+ * available = sum of usable bonuses; next = what can be used on the next booking:
+ * up to `referral_reward_max_per_booking` bonuses (default 5), those that expire first.
  */
 export async function rewardBalance(userId: string, db: Db = getPool()) {
   const r = await one<{ available: string; pending: string; unused: number }>(
@@ -19,15 +19,17 @@ export async function rewardBalance(userId: string, db: Db = getPool()) {
             COALESCE(SUM(remaining_amount_ore) FILTER (WHERE status = 'pending_vest'),0) AS pending,
             (count(*) FILTER (WHERE status IN ${UNUSED_STATUSES} AND expires_at > now() AND remaining_amount_ore > 0))::int AS unused
      FROM reward_credits WHERE user_id=$1`, [userId], db);
-  const next = await one<{ amount: number; expires_at: string }>(
+  const perBooking = await maxPerBooking(db);
+  const firsts = await q<{ amount: number; expires_at: string }>(
     `SELECT remaining_amount_ore AS amount, expires_at FROM reward_credits
      WHERE user_id=$1 AND status IN ('available','partially_used') AND expires_at > now() AND remaining_amount_ore > 0
-     ORDER BY expires_at, granted_at LIMIT 1`, [userId], db);
-  return { available: Number(r?.available ?? 0), pending: Number(r?.pending ?? 0), unused: r?.unused ?? 0,
-    next: next ? { amount: Number(next.amount), expiresAt: next.expires_at } : null };
+     ORDER BY expires_at, granted_at LIMIT $2`, [userId, perBooking], db);
+  return { available: Number(r?.available ?? 0), pending: Number(r?.pending ?? 0), unused: r?.unused ?? 0, perBooking,
+    next: firsts.length ? { amount: firsts.reduce((s, x) => s + Number(x.amount), 0), count: firsts.length, expiresAt: firsts[0].expires_at } : null };
 }
 
 async function validityMonths(db: Db) { return getNum('referral_reward_validity_months', 24, db); }
+async function maxPerBooking(db: Db) { return Math.max(1, await getNum('referral_reward_max_per_booking', 5, db)); }
 
 /** Computes the reward for one party from admin settings (fixed amount or % of the qualifying stay, capped). */
 export async function computeRewardAmount(role: 'referrer' | 'referred', qualifyingStayOre: number, db: Db = getPool()): Promise<number> {
@@ -64,7 +66,8 @@ export async function qualifyReferralForBooking(c: PoolClient, bookingId: string
   const parties: { user: typeof referred; role: 'referrer' | 'referred' }[] = [{ user: referred, role: 'referred' }];
   // Abuse guard: a suspended/revoked referrer gets nothing
   if (referrer && referrer.status === 'active') parties.push({ user: referrer, role: 'referrer' });
-  const maxUnused = await getNum('referral_reward_max_unused', 5, c);
+  const maxUnused = await getNum('referral_reward_max_unused', 10, c);
+  const perBooking = await maxPerBooking(c);
   for (const p of parties) {
     const amount = await computeRewardAmount(p.role, b.stay_price_ore, c);
     if (amount <= 0) continue;
@@ -74,7 +77,7 @@ export async function qualifyReferralForBooking(c: PoolClient, bookingId: string
       await audit(c, SYSTEM, 'reward.skipped_cap_reached', 'user', p.user.id, undefined, { referral: ref.id, maxUnused });
       await enqueue({ userId: p.user.id, to: p.user.email, type: 'reward_cap', dedupeKey: `reward_cap:${ref.id}:${p.role}`,
         subject: 'Du har nådd maks antall ubrukte vervebonuser',
-        body: `Hei ${p.user.name}! Du har ${unused!.n} ubrukte vervebonuser, som er maksimum. Derfor fikk du ikke ny bonus denne gangen. Bruk en bonus på en booking (én per booking) for å kunne tjene nye.` }, c);
+        body: `Hei ${p.user.name}! Du har ${unused!.n} ubrukte vervebonuser, som er maksimum. Derfor fikk du ikke ny bonus denne gangen. Bruk bonuser på en booking (opptil ${perBooking} per booking) for å kunne tjene nye.` }, c);
       continue;
     }
     const credit = await one<{ id: string; exp: string }>(
@@ -88,23 +91,23 @@ export async function qualifyReferralForBooking(c: PoolClient, bookingId: string
     await enqueue({ userId: p.user.id, to: p.user.email, type: 'reward_granted', dedupeKey: `reward_granted:${credit.id}`,
       subject: `Du har fått ${nok(amount)} i vervebonus`,
       body: p.role === 'referrer'
-        ? `Hei ${p.user.name}! ${referred.name} har fullført sitt første opphold. Du har fått ${nok(amount)} i bonus, som blir tilgjengelig om ${vestDays} dager.${rulesText(credit.exp, maxUnused)}`
-        : `Hei ${p.user.name}! Takk for oppholdet. Du har fått ${nok(amount)} i velkomstbonus, som blir tilgjengelig om ${vestDays} dager.${rulesText(credit.exp, maxUnused)}` }, c);
+        ? `Hei ${p.user.name}! ${referred.name} har fullført sitt første opphold. Du har fått ${nok(amount)} i bonus, som blir tilgjengelig om ${vestDays} dager.${rulesText(credit.exp, maxUnused, perBooking)}`
+        : `Hei ${p.user.name}! Takk for oppholdet. Du har fått ${nok(amount)} i velkomstbonus, som blir tilgjengelig om ${vestDays} dager.${rulesText(credit.exp, maxUnused, perBooking)}` }, c);
   }
   return true;
 }
 
-const rulesText = (exp: string, max: number) =>
-  `\n\nBonusen må brukes innen ${exp} (24 måneder etter at den ble opptjent), ellers utløper den. Du kan bruke én bonus per booking, og ha maks ${max} ubrukte bonuser om gangen. Bonusen kan ikke tas ut i penger.`;
+const rulesText = (exp: string, max: number, per: number) =>
+  `\n\nBonusen må brukes innen ${exp} (24 måneder etter at den ble opptjent), ellers utløper den. Du kan bruke opptil ${per} bonuser per booking, og ha maks ${max} ubrukte bonuser om gangen. Bonusen kan ikke tas ut i penger.`;
 
-/** Uses ONE bonus per booking: the one that expires first. Never exceeds its remaining value or the amount due. */
+/** Uses up to N bonuses per booking (default 5), those that expire first. Never exceeds the amount due. */
 export async function redeemForBooking(c: PoolClient, userId: string, bookingId: string, maxOre: number): Promise<number> {
   if (maxOre <= 0) return 0;
   if (await one(`SELECT 1 FROM reward_redemptions WHERE booking_id=$1 AND reversed_at IS NULL`, [bookingId], c)) return 0;
   const credits = await q<{ id: string; remaining_amount_ore: number }>(
     `SELECT id, remaining_amount_ore FROM reward_credits
      WHERE user_id=$1 AND status IN ('available','partially_used') AND expires_at > now() AND remaining_amount_ore > 0
-     ORDER BY expires_at, granted_at LIMIT 1 FOR UPDATE`, [userId], c);
+     ORDER BY expires_at, granted_at LIMIT $2 FOR UPDATE`, [userId, await maxPerBooking(c)], c);
   let left = maxOre, used = 0;
   for (const cr of credits) {
     if (left <= 0) break;
