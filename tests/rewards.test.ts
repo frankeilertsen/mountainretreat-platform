@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getPool, one, tx } from '../lib/db';
+import { getPool, one, q, tx } from '../lib/db';
 import { user, property, referral, d } from './factory';
 import { qualifyReferralForBooking, rewardBalance, adjustRewards, revokeCredit, vestAndExpireRewards } from '../lib/domain/rewards';
 import { approveBooking, requestBooking, rejectBooking, completeStays, handlePaymentSucceeded } from '../lib/domain/bookings';
@@ -84,23 +84,38 @@ describe('referral rewards', () => {
     expect(await one(`SELECT 1 FROM reward_credits WHERE user_id=$1`, [b.id])).toBeTruthy();
   });
 
-  it('rewards are applied FIFO at approval, capped at the total, and returned on rejection/expiry', async () => {
+  it('only ONE bonus is used per booking (the one expiring first) and it is returned on rejection/expiry', async () => {
     const pid = await property();
     const admin = await user('admin');
     const m = await user('member', { invite_tier: 'admin_invited' });
     await adjustRewards(m.id, 30000, 'Kompensasjon', { id: admin.id, type: 'admin' });
     await adjustRewards(m.id, 20000, 'Bonus', { id: admin.id, type: 'admin' });
+    await getPool().query(`UPDATE reward_credits SET expires_at = expires_at - interval '1 month' WHERE user_id=$1 AND amount_ore=20000`, [m.id]);
+    const bal0 = await rewardBalance(m.id);
+    expect(bal0).toMatchObject({ available: 50000, unused: 2 });
+    expect(bal0.next!.amount).toBe(20000);
     const b = await requestBooking(m, { propertyId: pid, startDate: d(10), endDate: d(12), adults: 2, children: 0, infants: 0, addOns: [], useRewards: true }, { id: m.id, type: 'member' });
     await approveBooking(b.id, { id: admin.id, type: 'admin' });
     const row = await one<{ price_total_ore: number; reward_discount_ore: number }>('SELECT price_total_ore, reward_discount_ore FROM bookings WHERE id=$1', [b.id]);
-    expect(row!.reward_discount_ore).toBe(50000);
-    expect(row!.price_total_ore).toBe(2 * 90000 + 50000 - 50000);
-    expect((await rewardBalance(m.id)).available).toBe(0);
-    // hold expires → rewards come back
+    expect(row!.reward_discount_ore).toBe(20000);
+    expect(row!.price_total_ore).toBe(2 * 90000 + 50000 - 20000);
+    expect((await rewardBalance(m.id)).available).toBe(30000);
+    // hold expires → the bonus comes back
     await getPool().query(`UPDATE booking_holds SET expires_at = now() - interval '1 minute' WHERE booking_id=$1`, [b.id]);
     const { expireHolds } = await import('../lib/domain/bookings');
     await expireHolds();
     expect((await rewardBalance(m.id)).available).toBe(50000);
+  });
+
+  it('bonuses are valid 24 months from earning, and a reminder goes out 30 days before expiry', async () => {
+    const admin = await user('admin');
+    const m = await user('member', { invite_tier: 'admin_invited' });
+    await adjustRewards(m.id, 50000, 'Test', { id: admin.id, type: 'admin' });
+    const cr = (await one<{ months: number }>(`SELECT (extract(year from age(expires_at, granted_at)) * 12 + extract(month from age(expires_at, granted_at)))::int AS months FROM reward_credits WHERE user_id=$1`, [m.id]))!;
+    expect(cr.months).toBe(24);
+    await getPool().query(`UPDATE reward_credits SET expires_at = now() + interval '20 days' WHERE user_id=$1`, [m.id]);
+    await vestAndExpireRewards(); await vestAndExpireRewards();
+    expect((await q(`SELECT 1 FROM notifications WHERE type='reward_expiring' AND user_id=$1`, [m.id])).length).toBe(1);
   });
 
   it('a booking fully covered by rewards is confirmed without payment', async () => {
@@ -162,6 +177,6 @@ describe('referral bonus cap', () => {
       const n = await one<{ n: number }>(`SELECT count(*)::int AS n FROM reward_credits WHERE user_id=$1`, [inviter.id]);
       expect(n!.n).toBe(2);
       expect(await one(`SELECT 1 FROM notifications WHERE user_id=$1 AND type='reward_cap'`, [inviter.id])).toBeTruthy();
-    } finally { await getPool().query(`UPDATE platform_settings SET value='10' WHERE key='referral_reward_max_unused'`); }
+    } finally { await getPool().query(`UPDATE platform_settings SET value='5' WHERE key='referral_reward_max_unused'`); }
   });
 });

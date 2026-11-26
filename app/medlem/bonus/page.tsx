@@ -26,7 +26,8 @@ export default async function Rewards() {
         <div className="card"><h3>{W.credits}</h3>{credits.length === 0 ? <Empty>{W.none}</Empty> : <ul className="list">{credits.map((c, i) => (
           <li key={i}><div className="row between"><strong>{nok(c.amount_ore)}</strong><Status s={c.status} lang={lang} /></div>
             <small>{c.source === 'manual_adjustment' ? W.fromAdmin : c.role_in_referral === 'referrer' ? W.youReferred(c.other ?? W.aMember) : W.welcome(c.other ?? W.aMember)}
-              {' · '}{W.remaining(nok(c.remaining_amount_ore))} · {W.expires(fmtDate(c.expires_at))}{c.status === 'pending_vest' ? ` · ${W.availableOn(fmtDate(c.vests_at))}` : ''}</small></li>))}</ul>}</div>
+              <br />{W.earned(fmtDate(c.granted_at))}{c.status === 'pending_vest' ? ` · ${W.availableOn(fmtDate(c.vests_at))}` : ''}
+              {['available', 'partially_used', 'pending_vest'].includes(c.status) && <> · {W.remaining(nok(c.remaining_amount_ore))} · <strong style={{ color: new Date(c.expires_at).getTime() - Date.now() < 30 * 864e5 ? 'var(--danger)' : undefined }}>{W.expires(fmtDate(c.expires_at))}</strong></>}</small></li>))}</ul>}</div>
         <div className="card"><h3>{W.tx}</h3>{tx.length === 0 ? <Empty>{W.noTx}</Empty> : <div className="table-wrap"><table><tbody>{tx.map((x, i) => (
           <tr key={i}><td><small>{fmtDate(x.created_at)}</small></td><td>{KIND[x.kind] ?? x.kind}{x.reference ? <small> · {x.reference}</small> : ''}<br /><small className="muted">{x.note}</small></td><td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>{x.amount_ore === 0 ? '' : (x.amount_ore > 0 ? '+' : '−') + nok(Math.abs(x.amount_ore))}</td></tr>))}</tbody></table></div>}</div>
       </div>

@@ -63,7 +63,7 @@ export async function requestBooking(member: UserLike & { email: string; name: s
   if (!(await isRangeFree(input.propertyId, input.startDate, input.endDate))) {
     throw new DomainError('unavailable', 'Datoene er ikke ledige.');
   }
-  const estimatedReward = input.useRewards ? Math.min((await rewardBalance(member.id)).available, quote.subtotal_ore) : 0;
+  const estimatedReward = input.useRewards ? Math.min((await rewardBalance(member.id)).next?.amount ?? 0, quote.subtotal_ore) : 0;
   try {
     return await tx(async c => {
       const b = await one<{ id: string; reference: string }>(

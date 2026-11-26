@@ -6,13 +6,28 @@ import { getNum, getStr } from '../settings';
 import { DomainError } from '../errors';
 import { nok } from '../format';
 
+/** Statuses of a bonus that still has value and counts toward the "max unused" limit. */
+export const UNUSED_STATUSES = `('pending_vest','available','partially_used')`;
+
+/**
+ * available = sum of usable bonuses; next = the bonus that will be used on the next booking
+ * (only ONE bonus per booking – the one that expires first).
+ */
 export async function rewardBalance(userId: string, db: Db = getPool()) {
-  const r = await one<{ available: string; pending: string }>(
+  const r = await one<{ available: string; pending: string; unused: number }>(
     `SELECT COALESCE(SUM(remaining_amount_ore) FILTER (WHERE status IN ('available','partially_used') AND expires_at > now()),0) AS available,
-            COALESCE(SUM(remaining_amount_ore) FILTER (WHERE status = 'pending_vest'),0) AS pending
+            COALESCE(SUM(remaining_amount_ore) FILTER (WHERE status = 'pending_vest'),0) AS pending,
+            (count(*) FILTER (WHERE status IN ${UNUSED_STATUSES} AND expires_at > now() AND remaining_amount_ore > 0))::int AS unused
      FROM reward_credits WHERE user_id=$1`, [userId], db);
-  return { available: Number(r?.available ?? 0), pending: Number(r?.pending ?? 0) };
+  const next = await one<{ amount: number; expires_at: string }>(
+    `SELECT remaining_amount_ore AS amount, expires_at FROM reward_credits
+     WHERE user_id=$1 AND status IN ('available','partially_used') AND expires_at > now() AND remaining_amount_ore > 0
+     ORDER BY expires_at, granted_at LIMIT 1`, [userId], db);
+  return { available: Number(r?.available ?? 0), pending: Number(r?.pending ?? 0), unused: r?.unused ?? 0,
+    next: next ? { amount: Number(next.amount), expiresAt: next.expires_at } : null };
 }
+
+async function validityMonths(db: Db) { return getNum('referral_reward_validity_months', 24, db); }
 
 /** Computes the reward for one party from admin settings (fixed amount or % of the qualifying stay, capped). */
 export async function computeRewardAmount(role: 'referrer' | 'referred', qualifyingStayOre: number, db: Db = getPool()): Promise<number> {
@@ -45,47 +60,51 @@ export async function qualifyReferralForBooking(c: PoolClient, bookingId: string
   await c.query(`UPDATE referrals SET status='qualified', qualifying_booking_id=$2, qualified_at=now() WHERE id=$1`, [ref.id, bookingId]);
 
   const vestDays = await getNum('referral_reward_vesting_days', 7, c);
-  const validDays = await getNum('referral_reward_validity_days', 730, c);
+  const validMonths = await validityMonths(c);
   const parties: { user: typeof referred; role: 'referrer' | 'referred' }[] = [{ user: referred, role: 'referred' }];
   // Abuse guard: a suspended/revoked referrer gets nothing
   if (referrer && referrer.status === 'active') parties.push({ user: referrer, role: 'referrer' });
-  const maxUnused = await getNum('referral_reward_max_unused', 10, c);
+  const maxUnused = await getNum('referral_reward_max_unused', 5, c);
   for (const p of parties) {
     const amount = await computeRewardAmount(p.role, b.stay_price_ore, c);
     if (amount <= 0) continue;
     // Cap: a member can hold at most N unused referral bonuses; they must use some before earning more
-    const unused = await one<{ n: number }>(`SELECT count(*)::int AS n FROM reward_credits WHERE user_id=$1 AND source='referral' AND status IN ('pending_vest','available')`, [p.user.id], c);
+    const unused = await one<{ n: number }>(`SELECT count(*)::int AS n FROM reward_credits WHERE user_id=$1 AND status IN ${UNUSED_STATUSES} AND expires_at > now() AND remaining_amount_ore > 0`, [p.user.id], c);
     if (maxUnused > 0 && (unused?.n ?? 0) >= maxUnused) {
       await audit(c, SYSTEM, 'reward.skipped_cap_reached', 'user', p.user.id, undefined, { referral: ref.id, maxUnused });
       await enqueue({ userId: p.user.id, to: p.user.email, type: 'reward_cap', dedupeKey: `reward_cap:${ref.id}:${p.role}`,
         subject: 'Du har nådd maks antall ubrukte vervebonuser',
-        body: `Hei ${p.user.name}! Du har ${unused!.n} ubrukte vervebonuser, som er maksimum. Bruk bonusen på en booking for å kunne tjene nye.` }, c);
+        body: `Hei ${p.user.name}! Du har ${unused!.n} ubrukte vervebonuser, som er maksimum. Derfor fikk du ikke ny bonus denne gangen. Bruk en bonus på en booking (én per booking) for å kunne tjene nye.` }, c);
       continue;
     }
-    const credit = await one<{ id: string }>(
+    const credit = await one<{ id: string; exp: string }>(
       `INSERT INTO reward_credits (user_id, referral_id, source, role_in_referral, amount_ore, remaining_amount_ore, vests_at, expires_at)
-       VALUES ($1,$2,'referral',$3,$4,$4, now() + make_interval(days => $5), now() + make_interval(days => $6))
-       ON CONFLICT DO NOTHING RETURNING id`, [p.user.id, ref.id, p.role, amount, vestDays, validDays], c);
+       VALUES ($1,$2,'referral',$3,$4,$4, now() + make_interval(days => $5), now() + make_interval(months => $6))
+       ON CONFLICT DO NOTHING RETURNING id, to_char(expires_at AT TIME ZONE 'Europe/Oslo','DD.MM.YYYY') AS exp`, [p.user.id, ref.id, p.role, amount, vestDays, validMonths], c);
     if (!credit) continue;
     await c.query(`INSERT INTO reward_transactions (user_id, reward_credit_id, booking_id, kind, amount_ore, note) VALUES ($1,$2,$3,'granted',0,$4)`,
-      [p.user.id, credit.id, bookingId, `Vervebonus ${nok(amount)} – tilgjengelig om ${vestDays} dager`]);
+      [p.user.id, credit.id, bookingId, `Vervebonus ${nok(amount)} – tilgjengelig om ${vestDays} dager, utløper ${credit.exp}`]);
     await audit(c, SYSTEM, 'reward.granted', 'reward_credit', credit.id, undefined, { amount, role: p.role, referral: ref.id });
     await enqueue({ userId: p.user.id, to: p.user.email, type: 'reward_granted', dedupeKey: `reward_granted:${credit.id}`,
       subject: `Du har fått ${nok(amount)} i vervebonus`,
       body: p.role === 'referrer'
-        ? `Hei ${p.user.name}! ${referred.name} har fullført sitt første opphold. Du har fått ${nok(amount)} i bonus, som blir tilgjengelig om ${vestDays} dager.`
-        : `Hei ${p.user.name}! Takk for oppholdet. Du har fått ${nok(amount)} i velkomstbonus, som blir tilgjengelig om ${vestDays} dager.` }, c);
+        ? `Hei ${p.user.name}! ${referred.name} har fullført sitt første opphold. Du har fått ${nok(amount)} i bonus, som blir tilgjengelig om ${vestDays} dager.${rulesText(credit.exp, maxUnused)}`
+        : `Hei ${p.user.name}! Takk for oppholdet. Du har fått ${nok(amount)} i velkomstbonus, som blir tilgjengelig om ${vestDays} dager.${rulesText(credit.exp, maxUnused)}` }, c);
   }
   return true;
 }
 
-/** FIFO redemption across the oldest-expiring available credits. Never exceeds balance or the amount due. */
+const rulesText = (exp: string, max: number) =>
+  `\n\nBonusen må brukes innen ${exp} (24 måneder etter at den ble opptjent), ellers utløper den. Du kan bruke én bonus per booking, og ha maks ${max} ubrukte bonuser om gangen. Bonusen kan ikke tas ut i penger.`;
+
+/** Uses ONE bonus per booking: the one that expires first. Never exceeds its remaining value or the amount due. */
 export async function redeemForBooking(c: PoolClient, userId: string, bookingId: string, maxOre: number): Promise<number> {
   if (maxOre <= 0) return 0;
+  if (await one(`SELECT 1 FROM reward_redemptions WHERE booking_id=$1 AND reversed_at IS NULL`, [bookingId], c)) return 0;
   const credits = await q<{ id: string; remaining_amount_ore: number }>(
     `SELECT id, remaining_amount_ore FROM reward_credits
      WHERE user_id=$1 AND status IN ('available','partially_used') AND expires_at > now() AND remaining_amount_ore > 0
-     ORDER BY expires_at, granted_at FOR UPDATE`, [userId], c);
+     ORDER BY expires_at, granted_at LIMIT 1 FOR UPDATE`, [userId], c);
   let left = maxOre, used = 0;
   for (const cr of credits) {
     if (left <= 0) break;
@@ -134,6 +153,19 @@ export async function vestAndExpireRewards(): Promise<{ vested: number; expired:
       await c.query(`INSERT INTO reward_transactions (user_id, reward_credit_id, kind, amount_ore, note) VALUES ($1,$2,'expired',$3,'Bonus utløpt')`, [e.user_id, e.id, -e.remaining_amount_ore]);
       await audit(c, SYSTEM, 'reward.expired', 'reward_credit', e.id);
     }
+    // Reminder 30 days before a bonus expires (once per bonus)
+    const soon = await q<{ id: string; user_id: string; email: string; name: string; remaining_amount_ore: number; exp: string; lang: string | null }>(
+      `UPDATE reward_credits rc SET expiry_reminded_at = now() FROM users u
+       WHERE u.id = rc.user_id AND u.status='active' AND rc.status IN ('available','partially_used') AND rc.remaining_amount_ore > 0
+         AND rc.expiry_reminded_at IS NULL AND rc.expires_at > now() AND rc.expires_at <= now() + interval '30 days'
+       RETURNING rc.id, rc.user_id, u.email, u.name, rc.remaining_amount_ore, to_char(rc.expires_at AT TIME ZONE 'Europe/Oslo','DD.MM.YYYY') AS exp, u.preferred_lang AS lang`, [], c);
+    for (const r of soon) {
+      const en = r.lang === 'en';
+      await enqueue({ userId: r.user_id, to: r.email, type: 'reward_expiring', dedupeKey: `reward_expiring:${r.id}`,
+        subject: en ? `Your bonus of ${nok(r.remaining_amount_ore)} expires on ${r.exp}` : `Bonusen din på ${nok(r.remaining_amount_ore)} utløper ${r.exp}`,
+        body: en ? `Hi ${r.name}!\n\nYou have a bonus of ${nok(r.remaining_amount_ore)} that expires on ${r.exp}. Book a stay before then and the bonus is deducted from the price. After that date it can no longer be used.`
+                 : `Hei ${r.name}!\n\nDu har en bonus på ${nok(r.remaining_amount_ore)} som utløper ${r.exp}. Book et opphold før det, så trekkes bonusen fra prisen. Etter denne datoen kan den ikke lenger brukes.` }, c);
+    }
     return { vested: vested.length, expired: expired.length };
   });
 }
@@ -144,11 +176,10 @@ export async function adjustRewards(userId: string, amountOre: number, note: str
   if (!note.trim()) throw new DomainError('note_required', 'Skriv en begrunnelse.');
   await tx(async c => {
     if (amountOre > 0) {
-      const validDays = await getNum('referral_reward_validity_days', 730, c);
       const cr = await one<{ id: string }>(
         `INSERT INTO reward_credits (user_id, source, amount_ore, remaining_amount_ore, vests_at, expires_at, status, note, granted_by_user_id)
-         VALUES ($1,'manual_adjustment',$2,$2, now(), now() + make_interval(days => $3), 'available', $4, $5) RETURNING id`,
-        [userId, amountOre, validDays, note.trim(), actor.id], c);
+         VALUES ($1,'manual_adjustment',$2,$2, now(), now() + make_interval(months => $3), 'available', $4, $5) RETURNING id`,
+        [userId, amountOre, await validityMonths(c), note.trim(), actor.id], c);
       await c.query(`INSERT INTO reward_transactions (user_id, reward_credit_id, kind, amount_ore, note, actor_user_id) VALUES ($1,$2,'adjusted',$3,$4,$5)`,
         [userId, cr!.id, amountOre, note.trim(), actor.id]);
       await audit(c, actor, 'reward.manual_credit', 'reward_credit', cr!.id, undefined, { amountOre, note });

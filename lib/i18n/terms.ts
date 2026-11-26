@@ -68,7 +68,8 @@ export function termsSections(lang: Lang, i: TermsInput): { title: string; lead:
       ] },
       { h: '8. Returns and refunds', p: [
         'Because this is a service and not goods, there is nothing to return. Refunds after a cancellation or a justified complaint are paid back to the same card or Vipps account that was used for the payment. We initiate the refund within 14 days; the time until the money is in your account depends on your bank.',
-        'Unused bonuses that were applied to a cancelled booking are returned to your bonus balance.',
+        'Unused bonuses that were applied to a cancelled booking are returned to your bonus balance. A returned bonus keeps its original expiry date.',
+        'Referral bonuses: each bonus is valid for 24 months from the date it is earned and must be used before it expires; an expired bonus cannot be used or refunded. One bonus can be used per booking, a member can hold at most 5 unused bonuses at a time, and bonuses cannot be paid out as cash. We send a reminder 30 days before a bonus expires.',
       ] },
       { h: '9. Complaints', p: [
         'If something is not as agreed – for example cleanliness, equipment or missing items – please tell us as soon as possible, preferably during your stay, via “Messages”, e-mail or phone, so we can put it right. Photos help.',
@@ -128,7 +129,8 @@ export function termsSections(lang: Lang, i: TermsInput): { title: string; lead:
       ] },
       { h: '8. Retur og refusjon', p: [
         'Fordi dette er en tjeneste og ikke en vare, er det ingenting å returnere. Refusjon etter avbestilling eller berettiget reklamasjon betales tilbake til samme kort eller Vipps-konto som ble brukt ved betalingen. Vi setter i gang refusjonen innen 14 dager; hvor lang tid det tar før pengene er på kontoen, avhenger av banken din.',
-        'Ubrukte bonuser som var trukket fra en avbestilt booking, føres tilbake til bonussaldoen din.',
+        'Ubrukte bonuser som var trukket fra en avbestilt booking, føres tilbake til bonussaldoen din. En tilbakeført bonus beholder sin opprinnelige utløpsdato.',
+        'Vervebonus: Hver bonus er gyldig i 24 måneder fra den er opptjent og må brukes før den utløper. En utløpt bonus kan ikke brukes eller refunderes. Det kan brukes én bonus per booking, et medlem kan ha maks 5 ubrukte bonuser om gangen, og bonus kan ikke tas ut i penger. Vi sender en påminnelse 30 dager før en bonus utløper.',
       ] },
       { h: '9. Reklamasjon', p: [
         'Er noe ikke som avtalt – for eksempel renhold, utstyr eller noe som mangler – gi beskjed så snart som mulig, helst mens du er der, via «Meldinger», e-post eller telefon, slik at vi kan rette det. Bilder er til god hjelp.',

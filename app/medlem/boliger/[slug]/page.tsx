@@ -116,14 +116,14 @@ export default async function PropertyPage({ params, searchParams }: { params: P
           {quoteErr && <div className="flash err" style={{ marginTop: 16 }}>{quoteErr}</div>}
           {quote && (
             <form action={requestBookingAction} style={{ marginTop: 20 }}>
-              <SavingsBreakdown quote={quote} rewardOre={bal.available > 0 ? Math.min(bal.available, quote.subtotal_ore) : 0} rewardEstimated lang={lang} />
+              <SavingsBreakdown quote={quote} rewardOre={bal.next ? Math.min(bal.next.amount, quote.subtotal_ore) : 0} rewardEstimated lang={lang} />
               <p className="muted" style={{ fontSize: '.82rem' }}>{fmtDate(fra!, true)} – {fmtDate(til!, true)}. {T.lockNote}</p>
               <input type="hidden" name="propertyId" value={p.id} /><input type="hidden" name="slug" value={slug} />
               <input type="hidden" name="fra" value={fra} /><input type="hidden" name="til" value={til} />
               <input type="hidden" name="voksne" value={adults} /><input type="hidden" name="barn" value={children} /><input type="hidden" name="sped" value={infants} />
               <input type="hidden" name="addons" value={JSON.stringify(selected)} />{ownLinen && <input type="hidden" name="eget_sengetoy" value="1" />}
               <input type="hidden" name="idem" value={crypto.randomUUID()} />
-              {bal.available > 0 && <label className="check field"><input type="checkbox" name="useRewards" defaultChecked /> {T.useBonus(nok(Math.min(bal.available, quote.subtotal_ore)), nok(bal.available))}</label>}
+              {bal.next && <label className="check field"><input type="checkbox" name="useRewards" defaultChecked /> {T.useBonus(nok(Math.min(bal.next.amount, quote.subtotal_ore)), fmtDate(bal.next.expiresAt), bal.unused)}</label>}
               <div className="field"><label>{T.comment}</label><textarea name="requests" maxLength={2000} placeholder={T.commentPh} /></div>
               <button className="btn block">{T.request}</button>
             </form>
