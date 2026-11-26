@@ -5,7 +5,7 @@ import { audit, Actor, SYSTEM } from '../audit';
 import { appUrl, enqueue, notifyAdmins } from '../notify';
 import { getNum } from '../settings';
 import { humanCode } from '../crypto';
-import { fmtDate, nightsBetween, nok, todayOslo } from '../format';
+import { fmtDate, nightsBetween, nok, pctNo, todayOslo } from '../format';
 import { isAdmin, can, UserLike } from '../auth/rbac';
 import { quoteFor } from './pricing';
 import { insertBlock, isRangeFree, removeBlocksFor } from './availability';
@@ -47,9 +47,9 @@ async function announceDiscountLevel(c: PoolClient, memberId: string, bookingId:
   if (after.totalPct <= before.totalPct) return;
   const m = await memberOf(c, memberId);
   await enqueue({ userId: memberId, to: m.email, type: 'discount_increased', dedupeKey: `discount_increased:${bookingId}`,
-    subject: `Medlemsrabatten din er nå ${after.totalPct} %`,
-    body: `Hei ${m.name}!\n\nTakk for bookingen. Medlemsrabatten din har økt fra ${before.totalPct} % til ${after.totalPct} % på alle fremtidige opphold.` +
-      (after.atMax ? `\nDu har nå nådd maksimal lojalitetsrabatt. 🎉` : `\nNeste booking gir ${after.nextTotalPct} %.`) }, c);
+    subject: `Medlemsrabatten din er nå ${pctNo(after.totalPct)} %`,
+    body: `Hei ${m.name}!\n\nTakk for bookingen. Medlemsrabatten din har økt fra ${pctNo(before.totalPct)} % til ${pctNo(after.totalPct)} % på alle fremtidige opphold.` +
+      (after.atMax ? `\nDu har nå nådd maksimal lojalitetsrabatt. 🎉` : `\nNeste booking gir ${pctNo(after.nextTotalPct)} %.`) }, c);
 }
 
 // ---------------------------------------------------------------- request

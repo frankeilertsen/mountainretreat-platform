@@ -1,3 +1,4 @@
+import { pctL } from '@/lib/format';
 import Link from 'next/link';
 import type { MemberDiscount } from '@/lib/domain/memberDiscount';
 import { dict, type Lang } from '@/lib/i18n/dict';
@@ -13,7 +14,7 @@ export function BenefitCards(d: BenefitData & { lang?: Lang }) {
   const lang = d.lang ?? 'no';
   const B = dict[lang].benefits;
   const { disc } = d;
-  const steps = Math.round(disc.loyaltyMaxPct / Math.max(disc.stepPct, 0.0001));
+  const steps = Math.ceil(disc.loyaltyMaxPct / Math.max(disc.stepPct, 0.0001) - 1e-9);
   const done = Math.min(steps, disc.bookingsCounted);
   return (
     <div className="grid g4">
@@ -28,12 +29,12 @@ export function BenefitCards(d: BenefitData & { lang?: Lang }) {
       </div>}
       <div className="card kpi-card">
         <span className="kpi-label">{B.member}</span>
-        <div className="kpi" style={{ color: 'var(--gold-2)' }}>{disc.basePct} %</div>
+        <div className="kpi" style={{ color: 'var(--gold-2)' }}>{pctL(disc.basePct, lang)} %</div>
         <small>{disc.baseIsOverride ? B.memberPersonal : B.memberFixed}{B.memberSuffix}</small>
       </div>
       <div className="card kpi-card">
         <span className="kpi-label">{B.loyalty}</span>
-        <div className="kpi">{disc.loyaltyPct} <span style={{ fontSize: '1.2rem', color: 'var(--muted)' }}>/ {disc.loyaltyMaxPct} %</span></div>
+        <div className="kpi">{pctL(disc.loyaltyPct, lang)} <span style={{ fontSize: '1.2rem', color: 'var(--muted)' }}>/ {disc.loyaltyMaxPct} %</span></div>
         <div style={{ display: 'flex', gap: 3, margin: '8px 0 6px' }}>
           {Array.from({ length: steps }, (_, i) => <span key={i} style={{ flex: 1, height: 6, borderRadius: 3, background: i < done ? 'var(--gold)' : 'var(--line-2)' }} />)}
         </div>

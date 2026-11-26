@@ -267,6 +267,7 @@ export async function saveSettingsAction(f: FormData) {
         if (k.endsWith('_ore')) v = String(Math.round(Number(v.replace(',', '.')) * 100));
         if (k === 'referral_reward_type' && !['fixed', 'percentage'].includes(v)) throw new DomainError('bad', 'Ugyldig bonustype.');
         if (k === 'long_term_contact_email' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) throw new DomainError('bad', 'Ugyldig e-postadresse.');
+        if (!['referral_reward_type', 'invoice_bank_account', 'company_name', 'long_term_contact_email', 'company_org_nr', 'company_address', 'company_phone', 'company_email'].includes(k)) v = v.replace(',', '.');
         if (k === 'company_email' && v && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) throw new DomainError('bad', 'Ugyldig e-postadresse.');
         if (k === 'company_org_nr' && v && !/^\d{3} ?\d{3} ?\d{3}$/.test(v)) throw new DomainError('bad', 'Organisasjonsnummer må være 9 siffer.');
         if (!['referral_reward_type', 'invoice_bank_account', 'company_name', 'long_term_contact_email', 'company_org_nr', 'company_address', 'company_phone', 'company_email'].includes(k) && (!Number.isFinite(Number(v)) || Number(v) < 0)) throw new DomainError('bad', `Ugyldig verdi for ${k}.`);

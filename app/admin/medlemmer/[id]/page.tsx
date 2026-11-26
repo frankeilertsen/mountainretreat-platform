@@ -1,3 +1,4 @@
+import { pctNo } from '@/lib/format';
 import { Stars } from '@/components/forms/StarInput';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
@@ -71,8 +72,8 @@ export default async function MemberDetail({ params, searchParams }: { params: P
           </div>
           {disc && (
             <div className="card"><h3>Medlemsrabatt</h3>
-              <div className="kpi" style={{ color: 'var(--gold-2)' }}>{disc.totalPct} %</div>
-              <small className="muted">{disc.basePct} % {disc.baseIsOverride ? 'personlig grunnrabatt' : 'standard'} + {disc.loyaltyPct} % lojalitet ({disc.bookingsCounted} bookinger, maks {disc.loyaltyMaxPct} %)</small>
+              <div className="kpi" style={{ color: 'var(--gold-2)' }}>{pctNo(disc.totalPct)} %</div>
+              <small className="muted">{pctNo(disc.basePct)} % {disc.baseIsOverride ? 'personlig grunnrabatt' : 'standard'} + {pctNo(disc.loyaltyPct)} % lojalitet ({disc.bookingsCounted} bookinger, maks {disc.loyaltyMaxPct} %)</small>
               <form action={A.memberDiscountAction} className="row" style={{ marginTop: 14 }}><input type="hidden" name="id" value={id} />
                 <input name="pct" defaultValue={disc.baseIsOverride ? disc.basePct : ''} placeholder={`Standard ${disc.standardPct} %`} style={{ width: 160 }} />
                 <button className="btn small">Sett personlig grunnrabatt</button>{disc.baseIsOverride && <ValueButton className="btn ghost small" name="reset" value="1">Tilbake til standard</ValueButton>}</form>

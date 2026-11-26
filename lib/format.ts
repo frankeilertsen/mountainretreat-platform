@@ -40,3 +40,7 @@ export function fmtDateTime(ts: string | Date | null | undefined): string {
 export function fmtTime(t: string | null | undefined): string {
   return t ? t.slice(0, 5) : '–';
 }
+
+/** Percent with Norwegian decimal comma (1,5) or English point (1.5). */
+export const pctNo = (n: number) => n.toLocaleString('nb-NO', { maximumFractionDigits: 2 });
+export const pctL = (n: number, lang: 'no' | 'en' = 'no') => n.toLocaleString(lang === 'en' ? 'en-GB' : 'nb-NO', { maximumFractionDigits: 2 });
