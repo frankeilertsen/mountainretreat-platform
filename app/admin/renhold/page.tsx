@@ -10,11 +10,12 @@ export const metadata = { title: 'Renhold' };
 export default async function CleaningAdmin({ searchParams }: { searchParams: Promise<Record<string, string>> }) {
   const sp = await searchParams;
   const today = todayOslo();
+  const range = sp.vis === '60' ? '60' : 'alle';
   const tasks = await q(`SELECT t.id, t.task_type, t.status, t.channel_name, to_char(t.checkout_date,'YYYY-MM-DD') AS date, to_char(t.next_checkin_date,'YYYY-MM-DD') AS next_checkin, t.assigned_to_user_id,
       t.completion_notes, t.completed_at, t.not_needed_reason, p.name AS property, p.id AS pid, u.name AS helper, sp.adults + sp.children AS next_guests,
       (SELECT count(*) FROM cleaning_reports r WHERE r.cleaning_task_id=t.id AND r.kind<>'comment')::int AS reports
     FROM cleaning_tasks t JOIN properties p ON p.id=t.property_id LEFT JOIN users u ON u.id=t.assigned_to_user_id LEFT JOIN stay_preparations sp ON sp.id=t.next_preparation_id
-    WHERE t.checkout_date BETWEEN $1 AND $2 AND t.status <> 'cancelled' ORDER BY t.checkout_date, p.name`, [addDays(today, -7), addDays(today, 60)]);
+    WHERE t.checkout_date BETWEEN $1 AND $2 AND t.status <> 'cancelled' ORDER BY t.checkout_date, p.name`, [addDays(today, -7), addDays(today, range === '60' ? 60 : 550)]);
   const helpers = await q(`SELECT u.id, u.name, array_agg(h.property_id) FILTER (WHERE h.active) AS props FROM users u LEFT JOIN helper_property_assignments h ON h.helper_user_id=u.id WHERE u.system_role='helper' AND u.status='active' GROUP BY u.id ORDER BY u.name`);
   const reports = await q(`SELECT r.*, p.name AS property, u.name AS by, (SELECT array_agg(ph.id) FROM photos ph WHERE ph.entity_type='cleaning_report' AND ph.entity_id=r.id) AS photos
     FROM cleaning_reports r JOIN properties p ON p.id=r.property_id JOIN users u ON u.id=r.created_by_user_id WHERE r.resolved_at IS NULL ORDER BY r.created_at DESC`);
@@ -38,7 +39,8 @@ export default async function CleaningAdmin({ searchParams }: { searchParams: Pr
         return n > 0 ? <div className="card" style={{ borderColor: 'var(--gold-line)', marginBottom: 20 }}><strong>{n} vaskejobb{n > 1 ? 'er' : ''} fra blokkerte dager på Airbnb venter på deg.</strong>
           <p className="muted" style={{ margin: '6px 0 0' }}>Blokkerte dager kan være eget opphold eller en booking fra et annet sted, så de sendes ikke automatisk. Tildel en renholder (hun eller han får beskjed med en gang) eller slett jobben.</p></div> : null; })()}
       <div className="card">
-        <h3>Oppgaver (siste 7 og neste 60 dager)</h3>
+        <div className="row between" style={{ flexWrap: 'wrap', gap: 8 }}><h3 style={{ margin: 0 }}>Oppgaver ({range === '60' ? 'siste 7 og neste 60 dager' : 'siste 7 dager og alle kommende'})</h3>
+          <span className="row" style={{ gap: 6 }}><Link href="/admin/renhold" className={`btn small ${range === 'alle' ? '' : 'ghost'}`}>Alle kommende</Link><Link href="/admin/renhold?vis=60" className={`btn small ${range === '60' ? '' : 'ghost'}`}>Neste 60 dager</Link></span></div>
         {tasks.length === 0 ? <Empty>Ingen oppgaver.</Empty> : <div className="table-wrap"><table><thead><tr><th>Dato</th><th>Bolig</th><th>Type</th><th>Neste ankomst</th><th>Renholder</th><th>Status</th><th></th></tr></thead><tbody>
           {tasks.map(t => {
             const same = t.next_checkin === t.date;

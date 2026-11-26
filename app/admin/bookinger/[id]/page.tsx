@@ -19,6 +19,7 @@ export default async function AdminBooking({ params, searchParams }: { params: P
       sp.adults AS p_adults, sp.children AS p_children, sp.infants AS p_infants
     FROM bookings b JOIN users u ON u.id=b.member_id JOIN properties p ON p.id=b.property_id LEFT JOIN booking_holds h ON h.booking_id=b.id AND h.released_at IS NULL
     LEFT JOIN users r ON r.id=b.admin_reviewer_id LEFT JOIN stay_preparations sp ON sp.booking_id=b.id WHERE b.id=$1`, [id]);
+  const cTasks = await q(`SELECT t.id, t.task_type, t.status, t.checkout_date, u.name AS helper FROM cleaning_tasks t LEFT JOIN users u ON u.id=t.assigned_to_user_id WHERE t.booking_id=$1 AND t.status <> 'cancelled' ORDER BY t.checkout_date`, [id]);
   if (!b) notFound();
   const [overlaps, payments, refunds, addOns, log] = await Promise.all([
     q(`SELECT ab.block_type, to_char(lower(ab.date_range),'YYYY-MM-DD') AS start, to_char(upper(ab.date_range),'YYYY-MM-DD') AS "end", ab.reason, cc.display_name FROM availability_blocks ab LEFT JOIN channel_connections cc ON cc.id=ab.source_connection_id
@@ -117,6 +118,7 @@ export default async function AdminBooking({ params, searchParams }: { params: P
           </div>
           <div className="card">
             <h3>Sluttrengjøring</h3>
+            {cTasks.length > 0 && <ul className="list" style={{ marginBottom: 10 }}>{cTasks.map((t: any) => <li key={t.id}><small>{t.task_type === 'preparation' ? 'Klargjøring' : 'Utvask'} {fmtDate(t.checkout_date)} · {({ open: 'Ikke tildelt', assigned: `Tildelt ${t.helper ?? ''}`, in_progress: 'Pågår', completed: 'Ferdig', not_needed: 'Slettet / ikke nødvendig' } as Record<string, string>)[t.status] ?? t.status}</small> <Link href="/admin/renhold" className="muted" style={{ fontSize: '.8rem' }}>Renhold →</Link></li>)}</ul>}
             {b.cleaning_self ? <>
               <p className="muted">Gjesten vasker selv denne gangen. Det lages ingen vaskejobb{b.price_locked_at ? '' : ', og sluttrengjøringen fjernes fra prisen når bookingen godkjennes'}.</p>
               <form action={bookingCleaningSelfAction}><input type="hidden" name="id" value={b.id} /><input type="hidden" name="on" value="0" /><button className="btn ghost small">Sett tilbake vanlig sluttrengjøring</button></form>
