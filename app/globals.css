@@ -373,3 +373,5 @@ main { padding: 44px 0 90px; }
 /* Long lists that scroll inside their card, header stays visible */
 .table-wrap.scroll-y { max-height: 70vh; overflow-y: auto; }
 .table-wrap.scroll-y thead th { position: sticky; top: 0; z-index: 1; background: var(--surface); }
+
+.launch-banner { border-color: var(--gold) !important; background: linear-gradient(90deg, rgba(200,169,107,.16), rgba(200,169,107,.04)) !important; }

@@ -1,7 +1,7 @@
 import { Db, getPool, q, one } from '../db';
 import { addDays, isoWeekday, nightsBetween } from '../format';
 import { DomainError } from '../errors';
-import { memberDiscount } from './memberDiscount';
+import { discountForKind, memberDiscount } from './memberDiscount';
 import { getNum } from '../settings';
 
 export type SeasonCategory = { id: string; kind: string; name: string; price_per_night_ore: number; weekend_price_per_night_ore?: number | null;
@@ -22,6 +22,8 @@ export type PricingInput = {
   memberDiscountPct?: number;
   /** Split of memberDiscountPct, for showing the member what each benefit is worth. */
   memberDiscountSplit?: { basePct: number; loyaltyPct: number };
+  /** Season-aware member discount per night (kind = season category kind, e.g. 'holiday'). */
+  discountByKind?: (kind: string | null) => { base: number; loyalty: number; launch: number; total: number };
   /** 'airbnb' = nightly price from externalRates (the listing's Airbnb price); 'manual' = season pricing. */
   pricingMode?: 'airbnb' | 'manual';
   externalRates?: Record<string, number>;
@@ -35,14 +37,15 @@ export type PricingInput = {
   addOns: AddOnItem[]; selectedAddOns: { id: string; quantity: number }[];
 };
 
-export type NightLine = { date: string; period: string; category: string; base_ore: number; member_discount_pct: number; los_discount_pct: number; price_ore: number };
+export type NightLine = { date: string; period: string; category: string; season_kind?: string | null; base_ore: number; member_discount_pct: number;
+  base_pct?: number; loyalty_pct?: number; launch_pct?: number; los_discount_pct: number; price_ore: number };
 export type Quote = {
   nights: number; nightLines: NightLine[]; stay_ore: number; cleaning_fee_ore: number;
   add_ons: { id: string; name: string; quantity: number; unit_price_ore: number; total_ore: number }[];
   add_ons_ore: number; subtotal_ore: number;
   extra_guests: number; extra_guest_fee_ore: number; extra_guest_unit_ore: number; extra_guest_basis: 'per_stay' | 'per_night'; included_guests: number;
   member_discount_pct: number; member_discount_ore: number;
-  base_discount_ore: number; loyalty_discount_ore: number;
+  base_discount_ore: number; loyalty_discount_ore: number; launch_discount_ore?: number;
   pricing_mode: 'airbnb' | 'manual';
   /** What the same nights + cleaning would cost a guest on Airbnb (incl. service fee). */
   airbnb_comparison_ore: number; airbnb_fee_pct: number; airbnb_fee_saved_ore: number;
@@ -119,18 +122,25 @@ export function computeQuote(input: PricingInput): Quote {
     }
   }
 
-  // Price: night × (1 − member%) × (1 − LOS tier%) — discounts multiply, never add
-  const memberPct = Math.min(100, Math.max(0, num(input.memberDiscountPct ?? 0)));
-  let stayExact = 0, undiscounted = 0;
+  // Price: night × (1 − member%) × (1 − LOS tier%) — discounts multiply, never add.
+  // With discountByKind the member % depends on the night's season (e.g. lower in holiday periods) and is split into base/loyalty/launch.
+  const flatPct = Math.min(100, Math.max(0, num(input.memberDiscountPct ?? 0)));
+  let stayExact = 0, undiscounted = 0, baseExact = 0, loyaltyExact = 0, launchExact = 0;
   const nightLines: NightLine[] = resolved.map(r => {
     const tiers = input.losDiscounts.filter(t => t.min_nights <= nights && (t.season_category_id === null || t.season_category_id === r.c?.id));
     const best = tiers.sort((a, b) => (b.min_nights - a.min_nights) || ((b.season_category_id ? 1 : 0) - (a.season_category_id ? 1 : 0)))[0];
     const losPct = best ? num(best.discount_percentage) : 0;
-    const exact = r.price * (1 - memberPct / 100) * (1 - losPct / 100);
-    stayExact += exact; undiscounted += r.price * (1 - losPct / 100);
-    return { date: r.date, period: r.label, category: r.c?.name ?? 'Airbnb', base_ore: r.price, member_discount_pct: memberPct, los_discount_pct: losPct, price_ore: Math.round(exact) };
+    const parts = input.discountByKind ? input.discountByKind(r.c?.kind ?? null) : null;
+    const memberPct = parts ? parts.total : flatPct;
+    const gross = r.price * (1 - losPct / 100);
+    const exact = gross * (1 - memberPct / 100);
+    stayExact += exact; undiscounted += gross;
+    if (parts) { baseExact += gross * parts.base / 100; loyaltyExact += gross * parts.loyalty / 100; launchExact += gross * parts.launch / 100; }
+    return { date: r.date, period: r.label, category: r.c?.name ?? 'Airbnb', season_kind: r.c?.kind ?? null, base_ore: r.price, member_discount_pct: memberPct,
+      ...(parts ? { base_pct: parts.base, loyalty_pct: parts.loyalty, launch_pct: parts.launch } : {}), los_discount_pct: losPct, price_ore: Math.round(exact) };
   });
   const stay_ore = Math.round(stayExact);
+  const memberPct = nightLines.length ? Math.max(...nightLines.map(n => n.member_discount_pct)) : flatPct;
 
   const selected = new Map(input.selectedAddOns.map(s => [s.id, Math.max(1, Math.floor(s.quantity || 1))]));
   const add_ons = input.addOns
@@ -148,7 +158,8 @@ export function computeQuote(input: PricingInput): Quote {
   const extra_guest_fee_ore = extra_guests * (input.extraGuestFeeOre ?? 0) * (basis === 'per_night' ? nights : 1);
   const member_discount_ore = Math.round(undiscounted) - stay_ore;
   const split = input.memberDiscountSplit;
-  const base_discount_ore = split && memberPct > 0 ? Math.round(member_discount_ore * split.basePct / memberPct) : member_discount_ore;
+  const launch_discount_ore = input.discountByKind ? Math.round(launchExact) : 0;
+  const base_discount_ore = input.discountByKind ? Math.round(baseExact) : split && memberPct > 0 ? Math.round(member_discount_ore * split.basePct / memberPct) : member_discount_ore;
   const feePct = num(input.airbnbGuestFeePct ?? 0);
   const airbnbCleaning = input.airbnbCleaningFeeOre ?? input.cleaningFeeOre;
   const comparisonBase = Math.round(undiscounted) + airbnbCleaning + extra_guest_fee_ore;
@@ -158,7 +169,7 @@ export function computeQuote(input: PricingInput): Quote {
   const airbnb_comparison_ore = Math.round(comparisonBase * (1 + feePct / 100));
   return { nights, nightLines, stay_ore, cleaning_fee_ore, add_ons, add_ons_ore, subtotal_ore: stay_ore + cleaning_fee_ore + add_ons_ore + extra_guest_fee_ore - own_linen_discount_ore,
     extra_guests, extra_guest_fee_ore, extra_guest_unit_ore: input.extraGuestFeeOre ?? 0, extra_guest_basis: basis, included_guests: included,
-    member_discount_pct: memberPct, member_discount_ore, base_discount_ore, loyalty_discount_ore: member_discount_ore - base_discount_ore,
+    member_discount_pct: memberPct, member_discount_ore, base_discount_ore, loyalty_discount_ore: member_discount_ore - base_discount_ore - launch_discount_ore, launch_discount_ore,
     pricing_mode: mode, airbnb_comparison_ore, airbnb_fee_pct: feePct, airbnb_fee_saved_ore: airbnb_comparison_ore - comparisonBase,
     airbnb_cleaning_fee_ore: airbnbCleaning, own_linen, own_linen_discount_ore, own_linen_unit_ore: linenUnit };
 }
@@ -197,7 +208,7 @@ export async function quoteFor(propertyId: string, memberId: string, startDate: 
     categories: ctx.categories, periods: ctx.periods, losDiscounts: ctx.losDiscounts,
     cleaningFeeOre: ctx.property.cleaning_fee_ore, cleaningExempt: (await isCleaningExempt(memberId, propertyId, db)) || (!!excludeBookingId && !!(await one(`SELECT 1 FROM bookings WHERE id=$1 AND cleaning_self`, [excludeBookingId], db))),
     addOns: ctx.addOns, selectedAddOns, memberDiscountPct: discount.totalPct,
-    memberDiscountSplit: { basePct: discount.basePct, loyaltyPct: discount.loyaltyPct },
+    memberDiscountSplit: { basePct: discount.basePct, loyaltyPct: discount.loyaltyPct }, discountByKind: kind => discountForKind(discount, kind),
     includedGuests: ctx.property.included_guests, extraGuestFeeOre: ctx.property.extra_guest_fee_ore, extraGuestBasis: ctx.property.extra_guest_fee_basis,
     pricingMode: ctx.property.pricing_mode, externalRates: ctx.rates, defaultMinNights: ctx.property.default_min_nights, airbnbGuestFeePct: ctx.airbnbFee,
     airbnbCleaningFeeOre: ctx.property.airbnb_cleaning_fee_ore, ownLinen: !!ownLinen, ownLinenDiscountOre: ctx.property.own_linen_discount_ore,

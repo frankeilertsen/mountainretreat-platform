@@ -34,13 +34,19 @@ export default async function RewardsAdmin({ searchParams }: { searchParams: Pro
           <p className="muted" style={{ fontSize: '.88rem' }}>Airbnb-avgiften brukes bare i sammenligningen medlemmet ser. Står den på 0 (avgiften er inkludert i Airbnb-prisen og betales av deg), vises ingen avgift og tekstene om å slippe avgiften skjules. Medlemsrabatten gjelder overnattingsprisen for alle medlemmer i tillegg. Kan overstyres per medlem på medlemssiden. Lojalitetsrabatten legges oppå: +steg % per booking (bekreftet/fullført), opp til maks.</p>
           <div className="fields">
             <div><label>Airbnb-avgift gjesten betaler på toppen % (0 = ingen)</label><input name="airbnb_guest_fee_pct" defaultValue={s.airbnb_guest_fee_pct} /></div>
-            <div><label>Medlemsrabatt %</label><input name="member_base_discount_pct" defaultValue={s.member_base_discount_pct} /></div>
+            <div><label>Medlemsrabatt lav-/høysesong %</label><input name="member_base_discount_pct" defaultValue={s.member_base_discount_pct} /></div>
+            <div><label>Medlemsrabatt i ferie %</label><input name="member_holiday_discount_pct" defaultValue={s.member_holiday_discount_pct ?? s.member_base_discount_pct} /></div>
+            <div><label>Samlet tak for rabatt %</label><input name="member_discount_cap_pct" defaultValue={s.member_discount_cap_pct ?? '100'} /></div>
+            <div><label>Lojalitet gjelder i ferie</label><select name="member_loyalty_in_holiday" defaultValue={s.member_loyalty_in_holiday ?? '1'}><option value="1">Ja</option><option value="0">Nei, bare lav-/høysesong</option></select></div>
+            <div><label>Lanseringsrabatt % (0 = av)</label><input name="launch_discount_pct" defaultValue={s.launch_discount_pct ?? '0'} /></div>
+            <div><label>Lansering – bookinger sendt fra</label><input type="date" name="launch_discount_from" defaultValue={s.launch_discount_from ?? ''} /></div>
+            <div><label>Lansering – til og med</label><input type="date" name="launch_discount_to" defaultValue={s.launch_discount_to ?? ''} /></div>
             <div style={{ gridColumn: '1 / -1' }}><label>Lojalitet per booking % (én økning per booking, skilt med ;)</label><input name="member_loyalty_steps" defaultValue={(s.member_loyalty_steps ?? '').split(';').map((x: string) => x.replace('.', ',')).join('; ')} placeholder="tomt = lik økning hver gang" />
               <small className="muted">Nå: {describeSteps(ld.steps)} – maks {pctNo(ld.loyaltyMaxPct)} % etter {ld.ladder.length - 1} bookinger.</small></div>
             {!(s.member_loyalty_steps ?? '').trim() && <div><label>Lik økning per booking %</label><input name="member_loyalty_step_pct" defaultValue={s.member_loyalty_step_pct} /></div>}
             <div><label>Maks lojalitet %</label><input name="member_loyalty_max_pct" defaultValue={s.member_loyalty_max_pct} /></div>
           </div>
-          <small className="muted">Eksempel: {s.member_base_discount_pct} % ved første booking (lojalitet starter på 0 %), {pctNo(Number(s.member_base_discount_pct) + ld.loyaltyMaxPct)} % etter {ld.ladder.length - 1} bookinger.</small><br />
+          <small className="muted">Eksempel i lav-/høysesong: {s.member_base_discount_pct} % ved første booking (lojalitet starter på 0 %), {pctNo(Math.min(Number(s.member_discount_cap_pct ?? 100), Number(s.member_base_discount_pct) + ld.loyaltyMaxPct))} % etter {ld.ladder.length - 1} bookinger. Lanseringsrabatten kommer i tillegg for bookinger sendt i perioden, men samlet rabatt går aldri over taket.</small><br />
           <button className="btn" style={{ marginTop: 12 }}>Lagre rabatt</button>
         </form>
         <form action={saveSettingsAction} className="card">

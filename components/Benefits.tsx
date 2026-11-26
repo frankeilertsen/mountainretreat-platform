@@ -6,7 +6,7 @@ import { nokL } from '@/lib/i18n/format';
 
 export type BenefitData = {
   disc: MemberDiscount; airbnbFeePct: number; cleaning?: { ours: number; airbnb: number; linen: number } | null; balance: number; pending: number; invited: number; qualified: number;
-  terms: { referrer: string; referred: string }; unusedBonuses: number; maxUnused: number;
+  terms: { referrer: string; referred: string }; unusedBonuses: number; maxUnused: number; perBooking?: number;
 };
 
 /** The four member benefits, shown on the dashboard and the benefits page. */
@@ -17,6 +17,8 @@ export function BenefitCards(d: BenefitData & { lang?: Lang }) {
   const steps = disc.ladder.length - 1;
   const done = Math.min(steps, disc.bookingsCounted);
   return (
+    <>
+    {disc.launchPct > 0 && disc.launchUntil && <div className="card launch-banner" style={{ marginBottom: 16 }}><strong>{B.launchTitle(disc.launchPct)}</strong> {B.launchText(disc.launchPct, disc.launchUntil, disc.capPct)}</div>}
     <div className="grid g4">
       {d.airbnbFeePct > 0 ? <div className="card kpi-card">
         <span className="kpi-label">{B.noFee}</span>
@@ -30,7 +32,7 @@ export function BenefitCards(d: BenefitData & { lang?: Lang }) {
       <div className="card kpi-card">
         <span className="kpi-label">{B.member}</span>
         <div className="kpi" style={{ color: 'var(--gold-2)' }}>{pctL(disc.basePct, lang)} %</div>
-        <small>{disc.baseIsOverride ? B.memberPersonal : B.memberFixed}{B.memberSuffix}</small>
+        <small>{disc.baseIsOverride ? B.memberPersonal : B.memberFixed}{disc.holidayBasePct !== disc.basePct ? B.memberHoliday(disc.basePct, disc.holidayBasePct) : ''}{B.memberSuffix}</small>
       </div>
       <div className="card kpi-card">
         <span className="kpi-label">{B.loyalty}</span>
@@ -38,7 +40,7 @@ export function BenefitCards(d: BenefitData & { lang?: Lang }) {
         <div style={{ display: 'flex', gap: 3, margin: '8px 0 6px' }}>
           {Array.from({ length: steps }, (_, i) => <span key={i} style={{ flex: 1, height: 6, borderRadius: 3, background: i < done ? 'var(--gold)' : 'var(--line-2)' }} />)}
         </div>
-        <small>{disc.atMax ? B.loyaltyMax : B.loyaltyNext(disc.stepPct, disc.nextTotalPct - disc.basePct)}</small>
+        <small>{disc.atMax ? B.loyaltyMax : B.loyaltyNext(disc.stepPct, disc.loyaltyPct + disc.stepPct)}{!disc.loyaltyInHoliday ? B.loyaltyScope : ''}</small>
       </div>
       <div className="card kpi-card">
         <span className="kpi-label">{B.referral}</span>
@@ -46,5 +48,6 @@ export function BenefitCards(d: BenefitData & { lang?: Lang }) {
         <small>{B.referralText(d.pending > 0 ? nokL(d.pending, lang) : null, d.unusedBonuses, d.maxUnused, d.terms.referrer)} <Link href="/medlem/invitasjoner">{B.invite}</Link></small>
       </div>
     </div>
+    </>
   );
 }

@@ -1,3 +1,4 @@
+import { discountForKind } from '@/lib/domain/memberDiscount';
 import { notFound } from 'next/navigation';
 import { requireUser } from '@/lib/auth/current';
 import { one, q } from '@/lib/db';
@@ -40,12 +41,12 @@ export default async function PropertyPage({ params, searchParams }: { params: P
   const today = todayOslo();
   const blocks = await blocksForRange(p.id, today, addDays(today, 400));
   // Season colours with the price span (weekday–weekend, all coming periods) – exact price comes with the quote
-  const seasonRows = await q<{ id: string; name: string; color: string | null; min: number; max: number }>(
-    `SELECT c.id, c.name, c.color, min(v)::int AS min, max(v)::int AS max
+  const seasonRows = await q<{ id: string; kind: string; name: string; color: string | null; min: number; max: number }>(
+    `SELECT c.id, c.kind, c.name, c.color, min(v)::int AS min, max(v)::int AS max
      FROM season_categories c JOIN pricing_periods pp ON pp.season_category_id=c.id AND pp.active AND pp.end_date >= current_date,
      LATERAL (VALUES (COALESCE(pp.price_per_night_ore, c.price_per_night_ore)),
                      (COALESCE(pp.weekend_price_per_night_ore, pp.price_per_night_ore, c.weekend_price_per_night_ore, c.price_per_night_ore))) x(v)
-     WHERE c.property_id=$1 AND c.active GROUP BY c.id, c.name, c.color ORDER BY min(v)`, [p.id]);
+     WHERE c.property_id=$1 AND c.active GROUP BY c.id, c.kind, c.name, c.color ORDER BY min(v)`, [p.id]);
   const seasons = seasonRows;
   const dayPeriods = await q<{ s: string; e: string; color: string | null; name: string; priority: number }>(
     `SELECT to_char(pp.start_date,'YYYY-MM-DD') s, to_char(pp.end_date,'YYYY-MM-DD') e, c.color, c.name, pp.priority
@@ -99,10 +100,10 @@ export default async function PropertyPage({ params, searchParams }: { params: P
                 <small className="muted">{T.followsAirbnb(airbnbFee, disc.totalPct, disc.loyaltyPct)} <a href="/medlem/fordeler">{T.howCalc}</a></small>
               </> : <p className="muted">{T.notEntered}</p>
             ) : <>
-              {seasons.map(s => { const f = 1 - disc.totalPct / 100; const span = (a: number, b: number) => a === b ? nok(a) : `${nok(a).replace(/\s?kr$/, '')}–${nok(b)}`;
+              {seasons.map(s => { const f = 1 - discountForKind(disc, s.kind).total / 100; const span = (a: number, b: number) => a === b ? nok(a) : `${nok(a).replace(/\s?kr$/, '')}–${nok(b)}`;
                 return <div key={s.id} className="row between season-row"><span><i className="season-dot" style={{ background: s.color ?? '#ccc' }} />{s.name}</span>
                   <span style={{ textAlign: 'right' }}><strong>{span(Math.round(s.min * f / 100) * 100, Math.round(s.max * f / 100) * 100)}</strong> <small>{t.common.perNight}</small><br /><small className="muted" style={{ textDecoration: 'line-through' }}>{span(s.min, s.max)}</small></span></div>; })}
-              <small className="muted">{T.discountApplied(disc.totalPct, disc.atMax ? null : disc.nextTotalPct)} {lang === 'en' ? 'The exact price for your dates is shown when you calculate the price.' : 'Nøyaktig pris for dine datoer ser du når du beregner pris.'}</small>
+              <small className="muted">{T.discountAppliedSeasons(disc.totalPct, disc.holidayTotalPct, disc.atMax ? null : disc.nextTotalPct, disc.launchPct)} {lang === 'en' ? 'The exact price for your dates is shown when you calculate the price.' : 'Nøyaktig pris for dine datoer ser du når du beregner pris.'}</small>
             </>}
           </div>
         </div>

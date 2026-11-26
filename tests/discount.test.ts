@@ -51,3 +51,39 @@ describe('member discount: standard + individual override + loyalty steps', () =
     expect((await memberDiscount(b.id)).totalPct).toBe(5);
   });
 });
+
+describe('season-aware discount (Dec 2026 model)', () => {
+  it('20 % low/high, 15 % holiday, loyalty max 5 % only outside holidays, launch +5 %, capped at 25 %', async () => {
+    const { computeMemberDiscount, discountForKind } = await import('../lib/domain/memberDiscount');
+    const steps = [1, 1, 1, 1, 1];
+    const extras = { holidayBasePct: 15, loyaltyInHoliday: false, capPct: 25 };
+    const d0 = computeMemberDiscount(20, null, 0, steps, 5, extras);
+    expect(discountForKind(d0, 'high_season')).toMatchObject({ base: 20, loyalty: 0, launch: 0, total: 20 });
+    expect(discountForKind(d0, 'holiday').total).toBe(15);
+    const d3 = computeMemberDiscount(20, null, 3, steps, 5, extras);
+    expect(discountForKind(d3, 'low_season').total).toBe(23);
+    expect(discountForKind(d3, 'holiday')).toMatchObject({ loyalty: 0, total: 15 });
+    const d9 = computeMemberDiscount(20, null, 9, steps, 5, extras);
+    expect(d9.loyaltyPct).toBe(5);
+    expect(discountForKind(d9, 'high_season').total).toBe(25);
+    const launch = computeMemberDiscount(20, null, 2, steps, 5, { ...extras, launchPct: 5 });
+    expect(discountForKind(launch, 'high_season')).toMatchObject({ base: 20, loyalty: 2, launch: 3, total: 25 });
+    expect(discountForKind(launch, 'holiday')).toMatchObject({ base: 15, loyalty: 0, launch: 5, total: 20 });
+  });
+
+  it('a quote mixes holiday and normal nights and splits the discount', async () => {
+    const { computeQuote } = await import('../lib/domain/pricing');
+    const { computeMemberDiscount, discountForKind } = await import('../lib/domain/memberDiscount');
+    const hi = { id: 'h', kind: 'high_season', name: 'Høy', price_per_night_ore: 100000, min_nights: 1, max_nights: null };
+    const ho = { id: 'f', kind: 'holiday', name: 'Ferie', price_per_night_ore: 100000, min_nights: 1, max_nights: null };
+    const per = (id: string, c: string, s: string, e: string) => ({ id, season_category_id: c, name: id, start_date: s, end_date: e, price_per_night_ore: null, min_nights: null, max_nights: null, booking_mode: 'flexible' as const, changeover_weekday: null, priority: 0 });
+    const d = computeMemberDiscount(20, null, 0, [1, 1, 1, 1, 1], 5, { holidayBasePct: 15, loyaltyInHoliday: false, capPct: 25, launchPct: 5 });
+    const q = computeQuote({ startDate: '2030-03-01', endDate: '2030-03-05', guests: 2, maxGuests: 6, categories: [hi, ho], periods: [per('a', 'h', '2030-03-01', '2030-03-02'), per('b', 'f', '2030-03-03', '2030-03-10')],
+      losDiscounts: [], cleaningFeeOre: 0, addOns: [], selectedAddOns: [], pricingMode: 'manual', discountByKind: k => discountForKind(d, k) });
+    expect(q.nightLines.map(n => n.member_discount_pct)).toEqual([25, 25, 20, 20]);
+    expect(q.stay_ore).toBe(75000 * 2 + 80000 * 2);
+    expect(q.base_discount_ore).toBe(20000 * 2 + 15000 * 2);
+    expect(q.launch_discount_ore).toBe(5000 * 4);
+    expect(q.loyalty_discount_ore).toBe(0);
+  });
+});

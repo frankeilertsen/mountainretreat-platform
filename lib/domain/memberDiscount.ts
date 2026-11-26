@@ -10,7 +10,18 @@ import { getNum, getStr } from '../settings';
  * "Booking made" = the member's bookings that are confirmed / completed (cancelled ones don't count).
  */
 export type MemberDiscount = {
+  /** Base discount in low and high season. */
   basePct: number; baseIsOverride: boolean; standardPct: number;
+  /** Base discount in holiday periods (season kind 'holiday'). */
+  holidayBasePct: number;
+  /** Loyalty also applies in holiday periods? */
+  loyaltyInHoliday: boolean;
+  /** Extra launch-campaign discount for bookings made in the campaign window (all seasons). */
+  launchPct: number; launchUntil: string | null;
+  /** Total discount never exceeds this (per night). */
+  capPct: number;
+  /** Total in holiday periods. */
+  holidayTotalPct: number;
   bookingsCounted: number;
   /** Increment the NEXT booking gives (0 when the maximum is reached). */
   stepPct: number;
@@ -35,18 +46,46 @@ export async function loyaltySettings(db: Db = getPool()) {
   return { step, max, steps };
 }
 
-export async function memberDiscount(userId: string, db: Db = getPool(), excludeBookingId?: string | null): Promise<MemberDiscount> {
+export type DiscountExtras = { holidayBasePct?: number | null; loyaltyInHoliday?: boolean; launchPct?: number; launchUntil?: string | null; capPct?: number };
+
+/** Launch campaign: extra % for bookings made (requested) between from and to (Oslo dates, inclusive). */
+export async function launchFor(at: Date, db: Db = getPool()) {
+  const pct = await getNum('launch_discount_pct', 0, db);
+  const from = await getStr('launch_discount_from', '', db), to = await getStr('launch_discount_to', '', db);
+  const day = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Oslo' }).format(at);
+  return pct > 0 && from && to && day >= from && day <= to ? { pct, until: to } : { pct: 0, until: null };
+}
+
+/** at = when the booking is/was made (affects the launch campaign). For an existing booking pass its id as excludeBookingId: its own request time is used. */
+export async function memberDiscount(userId: string, db: Db = getPool(), excludeBookingId?: string | null, at?: Date): Promise<MemberDiscount> {
   const standard = await getNum('member_base_discount_pct', 5, db);
+  const holidayStd = await getNum('member_holiday_discount_pct', standard, db);
+  const cap = await getNum('member_discount_cap_pct', 100, db);
+  const loyaltyInHoliday = (await getNum('member_loyalty_in_holiday', 1, db)) === 1;
   const { step, max, steps } = await loyaltySettings(db);
-  const row = await one<{ override: string | null; n: number }>(
+  const row = await one<{ override: string | null; n: number; made: Date | null }>(
     `SELECT u.member_discount_override_pct AS override,
-            (SELECT count(*) FROM bookings b WHERE b.member_id=u.id AND b.status IN ('confirmed','completed','cancellation_requested') AND b.id IS DISTINCT FROM $2)::int AS n
+            (SELECT count(*) FROM bookings b WHERE b.member_id=u.id AND b.status IN ('confirmed','completed','cancellation_requested') AND b.id IS DISTINCT FROM $2)::int AS n,
+            (SELECT created_at FROM bookings WHERE id=$2) AS made
      FROM users u WHERE u.id=$1`, [userId, excludeBookingId ?? null], db);
-  return computeMemberDiscount(standard, row?.override == null ? null : Number(row.override), row?.n ?? 0, steps.length ? steps : step, max);
+  const override = row?.override == null ? null : Number(row.override);
+  const launch = await launchFor(at ?? row?.made ?? new Date(), db);
+  return computeMemberDiscount(standard, override, row?.n ?? 0, steps.length ? steps : step, max,
+    { holidayBasePct: override ?? holidayStd, loyaltyInHoliday, launchPct: launch.pct, launchUntil: launch.until, capPct: cap });
+}
+
+/** The parts of the discount for one night of the given season kind, after the cap (launch is trimmed first, then loyalty). */
+export function discountForKind(d: MemberDiscount, kind: string | null | undefined) {
+  const holiday = kind === 'holiday';
+  const base = holiday ? d.holidayBasePct : d.basePct;
+  const loyalty = holiday && !d.loyaltyInHoliday ? 0 : d.loyaltyPct;
+  const cap = Math.max(0, Math.min(100, d.capPct));
+  const b = Math.min(base, cap), l = Math.min(loyalty, cap - b), x = Math.min(d.launchPct, cap - b - l);
+  return { base: round2(b), loyalty: round2(l), launch: round2(x), total: round2(b + l + x) };
 }
 
 /** stepsOrStep: a list with one increment per booking, or one uniform increment. */
-export function computeMemberDiscount(standardPct: number, overridePct: number | null, bookings: number, stepsOrStep: number | number[], maxPct: number): MemberDiscount {
+export function computeMemberDiscount(standardPct: number, overridePct: number | null, bookings: number, stepsOrStep: number | number[], maxPct: number, extras: DiscountExtras = {}): MemberDiscount {
   const uniform = typeof stepsOrStep === 'number';
   const stepAt = (i: number) => uniform ? (stepsOrStep as number) : ((stepsOrStep as number[])[i] ?? 0);
   const ladder = [0];
@@ -60,9 +99,14 @@ export function computeMemberDiscount(standardPct: number, overridePct: number |
   const basePct = overridePct ?? standardPct;
   const clamp = (v: number) => round2(Math.min(100, Math.max(0, v)));
   const steps = ladder.slice(1).map((v, i) => round2(v - ladder[i]));
+  const capPct = extras.capPct ?? 100, launchPct = extras.launchPct ?? 0;
+  const holidayBasePct = extras.holidayBasePct ?? basePct, loyaltyInHoliday = extras.loyaltyInHoliday ?? true;
+  const capped = (v: number) => clamp(Math.min(capPct, v));
   return {
-    basePct, baseIsOverride: overridePct != null, standardPct, bookingsCounted: bookings, stepPct: round2(nextLoyalty - loyaltyPct), steps, ladder,
-    loyaltyMaxPct: top, loyaltyPct, totalPct: clamp(basePct + loyaltyPct), nextTotalPct: clamp(basePct + nextLoyalty), atMax: loyaltyPct >= top,
+    basePct, baseIsOverride: overridePct != null, standardPct, holidayBasePct, loyaltyInHoliday, launchPct, launchUntil: extras.launchUntil ?? null, capPct,
+    bookingsCounted: bookings, stepPct: round2(nextLoyalty - loyaltyPct), steps, ladder,
+    loyaltyMaxPct: top, loyaltyPct, totalPct: capped(basePct + loyaltyPct + launchPct), nextTotalPct: capped(basePct + nextLoyalty + launchPct), atMax: loyaltyPct >= top,
+    holidayTotalPct: capped(holidayBasePct + (loyaltyInHoliday ? loyaltyPct : 0) + launchPct),
   };
 }
 
