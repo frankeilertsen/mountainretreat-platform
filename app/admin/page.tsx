@@ -40,7 +40,7 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
     LEFT JOIN availability_blocks ab ON ab.date_range && daterange(m::date,(m+interval '1 month')::date) GROUP BY m ORDER BY m`);
   const revenue = await q(`SELECT to_char(m,'YYYY-MM') AS month, COALESCE(sum(p.amount_ore - p.refunded_amount_ore),0)::bigint AS amount
     FROM generate_series(date_trunc('month', now()) - interval '5 months', date_trunc('month', now()), interval '1 month') m
-    LEFT JOIN payments p ON date_trunc('month', p.created_at) = m AND p.status IN ('succeeded','partially_refunded','refunded') GROUP BY m ORDER BY m`);
+    LEFT JOIN payments p ON date_trunc('month', p.created_at) = m AND p.status IN ('succeeded','partially_refunded','refunded') AND NOT p.test_mode GROUP BY m ORDER BY m`);
   const queueEmpty = !pending.length && !cancels.length && !loyalty.length;
   return (
     <>
