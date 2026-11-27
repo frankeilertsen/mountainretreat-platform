@@ -1,3 +1,4 @@
+import { AdminStayEditor } from '@/components/AdminStayEditor';
 import { getNum } from '@/lib/settings';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
@@ -95,31 +96,10 @@ export default async function AdminBooking({ params, searchParams }: { params: P
               </div>
             </div>
           )}
-          {plan && (
-            <div className="card">
-              <div className="row between"><h3>Ankomst og soveplan</h3><span className="badge">{plan.source === 'admin_override' ? 'Overstyrt' : 'Automatisk'}</span></div>
-              <form action={adminPreparationAction} className="fields" style={{ marginBottom: 16 }}>
-                <input type="hidden" name="prepId" value={b.prep_id} /><input type="hidden" name="back" value={back} />
-                <div><label>Voksne</label><input type="number" name="adults" defaultValue={b.p_adults} min={0} /></div>
-                <div><label>Barn</label><input type="number" name="children" defaultValue={b.p_children} min={0} /></div>
-                <div><label>Spedbarn</label><input type="number" name="infants" defaultValue={b.p_infants} min={0} /></div>
-                <div><label>Ankomst</label><input type="time" name="arrival" defaultValue={b.arrival ?? ''} /></div>
-                <div style={{ gridColumn: '1/-1' }}><label>Beskjed til renholder</label><input name="comment" defaultValue={b.comment_for_cleaner ?? ''} /></div>
-                <div><button className="btn secondary small">Lagre</button></div>
-              </form>
-              <RoomPlan plan={plan} />
-              <details><summary>Overstyr senger for dette oppholdet</summary>
-                <form action={sleepingPlanAction} style={{ marginTop: 10 }}>
-                  <input type="hidden" name="prepId" value={b.prep_id} /><input type="hidden" name="back" value={back} />
-                  <table><tbody>{allBeds.map(bd => (
-                    <tr key={bd.id}><td>{bd.room}<br /><small>{bd.label} · {BED_LABELS[bd.bed_type]}</small></td>
-                      <td><input type="number" name={'bed_' + bd.id} min={0} max={bd.sleeps} defaultValue={bd.allocation?.persons ?? 0} style={{ width: 70 }} /></td>
-                      <td><select name={'type_' + bd.id} defaultValue={bd.allocation?.guest_type ?? 'adult'}><option value="adult">Voksen</option><option value="child">Barn</option><option value="infant">Spedbarn</option><option value="mixed">Blandet</option></select></td></tr>))}</tbody></table>
-                  <div className="row" style={{ marginTop: 10 }}><button className="btn small">Lagre overstyring</button>{plan.source === 'admin_override' && <ValueButton className="btn ghost small" name="reset" value="1">Tilbake til automatisk</ValueButton>}</div>
-                </form>
-              </details>
-            </div>
-          )}
+          {plan && b.prep_id && (<>
+            <div className="card"><h3>Soveplan</h3><RoomPlan plan={plan} /></div>
+            <AdminStayEditor prep={{ id: b.prep_id, adults: b.p_adults, children: b.p_children, infants: b.p_infants, arrival: b.arrival, comment: b.comment_for_cleaner }} plan={plan as any} back={back} />
+          </>)}
         </div>
         <div className="stack">
           <div className="card">

@@ -55,6 +55,14 @@ export async function adminPreparationAction(f: FormData) {
     return 'Ankomstinfo lagret.';
   });
 }
+export async function taskNotesAction(f: FormData) {
+  const { actor } = await admin(); const back = str(f, 'back') || '/admin/renhold';
+  await run(back, async () => {
+    const { setTaskNotes } = await import('@/lib/domain/cleaning');
+    await setTaskNotes(str(f, 'taskId'), str(f, 'notes'), actor);
+    return 'Beskjeden til vaskejobben er lagret.';
+  });
+}
 export async function sleepingPlanAction(f: FormData) {
   const { actor } = await admin(); const back = str(f, 'back');
   await run(back, async () => {
@@ -377,13 +385,6 @@ export async function bookingCleaningSelfAction(f: FormData) {
     return r.priceLocked
       ? 'Vaskejobben er slått av. Prisen var allerede låst – refunder sluttrengjøringen under Betalinger hvis gjesten ikke skal betale den.'
       : 'Gjesten vasker selv: sluttrengjøringen fjernes fra prisen når bookingen godkjennes, og det lages ingen vaskejobb.';
-  });
-}
-export async function taskNotesAction(f: FormData) {
-  const { actor } = await admin();
-  await run(str(f, 'back') || '/admin/renhold', async () => {
-    await getPool().query(`UPDATE cleaning_tasks SET notes=$2, updated_at=now() WHERE id=$1`, [str(f, 'id'), str(f, 'notes') || null]);
-    await audit(null, actor, 'cleaning.notes_updated', 'cleaning_task', str(f, 'id')); return 'Instruksjon lagret.';
   });
 }
 export async function resolveReportAction(f: FormData) {

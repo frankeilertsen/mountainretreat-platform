@@ -408,3 +408,16 @@ export async function updatePreparation(prepId: string, data: { adults: number; 
     for (const t of assigned) await notifyHelper(c, t.assigned_to_user_id, helperMsg.guestInfoChanged(), t.id);
   });
 }
+
+/** Admin instructions for one cleaning job (shown to the cleaner); the assigned cleaner is told when it changes. */
+export async function setTaskNotes(taskId: string, notes: string, actor: Actor) {
+  await tx(async c => {
+    const t = await one<{ notes: string | null; assigned_to_user_id: string | null; status: string }>(`SELECT notes, assigned_to_user_id, status FROM cleaning_tasks WHERE id=$1 FOR UPDATE`, [taskId], c);
+    if (!t) throw new DomainError('not_found', 'Fant ikke vaskejobben.');
+    const v = notes.trim().slice(0, 1000) || null;
+    if (v === t.notes) return;
+    await c.query(`UPDATE cleaning_tasks SET notes=$2, updated_at=now() WHERE id=$1`, [taskId, v]);
+    await audit(c, actor, 'cleaning.notes_updated', 'cleaning_task', taskId, { notes: t.notes }, { notes: v });
+    if (t.assigned_to_user_id && ['assigned', 'in_progress'].includes(t.status)) await notifyHelper(c, t.assigned_to_user_id, helperMsg.guestInfoChanged(), taskId);
+  });
+}

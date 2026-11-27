@@ -1,3 +1,4 @@
+import { AdminStayEditor } from '@/components/AdminStayEditor';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { requireUser } from '@/lib/auth/current';
@@ -26,7 +27,7 @@ export default async function TaskPage({ params, searchParams }: { params: Promi
   const t = await one(`SELECT t.id, t.task_type, t.status, t.channel_name, to_char(t.checkout_date,'YYYY-MM-DD') AS date, to_char(t.next_checkin_date,'YYYY-MM-DD') AS next_checkin,
       t.deadline_at, t.checkout_guests, t.notes, t.started_at, t.completed_at, t.completion_notes, t.next_preparation_id, t.property_id,
       p.name AS property, p.address, to_char(p.check_in_time,'HH24:MI') AS cin, to_char(p.check_out_time,'HH24:MI') AS cout,
-      sp.adults, sp.children, sp.infants, sp.comment_for_cleaner, sp.own_linen, (SELECT string_agg(a.name || ' × ' || ba.quantity, ', ' ORDER BY a.name) FROM booking_add_ons ba JOIN add_on_items a ON a.id=ba.add_on_item_id WHERE ba.booking_id = sp.booking_id) AS next_add_ons, to_char(sp.expected_arrival_time,'HH24:MI') AS arrival, hu.name AS assignee
+      sp.adults, sp.children, sp.infants, sp.comment_for_cleaner, sp.id AS prep_id, sp.own_linen, (SELECT string_agg(a.name || ' × ' || ba.quantity, ', ' ORDER BY a.name) FROM booking_add_ons ba JOIN add_on_items a ON a.id=ba.add_on_item_id WHERE ba.booking_id = sp.booking_id) AS next_add_ons, to_char(sp.expected_arrival_time,'HH24:MI') AS arrival, hu.name AS assignee
     FROM cleaning_tasks t JOIN properties p ON p.id=t.property_id LEFT JOIN stay_preparations sp ON sp.id=t.next_preparation_id LEFT JOIN users hu ON hu.id=t.assigned_to_user_id WHERE t.id=$1`, [id]);
   if (!t) notFound();
   const plan = await roomPlanForPreparation(t.next_preparation_id, t.property_id);
@@ -37,6 +38,7 @@ export default async function TaskPage({ params, searchParams }: { params: Promi
   const open = ['open', 'assigned', 'in_progress'].includes(t.status);
   const KIND = C.kinds;
   const sameDay = t.next_checkin === t.date;
+  const isAdmin = ['admin', 'super_admin'].includes((u as any).system_role);
   return (
     <>
       <Link href="/renhold" className="muted">{C.back}</Link>
@@ -59,6 +61,8 @@ export default async function TaskPage({ params, searchParams }: { params: Promi
       </div>
 
       {t.status === 'not_needed' && <p className="muted" style={{ marginTop: 16 }}>{C.notNeeded}</p>}
+      {isAdmin && <div style={{ marginTop: 20 }}><AdminStayEditor back={`/renhold/oppgaver/${id}`} task={{ id, notes: t.notes }}
+        prep={t.prep_id ? { id: t.prep_id, adults: t.adults ?? 0, children: t.children ?? 0, infants: t.infants ?? 0, arrival: t.arrival, comment: t.comment_for_cleaner } : null} plan={plan as any} /></div>}
 
       <h2 style={{ marginTop: 28 }}>{C.bedsTitle} {t.next_checkin && <small className="muted" style={{ fontSize: '.9rem' }}>{C.forNext}</small>}</h2>
       {plan.source === 'none' ? <p className="muted">{C.noPlan}</p> : (
