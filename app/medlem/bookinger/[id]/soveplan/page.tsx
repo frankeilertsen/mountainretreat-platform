@@ -19,8 +19,7 @@ export default async function SleepingPlan({ params, searchParams }: { params: P
   const { id } = await params; const sp = await searchParams;
   const lang = await getLang(); const en = lang === 'en';
   const { booking: b, plan, open, lockDate, ownLinen, guests } = await memberPlanContext(id, u.id);
-  const partial = ownLinen > 0 && ownLinen < guests;
-  const all = ownLinen >= guests && guests > 0;
+  const all = ownLinen > 0 && guests > 0;
   const chosen = plan.source === 'member';
   return (
     <div className="narrow">
@@ -30,7 +29,6 @@ export default async function SleepingPlan({ params, searchParams }: { params: P
       <Flash sp={sp} lang={lang} />
       <div className="card flat" style={{ marginBottom: 16 }}>
         <p style={{ margin: 0 }}>{en ? 'Tell us how you want to sleep, and the cleaner makes up the beds exactly like that. This is optional – if you skip it, we make up the beds based on the number of guests.' : 'Fortell oss hvordan dere vil sove, så reer renholderen opp akkurat slik. Dette er valgfritt – hopper du over, reer vi opp etter antall gjester.'}</p>
-        {partial && <p style={{ margin: '10px 0 0', color: 'var(--gold-2)' }}>{en ? `${ownLinen} of you bring your own bed linen: tick “Own linen” for the beds where they sleep.` : `${ownLinen} av dere tar med eget sengetøy: kryss av «Eget sengetøy» på sengene der de sover.`}</p>}
         {all && <p style={{ margin: '10px 0 0' }}>{en ? 'Everyone brings their own bed linen, so the beds will not be made up.' : 'Alle tar med eget sengetøy, så sengene blir ikke redd opp.'}</p>}
         <p className="muted" style={{ margin: '10px 0 0', fontSize: '.85rem' }}>{open ? (en ? `You can change this until ${fmtDate(lockDate)}.` : `Du kan endre dette til og med ${fmtDate(lockDate)}.`) : plan.source === 'admin_override' ? (en ? 'The host has set up the beds for this stay. Contact us if something should be changed.' : 'Vertskapet har satt opp sengene for dette oppholdet. Ta kontakt hvis noe bør endres.') : (en ? 'The sleeping plan can no longer be changed. Contact us if something should be changed.' : 'Soveplanen kan ikke endres lenger. Ta kontakt hvis noe bør endres.')}</p>
       </div>
@@ -47,7 +45,6 @@ export default async function SleepingPlan({ params, searchParams }: { params: P
                     <div><strong>{bd.label}</strong><br /><small className="muted">{BED[bd.bed_type]?.[en ? 1 : 0] ?? bd.bed_type}{bd.width_cm ? ` · ${bd.width_cm} cm` : ''}{bd.children_only ? (en ? ' · children only' : ' · kun barn') : ''}</small></div>
                     <label className="sleep-count"><span className="muted">{en ? 'Sleeps here' : 'Sover her'}</span>
                       <select name={'bed_' + bd.id} defaultValue={String(bd.allocation?.persons ?? 0)} disabled={!open}>{Array.from({ length: bd.sleeps + 1 }, (_, n) => <option key={n} value={n}>{n}</option>)}</select></label>
-                    {partial && <label className="check" style={{ margin: 0 }}><input type="checkbox" name={'own_' + bd.id} value="1" defaultChecked={bd.allocation?.linen === false} disabled={!open} /> <span>{en ? 'Own linen' : 'Eget sengetøy'}</span></label>}
                   </div>
                 ))}
               </div>

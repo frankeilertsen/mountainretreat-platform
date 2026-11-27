@@ -68,7 +68,7 @@ export default async function BookingDetail({ params, searchParams }: { params: 
             </dl>
           </div>
           {['awaiting_payment', 'confirmed'].includes(b.status) && b.bed_count > 0 && (
-            <div className="card" id="soveplan" style={b.plan_source === 'auto' && b.own_linen_persons < b.adults + b.children ? { borderColor: 'var(--gold-line)' } : undefined}>
+            <div className="card" id="soveplan" style={b.plan_source === 'auto' && Number(b.own_linen_persons) === 0 ? { borderColor: 'var(--gold-line)' } : undefined}>
               <h3>{lang === 'en' ? 'Who sleeps where?' : 'Hvem sover hvor?'} <small className="muted" style={{ fontSize: '.8rem' }}>{lang === 'en' ? '(optional)' : '(valgfritt)'}</small></h3>
               <p className="muted" style={{ fontSize: '.88rem' }}>{b.plan_source === 'member' ? (lang === 'en' ? 'Thanks – your sleeping plan is saved, and the beds will be made up that way.' : 'Takk – soveplanen er lagret, og sengene blir redd opp slik.') : b.plan_source === 'admin_override' ? (lang === 'en' ? 'The host has set up the beds for your stay.' : 'Vertskapet har satt opp sengene for oppholdet ditt.') : (lang === 'en' ? 'Tell us who sleeps where, so the cleaner can make up the beds the way you want.' : 'Fortell oss hvem som sover hvor, så renholderen kan re opp sengene slik dere ønsker.')}</p>
               <Link href={`/medlem/bookinger/${id}/soveplan`} className={`btn small ${b.plan_source === 'auto' ? '' : 'secondary'}`}>{b.plan_source === 'auto' ? (lang === 'en' ? 'Choose sleeping plan' : 'Velg soveplan') : (lang === 'en' ? 'See / change' : 'Se / endre')}</Link>

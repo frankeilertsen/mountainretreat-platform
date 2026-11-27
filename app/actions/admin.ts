@@ -68,7 +68,7 @@ export async function sleepingPlanAction(f: FormData) {
   await run(back, async () => {
     if (str(f, 'reset') === '1') { await overrideSleepingPlan(str(f, 'prepId'), null, actor); return 'Tilbake til automatisk soveplan.'; }
     const plan: { bed_id: string; persons: number; guest_type: string; linen: boolean }[] = [];
-    for (const [k, v] of f.entries()) if (k.startsWith('bed_')) { const n = parseInt(String(v), 10); if (n > 0) plan.push({ bed_id: k.slice(4), persons: n, guest_type: String(f.get('type_' + k.slice(4)) || 'adult'), linen: f.get('ownlinen_' + k.slice(4)) !== '1' }); }
+    for (const [k, v] of f.entries()) if (k.startsWith('bed_')) { const n = parseInt(String(v), 10); if (n > 0) plan.push({ bed_id: k.slice(4), persons: n, guest_type: String(f.get('type_' + k.slice(4)) || 'adult'), linen: true }); }
     await overrideSleepingPlan(str(f, 'prepId'), plan, actor);
     return 'Soveplanen er overstyrt for dette oppholdet.';
   });

@@ -34,26 +34,23 @@ export async function saveMemberPlan(bookingId: string, memberId: string, entrie
   if (!ctx.open) throw new DomainError('locked', `Soveplanen kan ikke endres lenger. Ta kontakt hvis noe må endres.`);
   const beds = new Map(ctx.plan.rooms.flatMap(r => r.beds.map(b => [b.id, b] as const)));
   const used = entries.filter(e => e.persons > 0);
-  let total = 0, inOwn = 0;
+  let total = 0;
   for (const e of used) {
     const bed = beds.get(e.bed_id);
     if (!bed) throw new DomainError('bad_bed', 'Ukjent seng.');
     if (e.persons > bed.sleeps) throw new DomainError('over', `For mange i «${bed.label}» (maks ${bed.sleeps}).`);
     total += bed.bed_type === 'cot' ? 0 : e.persons;
-    if (e.ownLinen) inOwn += e.persons;
   }
   const { adults, children, infants } = ctx.booking;
   if (total < adults + children) throw new DomainError('missing', `Alle ${adults + children} gjestene må ha en seng (${total} plassert).`);
   if (total > adults + children + infants) throw new DomainError('too_many', `Det er plassert flere personer (${total}) enn det er gjester på bookingen.`);
-  const partial = ctx.ownLinen > 0 && ctx.ownLinen < adults + children;
-  if (partial && inOwn !== ctx.ownLinen) throw new DomainError('linen', `Merk sengene til de ${ctx.ownLinen} som tar med eget sengetøy (nå ${inOwn}).`);
   await tx(async c => {
     const prepId = ctx.booking.prep_id!;
     await c.query('DELETE FROM stay_sleeping_plan WHERE stay_preparation_id=$1', [prepId]);
     for (const e of used) {
       const bed = beds.get(e.bed_id)!;
       const type = bed.bed_type === 'cot' ? 'infant' : bed.children_only ? 'child' : 'adult';
-      const linen = ctx.ownLinen >= adults + children ? false : partial ? !e.ownLinen : true;
+      const linen = !(ctx.ownLinen > 0);
       await c.query('INSERT INTO stay_sleeping_plan (stay_preparation_id, bed_id, persons, guest_type, linen) VALUES ($1,$2,$3,$4,$5)', [prepId, e.bed_id, e.persons, type, linen]);
     }
     await c.query(`UPDATE stay_preparations SET plan_source='member', updated_by_user_id=$2, updated_at=now() WHERE id=$1`, [prepId, actor.id]);
@@ -79,7 +76,7 @@ export async function sendSleepPlanRequests() {
   const rows = await q<{ id: string; uid: string; reference: string; start: string; email: string; name: string; lang: string; requested: Date | null; property: string }>(
     `SELECT b.id, u.id AS uid, b.reference, to_char(b.start_date,'YYYY-MM-DD') AS start, u.email, u.name, u.preferred_lang AS lang, b.sleep_plan_requested_at AS requested, p.name AS property
      FROM bookings b JOIN users u ON u.id=b.member_id JOIN properties p ON p.id=b.property_id JOIN stay_preparations sp ON sp.booking_id=b.id
-     WHERE b.status='confirmed' AND sp.plan_source='auto' AND sp.own_linen_persons < (b.adults + b.children)
+     WHERE b.status='confirmed' AND sp.plan_source='auto' AND sp.own_linen_persons = 0
        AND b.start_date - $1::date BETWEEN ${LOCK_DAYS} AND ${REQUEST_DAYS}
        AND (b.sleep_plan_requested_at IS NULL OR (b.sleep_plan_reminded_at IS NULL AND b.sleep_plan_requested_at <= now() - interval '${REMINDER_AFTER_DAYS} days'))
        AND EXISTS (SELECT 1 FROM beds bd WHERE bd.property_id=b.property_id AND bd.active)`, [today]);
