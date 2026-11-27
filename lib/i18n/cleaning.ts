@@ -18,6 +18,7 @@ const no = {
     guestList: (a: number, c: number, i: number) => `${a} voksne${c ? `, ${c} barn` : ''}${i ? `, ${i} spedbarn` : ''}`, noGuestInfo: 'Ingen info om neste gjester ennå',
     responsible: 'Ansvarlig', notAssigned: 'Ikke tildelt', notNeeded: 'Ikke nødvendig – gjesten vasker selv.',
     bedsTitle: 'Senger og rom', forNext: '– for neste gjester', noPlan: 'Ingen informasjon om neste gjester ennå. Re opp etter standard eller spør administrator.',
+    planMember: 'Soveplan valgt av gjesten.', linenAll: 'Alle gjestene tar med eget sengetøy og håndklær – ikke re opp sengene eller legg ut håndklær.', linenPartial: (own: number, total: number) => `${own} av ${total} gjester tar med eget sengetøy. Re opp bare sengene som ikke er merket «Eget sengetøy».`, linenPartialNoPlan: (own: number, total: number) => `${own} av ${total} gjester tar med eget sengetøy, men gjesten har ikke valgt hvilke senger ennå. Re opp for ${total - own} personer.`,
     planAdmin: 'Soveplan satt av administrator.', planAuto: 'Automatisk forslag ut fra antall gjester og senger.', roomsSummary: (n: number, d: number) => `${n} rom skal gjøres klare · ${d} ferdig.`,
     reports: 'Rapporter', resolved: 'løst', newReport: '+ Rapporter skade, mangel eller kommentar', type: 'Type',
     kinds: { damage: 'Skade', missing_item: 'Mangler', issue: 'Avvik', comment: 'Kommentar' } as Record<string, string>,
@@ -28,7 +29,7 @@ const no = {
   },
   room: {
     guestsInRoom: (n: number) => `${n} gjest${n === 1 ? '' : 'er'} i rommet`, empty: 'Ingen gjester – ikke re opp', done: '✓ Ferdig', markDone: 'Marker ferdig',
-    persons: 'Antall personer', makeCot: 'Gjør klar barneseng', makeFor: (n: number, child: boolean) => `Re opp for ${n}${child ? ' (barn)' : ''}`, unused: 'Ikke i bruk',
+    persons: 'Antall personer', makeCot: 'Gjør klar barneseng', makeFor: (n: number, child: boolean) => `Re opp for ${n}${child ? ' (barn)' : ''}`, ownLinen: (n: number) => `Eget sengetøy (${n}) – ikke re opp`, unused: 'Ikke i bruk',
     noBeds: 'Ingen senger i dette rommet.', sheets: (n: number) => `${n} sengesett`, duvets: (n: number) => `${n} dyner`, pillows: (n: number) => `${n} puter`,
     towels: (l: number, s: number) => `${l} store + ${s} små håndklær`, cot: (n: number) => `${n} sett barnesengtøy`, instructions: 'Instruks:',
   },
@@ -59,6 +60,7 @@ const en: CleanT = {
     guestList: (a: number, c: number, i: number) => `${a} adult${a === 1 ? '' : 's'}${c ? `, ${c} child${c === 1 ? '' : 'ren'}` : ''}${i ? `, ${i} infant${i === 1 ? '' : 's'}` : ''}`, noGuestInfo: 'No information about the next guests yet',
     responsible: 'Assigned to', notAssigned: 'Not assigned', notNeeded: 'Not needed – the guest cleans themselves.',
     bedsTitle: 'Beds and rooms', forNext: '– for the next guests', noPlan: 'No information about the next guests yet. Make up the beds as standard or ask the administrator.',
+    planMember: 'Sleeping plan chosen by the guest.', linenAll: 'All guests bring their own bed linen and towels – do not make up the beds or put out towels.', linenPartial: (own: number, total: number) => `${own} of ${total} guests bring their own bed linen. Only make up the beds not marked “Own linen”.`, linenPartialNoPlan: (own: number, total: number) => `${own} of ${total} guests bring their own bed linen, but the guest has not chosen which beds yet. Make up for ${total - own} people.`,
     planAdmin: 'Sleeping plan set by the administrator.', planAuto: 'Automatic suggestion based on the number of guests and beds.', roomsSummary: (n: number, d: number) => `${n} room${n === 1 ? '' : 's'} to prepare · ${d} done.`,
     reports: 'Reports', resolved: 'resolved', newReport: '+ Report damage, something missing or a comment', type: 'Type',
     kinds: { damage: 'Damage', missing_item: 'Missing', issue: 'Issue', comment: 'Comment' } as Record<string, string>,
@@ -69,7 +71,7 @@ const en: CleanT = {
   },
   room: {
     guestsInRoom: (n: number) => `${n} guest${n === 1 ? '' : 's'} in the room`, empty: 'No guests – do not make up', done: '✓ Done', markDone: 'Mark done',
-    persons: 'Number of people', makeCot: 'Prepare the cot', makeFor: (n: number, child: boolean) => `Make up for ${n}${child ? ' (child)' : ''}`, unused: 'Not in use',
+    persons: 'Number of people', makeCot: 'Prepare the cot', makeFor: (n: number, child: boolean) => `Make up for ${n}${child ? ' (child)' : ''}`, ownLinen: (n: number) => `Own linen (${n}) – do not make up`, unused: 'Not in use',
     noBeds: 'No beds in this room.', sheets: (n: number) => `${n} bedding set${n === 1 ? '' : 's'}`, duvets: (n: number) => `${n} duvet${n === 1 ? '' : 's'}`, pillows: (n: number) => `${n} pillow${n === 1 ? '' : 's'}`,
     towels: (l: number, s: number) => `${l} large + ${s} small towels`, cot: (n: number) => `${n} cot bedding set${n === 1 ? '' : 's'}`, instructions: 'Instructions:',
   },

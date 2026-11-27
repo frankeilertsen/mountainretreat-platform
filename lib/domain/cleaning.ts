@@ -11,11 +11,12 @@ import { putObject } from '../storage';
 import { helperMsg, helperEmailBody, HelperMessage } from '../i18n/cleaning';
 
 // ------------------------------------------------------------------ stay preparation
-export async function upsertBookingPreparation(c: PoolClient, bookingId: string, propertyId: string, g: { adults: number; children: number; infants: number; ownLinen?: boolean }) {
+export async function upsertBookingPreparation(c: PoolClient, bookingId: string, propertyId: string, g: { adults: number; children: number; infants: number; ownLinen?: boolean; ownLinenPersons?: number }) {
   await c.query(
-    `INSERT INTO stay_preparations (property_id, booking_id, adults, children, infants, own_linen) VALUES ($1,$2,$3,$4,$5,COALESCE($6,false))
-     ON CONFLICT (booking_id) DO UPDATE SET adults=EXCLUDED.adults, children=EXCLUDED.children, infants=EXCLUDED.infants, own_linen=COALESCE($6, stay_preparations.own_linen), updated_at=now()`,
-    [propertyId, bookingId, g.adults, g.children, g.infants, g.ownLinen ?? null]);
+    `INSERT INTO stay_preparations (property_id, booking_id, adults, children, infants, own_linen, own_linen_persons) VALUES ($1,$2,$3,$4,$5,COALESCE($6,false),COALESCE($7,0))
+     ON CONFLICT (booking_id) DO UPDATE SET adults=EXCLUDED.adults, children=EXCLUDED.children, infants=EXCLUDED.infants, own_linen=COALESCE($6, stay_preparations.own_linen),
+       own_linen_persons=COALESCE($7, stay_preparations.own_linen_persons), updated_at=now()`,
+    [propertyId, bookingId, g.adults, g.children, g.infants, g.ownLinen ?? null, g.ownLinenPersons ?? null]);
 }
 
 async function ensureExternalPreparation(c: PoolClient, eventId: string, propertyId: string): Promise<string> {
@@ -184,7 +185,7 @@ export async function tasksForHelper(user: UserLike & { cleaning_scope?: string 
     `SELECT t.id, t.task_type, t.status, t.channel_name, to_char(t.checkout_date,'YYYY-MM-DD') AS date, to_char(t.next_checkin_date,'YYYY-MM-DD') AS next_checkin,
             t.deadline_at, t.checkout_guests, t.notes, t.assigned_to_user_id, p.name AS property_name, p.address, p.id AS property_id,
             to_char(p.check_out_time,'HH24:MI') AS check_out_time, to_char(p.check_in_time,'HH24:MI') AS check_in_time,
-            sp.adults AS next_adults, sp.children AS next_children, sp.infants AS next_infants, sp.comment_for_cleaner, sp.own_linen, (SELECT string_agg(a.name || ' × ' || ba.quantity, ', ' ORDER BY a.name) FROM booking_add_ons ba JOIN add_on_items a ON a.id=ba.add_on_item_id WHERE ba.booking_id = sp.booking_id) AS next_add_ons, to_char(sp.expected_arrival_time,'HH24:MI') AS expected_arrival,
+            sp.adults AS next_adults, sp.children AS next_children, sp.infants AS next_infants, sp.comment_for_cleaner, sp.own_linen, sp.own_linen_persons, (SELECT string_agg(a.name || ' × ' || ba.quantity, ', ' ORDER BY a.name) FROM booking_add_ons ba JOIN add_on_items a ON a.id=ba.add_on_item_id WHERE ba.booking_id = sp.booking_id) AS next_add_ons, to_char(sp.expected_arrival_time,'HH24:MI') AS expected_arrival,
             hu.name AS assignee_name,
             (t.next_checkin_date IS NOT NULL AND t.next_checkin_date = t.checkout_date) AS same_day
      FROM cleaning_tasks t JOIN properties p ON p.id=t.property_id
@@ -201,15 +202,15 @@ export async function roomPlanForPreparation(prepId: string | null, propertyId: 
     `SELECT r.id, r.name, r.floor, r.description, (SELECT ph.id FROM photos ph WHERE ph.entity_type='room' AND ph.entity_id=r.id ORDER BY ph.created_at DESC LIMIT 1) AS photo_id, r.max_capacity, r.bedding_instructions, r.sort_order FROM rooms r WHERE r.property_id=$1 AND r.active ORDER BY r.sort_order, r.name`, [propertyId], db);
   const beds = await q<BedInput & { label: string; width_cm: number | null; length_cm: number | null }>(
     `SELECT id, room_id, label, bed_type, sleeps, allocation_priority, children_only, width_cm, length_cm FROM beds WHERE property_id=$1 AND active ORDER BY allocation_priority`, [propertyId], db);
-  const prep = prepId ? await one<{ id: string; adults: number; children: number; infants: number; plan_source: string; comment_for_cleaner: string | null }>(
-    'SELECT id, adults, children, infants, plan_source, comment_for_cleaner FROM stay_preparations WHERE id=$1', [prepId], db) : null;
+  const prep = prepId ? await one<{ id: string; adults: number; children: number; infants: number; plan_source: string; comment_for_cleaner: string | null; own_linen_persons: number }>(
+    'SELECT id, adults, children, infants, plan_source, comment_for_cleaner, own_linen_persons FROM stay_preparations WHERE id=$1', [prepId], db) : null;
   const guests = prep ? { adults: prep.adults, children: prep.children, infants: prep.infants } : null;
   let allocations: Allocation[] = [];
   let warnings: string[] = [];
-  let source: 'none' | 'auto' | 'admin_override' = 'none';
-  if (prep && prep.plan_source === 'admin_override') {
-    allocations = await q<Allocation>('SELECT bed_id, persons, guest_type FROM stay_sleeping_plan WHERE stay_preparation_id=$1', [prep.id], db);
-    source = 'admin_override';
+  let source: 'none' | 'auto' | 'admin_override' | 'member' = 'none';
+  if (prep && (prep.plan_source === 'admin_override' || prep.plan_source === 'member')) {
+    allocations = await q<Allocation>('SELECT bed_id, persons, guest_type, linen FROM stay_sleeping_plan WHERE stay_preparation_id=$1', [prep.id], db);
+    source = prep.plan_source as 'admin_override' | 'member';
   } else if (guests && guests.adults + guests.children + guests.infants > 0) {
     const r = allocateBeds(rooms, beds, guests);
     allocations = r.allocations; warnings = r.warnings; source = 'auto';
@@ -377,7 +378,7 @@ export async function setBookingCleaningSelf(bookingId: string, on: boolean, act
   return { priceLocked: b.status !== 'pending_review' };
 }
 
-export async function overrideSleepingPlan(prepId: string, plan: { bed_id: string; persons: number; guest_type: string }[] | null, actor: Actor) {
+export async function overrideSleepingPlan(prepId: string, plan: { bed_id: string; persons: number; guest_type: string; linen?: boolean }[] | null, actor: Actor) {
   await tx(async c => {
     const prep = await one<{ property_id: string }>('SELECT property_id FROM stay_preparations WHERE id=$1 FOR UPDATE', [prepId], c);
     if (!prep) throw new DomainError('not_found', 'Fant ikke oppholdet.');
@@ -389,7 +390,7 @@ export async function overrideSleepingPlan(prepId: string, plan: { bed_id: strin
         const bed = await one<{ sleeps: number }>('SELECT sleeps FROM beds WHERE id=$1 AND property_id=$2', [p.bed_id, prep.property_id], c);
         if (!bed) throw new DomainError('bad_bed', 'Ugyldig seng.');
         if (p.persons > bed.sleeps) throw new DomainError('over_capacity', 'For mange personer i én seng.');
-        await c.query('INSERT INTO stay_sleeping_plan (stay_preparation_id, bed_id, persons, guest_type) VALUES ($1,$2,$3,$4)', [prepId, p.bed_id, p.persons, p.guest_type]);
+        await c.query('INSERT INTO stay_sleeping_plan (stay_preparation_id, bed_id, persons, guest_type, linen) VALUES ($1,$2,$3,$4,$5)', [prepId, p.bed_id, p.persons, p.guest_type, p.linen !== false]);
       }
       await c.query(`UPDATE stay_preparations SET plan_source='admin_override', updated_by_user_id=$2, updated_at=now() WHERE id=$1`, [prepId, actor.id]);
     }

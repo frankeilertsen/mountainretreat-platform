@@ -29,7 +29,8 @@ export default async function BookingDetail({ params, searchParams }: { params: 
   const nok = (o: number) => nokL(o, lang), fmtDate = (d: string, w?: boolean) => fmtDateL(d, lang, w), fmtDateTime = (d: any) => fmtDateTimeL(d, lang);
   const b = await one(`SELECT b.*, to_char(b.start_date,'YYYY-MM-DD') AS start, to_char(b.end_date,'YYYY-MM-DD') AS "end", p.name AS property, p.address, p.slug,
       to_char(p.check_in_time,'HH24:MI') AS cin, to_char(p.check_out_time,'HH24:MI') AS cout, h.expires_at AS hold_expires,
-      sp.comment_for_cleaner, to_char(sp.expected_arrival_time,'HH24:MI') AS arrival
+      sp.comment_for_cleaner, to_char(sp.expected_arrival_time,'HH24:MI') AS arrival, sp.plan_source, sp.own_linen_persons,
+      (SELECT count(*) FROM beds bd WHERE bd.property_id=b.property_id AND bd.active)::int AS bed_count
     FROM bookings b JOIN properties p ON p.id=b.property_id LEFT JOIN booking_holds h ON h.booking_id=b.id AND h.released_at IS NULL
     LEFT JOIN stay_preparations sp ON sp.booking_id=b.id WHERE b.id=$1`, [id]);
   if (!b || b.member_id !== u.id) notFound();
@@ -66,6 +67,13 @@ export default async function BookingDetail({ params, searchParams }: { params: 
               {b.rejection_reason && <><dt>{T.reason}</dt><dd>{b.rejection_reason}</dd></>}
             </dl>
           </div>
+          {['awaiting_payment', 'confirmed'].includes(b.status) && b.bed_count > 0 && (
+            <div className="card" id="soveplan" style={b.plan_source === 'auto' && b.own_linen_persons < b.adults + b.children ? { borderColor: 'var(--gold-line)' } : undefined}>
+              <h3>{lang === 'en' ? 'Who sleeps where?' : 'Hvem sover hvor?'} <small className="muted" style={{ fontSize: '.8rem' }}>{lang === 'en' ? '(optional)' : '(valgfritt)'}</small></h3>
+              <p className="muted" style={{ fontSize: '.88rem' }}>{b.plan_source === 'member' ? (lang === 'en' ? 'Thanks – your sleeping plan is saved, and the beds will be made up that way.' : 'Takk – soveplanen er lagret, og sengene blir redd opp slik.') : b.plan_source === 'admin_override' ? (lang === 'en' ? 'The host has set up the beds for your stay.' : 'Vertskapet har satt opp sengene for oppholdet ditt.') : (lang === 'en' ? 'Tell us who sleeps where, so the cleaner can make up the beds the way you want.' : 'Fortell oss hvem som sover hvor, så renholderen kan re opp sengene slik dere ønsker.')}</p>
+              <Link href={`/medlem/bookinger/${id}/soveplan`} className={`btn small ${b.plan_source === 'auto' ? '' : 'secondary'}`}>{b.plan_source === 'auto' ? (lang === 'en' ? 'Choose sleeping plan' : 'Velg soveplan') : (lang === 'en' ? 'See / change' : 'Se / endre')}</Link>
+            </div>
+          )}
           {editable && (
             <div className="card">
               <h3>{T.arrivalTitle}</h3>

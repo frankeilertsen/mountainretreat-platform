@@ -11,7 +11,7 @@
  */
 export type BedInput = { id: string; room_id: string; bed_type: string; sleeps: number; allocation_priority: number; children_only: boolean; label?: string };
 export type RoomInput = { id: string; max_capacity: number; sort_order: number };
-export type Allocation = { bed_id: string; persons: number; guest_type: 'adult' | 'child' | 'infant' | 'mixed' };
+export type Allocation = { bed_id: string; persons: number; guest_type: 'adult' | 'child' | 'infant' | 'mixed'; linen?: boolean };
 export type AllocationResult = { allocations: Allocation[]; unplaced: { adults: number; children: number; infants: number }; warnings: string[] };
 
 export function allocateBeds(rooms: RoomInput[], beds: BedInput[], guests: { adults: number; children: number; infants: number }): AllocationResult {
@@ -86,7 +86,7 @@ export function roomSupplies(beds: BedInput[], alloc: Map<string, Allocation>) {
   let sheets = 0, duvets = 0, pillows = 0, towelsLarge = 0, towelsSmall = 0, cotSets = 0;
   for (const b of beds) {
     const a = alloc.get(b.id);
-    if (!a) continue;
+    if (!a || a.linen === false) continue;   // guest brings own linen for this bed
     if (b.bed_type === 'cot') { cotSets++; continue; }
     sheets++;
     duvets += a.persons; pillows += a.persons;

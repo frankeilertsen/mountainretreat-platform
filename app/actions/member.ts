@@ -22,7 +22,7 @@ export async function requestBookingAction(f: FormData) {
     const b = await requestBooking(u, {
       propertyId: str(f, 'propertyId'), startDate: str(f, 'fra'), endDate: str(f, 'til'),
       adults: int(f, 'voksne', 1), children: int(f, 'barn'), infants: int(f, 'sped'), addOns,
-      specialRequests: str(f, 'requests'), useRewards: !!f.get('useRewards'), idempotencyKey: str(f, 'idem') || undefined, ownLinen: str(f, 'eget_sengetoy') === '1',
+      specialRequests: str(f, 'requests'), useRewards: !!f.get('useRewards'), idempotencyKey: str(f, 'idem') || undefined, ownLinen: Math.max(0, parseInt(str(f, 'eget_sengetoy') || '0', 10) || 0),
     }, actor);
     return { redirect: `/medlem/bookinger/${b.id}`, ok: 'Forespørselen er sendt. Du får beskjed når den er behandlet.' };
   });
@@ -122,5 +122,24 @@ export async function reviewAction(f: FormData) {
     for (const k of ['rating', 'cleanliness', 'accuracy', 'checkin', 'communication', 'location', 'value', 'public_text', 'private_feedback', 'consent_publish', 'lang']) input[k] = f.get(k) ?? undefined;
     await submitReview(u.id, id, input);
     return { redirect: `/medlem/bookinger/${id}/omtale?takk=1` };
+  });
+}
+
+export async function saveSleepPlanAction(f: FormData) {
+  const u = await assertUser('request_booking'); const id = str(f, 'id');
+  await run(`/medlem/bookinger/${id}/soveplan`, async () => {
+    const { saveMemberPlan } = await import('@/lib/domain/sleepingPlan');
+    const entries: { bed_id: string; persons: number; ownLinen: boolean }[] = [];
+    for (const [k, v] of f.entries()) if (k.startsWith('bed_')) entries.push({ bed_id: k.slice(4), persons: parseInt(String(v), 10) || 0, ownLinen: f.get('own_' + k.slice(4)) === '1' });
+    await saveMemberPlan(id, u.id, entries, actorFor(u));
+    return { redirect: `/medlem/bookinger/${id}`, ok: 'Takk! Soveplanen er lagret, og renholderen reer opp slik.' };
+  });
+}
+export async function resetSleepPlanAction(f: FormData) {
+  const u = await assertUser('request_booking'); const id = str(f, 'id');
+  await run(`/medlem/bookinger/${id}/soveplan`, async () => {
+    const { resetMemberPlan } = await import('@/lib/domain/sleepingPlan');
+    await resetMemberPlan(id, u.id, actorFor(u));
+    return 'Vi bruker det automatiske forslaget.';
   });
 }

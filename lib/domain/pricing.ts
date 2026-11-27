@@ -33,7 +33,8 @@ export type PricingInput = {
   /** Airbnb's cleaning fee for the same listing (comparison only). Defaults to our cleaning fee. */
   airbnbCleaningFeeOre?: number | null;
   /** Guests bring their own bed linen: ownLinenDiscountOre off per guest (infants not counted). */
-  ownLinen?: boolean; ownLinenDiscountOre?: number;
+  /** true = every guest, a number = that many guests */
+  ownLinen?: boolean | number; ownLinenDiscountOre?: number;
   addOns: AddOnItem[]; selectedAddOns: { id: string; quantity: number }[];
 };
 
@@ -51,7 +52,7 @@ export type Quote = {
   /** What the same nights + cleaning would cost a guest on Airbnb (incl. service fee). */
   airbnb_comparison_ore: number; airbnb_fee_pct: number; airbnb_fee_saved_ore: number;
   airbnb_cleaning_fee_ore?: number;
-  own_linen?: boolean; own_linen_discount_ore?: number; own_linen_unit_ore?: number;
+  own_linen?: boolean; own_linen_discount_ore?: number; own_linen_unit_ore?: number; own_linen_persons?: number;
   member_discount?: import('./memberDiscount').MemberDiscount;
 };
 
@@ -165,14 +166,15 @@ export function computeQuote(input: PricingInput): Quote {
   const airbnbCleaning = input.airbnbCleaningFeeOre ?? input.cleaningFeeOre;
   const comparisonBase = Math.round(undiscounted) + airbnbCleaning + extra_guest_fee_ore;
   const linenUnit = input.ownLinenDiscountOre ?? 0;
-  const own_linen = !!input.ownLinen && linenUnit > 0;
-  const own_linen_discount_ore = own_linen ? linenUnit * input.guests : 0;
+  const linenPersons = linenUnit > 0 ? Math.max(0, Math.min(input.guests, typeof input.ownLinen === 'number' ? Math.floor(input.ownLinen) : input.ownLinen ? input.guests : 0)) : 0;
+  const own_linen = linenPersons > 0;
+  const own_linen_discount_ore = linenUnit * linenPersons;
   const airbnb_comparison_ore = Math.round(comparisonBase * (1 + feePct / 100));
   return { nights, nightLines, stay_ore, cleaning_fee_ore, add_ons, add_ons_ore, subtotal_ore: stay_ore + cleaning_fee_ore + add_ons_ore + extra_guest_fee_ore - own_linen_discount_ore,
     extra_guests, extra_guest_fee_ore, extra_guest_unit_ore: input.extraGuestFeeOre ?? 0, extra_guest_basis: basis, included_guests: included,
     member_discount_pct: memberPct, member_discount_ore, base_discount_ore, loyalty_discount_ore: member_discount_ore - base_discount_ore - launch_discount_ore, launch_discount_ore,
     pricing_mode: mode, airbnb_comparison_ore, airbnb_fee_pct: feePct, airbnb_fee_saved_ore: airbnb_comparison_ore - comparisonBase,
-    airbnb_cleaning_fee_ore: airbnbCleaning, own_linen, own_linen_discount_ore, own_linen_unit_ore: linenUnit };
+    airbnb_cleaning_fee_ore: airbnbCleaning, own_linen, own_linen_discount_ore, own_linen_unit_ore: linenUnit, own_linen_persons: linenPersons };
 }
 
 export async function loadPricingContext(propertyId: string, db: Db = getPool()) {
@@ -200,9 +202,9 @@ export async function isCleaningExempt(userId: string, propertyId: string, db: D
 }
 
 export async function quoteFor(propertyId: string, memberId: string, startDate: string, endDate: string, guests: number,
-  selectedAddOns: { id: string; quantity: number }[], db: Db = getPool(), excludeBookingId?: string | null, ownLinen?: boolean): Promise<Quote> {
+  selectedAddOns: { id: string; quantity: number }[], db: Db = getPool(), excludeBookingId?: string | null, ownLinen?: boolean | number): Promise<Quote> {
   const ctx = await loadPricingContext(propertyId, db);
-  if (ownLinen === undefined && excludeBookingId) ownLinen = !!(await one(`SELECT 1 FROM bookings WHERE id=$1 AND own_linen`, [excludeBookingId], db));
+  if (ownLinen === undefined && excludeBookingId) ownLinen = (await one<{ n: number }>(`SELECT own_linen_persons AS n FROM bookings WHERE id=$1`, [excludeBookingId], db))?.n ?? 0;
   const discount = await memberDiscount(memberId, db, excludeBookingId);
   const quote = computeQuote({
     startDate, endDate, guests, maxGuests: ctx.property.max_guests,
@@ -212,7 +214,7 @@ export async function quoteFor(propertyId: string, memberId: string, startDate: 
     memberDiscountSplit: { basePct: discount.basePct, loyaltyPct: discount.loyaltyPct }, discountByKind: kind => discountForKind(discount, kind),
     includedGuests: ctx.property.included_guests, extraGuestFeeOre: ctx.property.extra_guest_fee_ore, extraGuestBasis: ctx.property.extra_guest_fee_basis,
     pricingMode: ctx.property.pricing_mode, externalRates: ctx.rates, defaultMinNights: ctx.property.default_min_nights, airbnbGuestFeePct: ctx.airbnbFee,
-    airbnbCleaningFeeOre: ctx.property.airbnb_cleaning_fee_ore, ownLinen: !!ownLinen, ownLinenDiscountOre: ctx.property.own_linen_discount_ore,
+    airbnbCleaningFeeOre: ctx.property.airbnb_cleaning_fee_ore, ownLinen: ownLinen ?? 0, ownLinenDiscountOre: ctx.property.own_linen_discount_ore,
   });
   // Manual adjustment agreed with the administrator (stays when the price is re-calculated at approval)
   if (excludeBookingId) {

@@ -34,7 +34,7 @@ export function RoomPlan({ plan, doneRooms, roomAction, taskId, lang = 'no' }: {
                   <div className="shape">{Array.from({ length: Math.min(b.sleeps, 2) }, (_, i) => <span key={i} className="pillow" />)}</div>
                   <strong style={{ fontSize: '.9rem' }}>{b.label}</strong><br />
                   <small>{BEDS[b.bed_type] ?? BED_LABELS[b.bed_type]}{b.width_cm ? ` · ${b.width_cm}×${b.length_cm}` : ''}</small><br />
-                  <small style={{ fontWeight: 600 }}>{b.allocation ? (b.bed_type === 'cot' ? C.makeCot : C.makeFor(b.allocation.persons, b.allocation.guest_type === 'child')) : C.unused}</small>
+                  <small style={{ fontWeight: 600 }}>{b.allocation ? (b.allocation.linen === false ? C.ownLinen(b.allocation.persons) : b.bed_type === 'cot' ? C.makeCot : C.makeFor(b.allocation.persons, b.allocation.guest_type === 'child')) : C.unused}</small>
                 </div>
               ))}
               {r.beds.length === 0 && <small className="muted">{C.noBeds}</small>}

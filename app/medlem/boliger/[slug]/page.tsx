@@ -82,7 +82,7 @@ export default async function PropertyPage({ params, searchParams }: { params: P
   const fra = sp.fra, til = sp.til;
   const adults = Math.max(1, parseInt(sp.voksne ?? '2', 10) || 1), children = Math.max(0, parseInt(sp.barn ?? '0', 10) || 0), infants = Math.max(0, parseInt(sp.sped ?? '0', 10) || 0);
   const selected = addOns.filter(a => sp['a_' + a.id]).map(a => ({ id: a.id, quantity: Math.max(1, parseInt(sp['q_' + a.id] ?? '1', 10) || 1) }));
-  const ownLinen = p.own_linen_discount_ore > 0 && sp.eget_sengetoy === '1';
+  const ownLinen = p.own_linen_discount_ore > 0 ? Math.max(0, Math.min(adults + children, parseInt(sp.eget_sengetoy ?? '0', 10) || 0)) : 0;
   let quote: Quote | null = null, quoteErr: string | null = null;
   if (fra && til) {
     try {
@@ -141,7 +141,9 @@ export default async function PropertyPage({ params, searchParams }: { params: P
                   {a.price_type === 'per_unit' && <input type="number" name={'q_' + a.id} min={1} max={20} defaultValue={sp['q_' + a.id] ?? 1} style={{ width: 70 }} />}
                 </div>))}
             </div>}
-            {p.own_linen_discount_ore > 0 && <label className="check" style={{ marginTop: 12 }}><input type="checkbox" name="eget_sengetoy" value="1" defaultChecked={ownLinen} /> <span>{lang === 'en' ? `We bring our own bed linen and towels` : `Vi tar med eget sengetøy og håndklær`} <small className="muted">{lang === 'en' ? `−${nok(p.own_linen_discount_ore)} per person` : `−${nok(p.own_linen_discount_ore)} per person`}</small></span></label>}
+            {p.own_linen_discount_ore > 0 && <div className="field" style={{ marginTop: 12 }}><label>{lang === 'en' ? 'Own bed linen and towels' : 'Eget sengetøy og håndklær'}</label>
+              <select name="eget_sengetoy" defaultValue={String(ownLinen)}>{Array.from({ length: Math.max(1, adults + children) + 1 }, (_, n) => <option key={n} value={n}>{n === 0 ? (lang === 'en' ? 'No – make up the beds for us' : 'Nei – re opp sengene for oss') : lang === 'en' ? `${n} ${n === 1 ? 'person brings' : 'people bring'} their own (−${nok(p.own_linen_discount_ore * n)})` : `${n} ${n === 1 ? 'person' : 'personer'} tar med eget (−${nok(p.own_linen_discount_ore * n)})`}</option>)}</select>
+              <small className="muted">{lang === 'en' ? `${nok(p.own_linen_discount_ore)} off per person who brings their own.` : `${nok(p.own_linen_discount_ore)} rabatt per person som tar med eget.`}</small></div>}
             <button className="btn secondary block" style={{ marginTop: 10 }}>{T.calc}</button>
           </form>
 
@@ -153,7 +155,7 @@ export default async function PropertyPage({ params, searchParams }: { params: P
               <input type="hidden" name="propertyId" value={p.id} /><input type="hidden" name="slug" value={slug} />
               <input type="hidden" name="fra" value={fra} /><input type="hidden" name="til" value={til} />
               <input type="hidden" name="voksne" value={adults} /><input type="hidden" name="barn" value={children} /><input type="hidden" name="sped" value={infants} />
-              <input type="hidden" name="addons" value={JSON.stringify(selected)} />{ownLinen && <input type="hidden" name="eget_sengetoy" value="1" />}
+              <input type="hidden" name="addons" value={JSON.stringify(selected)} />{ownLinen > 0 && <input type="hidden" name="eget_sengetoy" value={String(ownLinen)} />}
               <input type="hidden" name="idem" value={crypto.randomUUID()} />
               {bal.next && <label className="check field"><input type="checkbox" name="useRewards" defaultChecked /> {T.useBonus(nok(Math.min(bal.next.amount, quote.subtotal_ore)), fmtDate(bal.next.expiresAt), bal.next.count, bal.unused)}</label>}
               <div className="field"><label>{T.comment}</label><textarea name="requests" maxLength={2000} placeholder={T.commentPh} /></div>

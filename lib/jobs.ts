@@ -30,6 +30,7 @@ export const JOBS: Record<string, JobFn> = {
   vipps_check: () => checkOpenVippsPayments(),
   invoice_overdue: invoiceOverdue,
   review_requests: () => sendReviewRequests(),
+  sleep_plan_requests: async () => (await import('./domain/sleepingPlan')).sendSleepPlanRequests(),
   retention_purge: retentionPurge,
   deliver_notifications: () => deliverQueued(100),
 };

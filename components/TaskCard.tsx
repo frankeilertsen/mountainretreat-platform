@@ -23,7 +23,7 @@ export function TaskCard({ t, lang = 'no' }: { t: any; lang?: Lang }) {
       </div>
       {urgent && t.status !== 'done' && <div style={{ marginTop: 8 }}><span className="badge b-danger">{C.shortTurn(t.check_in_time)}</span></div>}
       {t.next_add_ons && t.next_checkin && <div style={{ marginTop: 8, fontSize: '.88rem' }}>🧺 {lang === 'en' ? 'Have ready:' : 'Gjør klart:'} {t.next_add_ons}</div>}
-      {t.own_linen && t.next_checkin && <div style={{ marginTop: 8, fontSize: '.88rem', color: 'var(--gold-2)' }}>🛏️ {lang === 'en' ? 'Guests bring own bed linen – do not make up beds' : 'Gjestene tar med eget sengetøy – ikke re opp sengene'}</div>}
+      {t.own_linen && t.next_checkin && <div style={{ marginTop: 8, fontSize: '.88rem', color: 'var(--gold-2)' }}>🛏️ {(() => { const tot = (t.next_adults ?? 0) + (t.next_children ?? 0), own = Number(t.own_linen_persons ?? tot); return own >= tot ? (lang === 'en' ? 'Guests bring own bed linen – do not make up beds' : 'Gjestene tar med eget sengetøy – ikke re opp sengene') : (lang === 'en' ? `${own} of ${tot} bring own linen – see the bed plan` : `${own} av ${tot} tar med eget sengetøy – se sengeoppsettet`); })()}</div>}
       {(t.notes || t.comment_for_cleaner) && <div style={{ marginTop: 8, fontSize: '.88rem' }}>💬 {t.notes ?? t.comment_for_cleaner}</div>}
       <small className="muted">{t.channel_name}{t.assignee_name ? ` · ${t.assignee_name}` : ` · ${C.unassigned}`}</small>
     </Link>
