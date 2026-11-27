@@ -1,3 +1,4 @@
+import { DateRangePicker, type PickerNight } from '@/components/DateRangePicker';
 import { discountForKind } from '@/lib/domain/memberDiscount';
 import { notFound } from 'next/navigation';
 import { requireUser } from '@/lib/auth/current';
@@ -31,7 +32,7 @@ export default async function PropertyPage({ params, searchParams }: { params: P
   const T = t.property;
   const nok = (o: number) => nokL(o, lang), fmtDate = (d: string, w?: boolean) => fmtDateL(d, lang, w);
   const bedLabel = (k: string) => lang === 'en' ? (BED_LABELS_EN[k] ?? k) : (BED_LABELS[k] ?? k);
-  const p = await one(`SELECT id, name, address, description, pricing_mode, included_guests, extra_guest_fee_ore, extra_guest_fee_basis, extra_guest_fee_includes, amenities, house_rules, max_guests, to_char(check_in_time,'HH24:MI') AS cin, to_char(check_out_time,'HH24:MI') AS cout, cleaning_fee_ore, own_linen_discount_ore,
+  const p = await one(`SELECT id, name, address, description, pricing_mode, included_guests, extra_guest_fee_ore, extra_guest_fee_basis, extra_guest_fee_includes, amenities, house_rules, max_guests, to_char(check_in_time,'HH24:MI') AS cin, to_char(check_out_time,'HH24:MI') AS cout, cleaning_fee_ore, own_linen_discount_ore, default_min_nights,
      (SELECT ph.id FROM photos ph WHERE ph.entity_type='property' AND ph.entity_id=properties.id ORDER BY ph.created_at LIMIT 1) AS photo_id
      FROM properties WHERE slug=$1 AND active`, [slug]);
   if (!p) notFound();
@@ -40,6 +41,19 @@ export default async function PropertyPage({ params, searchParams }: { params: P
     ORDER BY 3, 5, 4`, [p.id]);
   const today = todayOslo();
   const blocks = await blocksForRange(p.id, today, addDays(today, 400));
+  // Night-by-night info for the date picker: taken, bookable (has a price), minimum nights when checking in, season colour
+  const pp = await q<{ s: string; e: string; min: number | null; cmin: number | null; color: string | null; name: string; priority: number }>(
+    `SELECT to_char(pp.start_date,'YYYY-MM-DD') s, to_char(pp.end_date,'YYYY-MM-DD') e, pp.min_nights AS min, c.min_nights AS cmin, c.color, c.name, pp.priority
+     FROM pricing_periods pp JOIN season_categories c ON c.id=pp.season_category_id
+     WHERE pp.property_id=$1 AND pp.active AND pp.end_date >= $2 AND pp.start_date <= $3`, [p.id, today, addDays(today, 400)]);
+  const rateDays = p.pricing_mode === 'airbnb' ? new Set((await q<{ d: string }>(`SELECT to_char(date,'YYYY-MM-DD') d FROM external_nightly_rates WHERE property_id=$1 AND date >= $2`, [p.id, today])).map(r => r.d)) : null;
+  const pickerNights: PickerNight[] = [];
+  for (let d = today.slice(0, 8) + '01'; d < addDays(today, 400); d = addDays(d, 1)) {
+    const per = pp.filter(x => x.s <= d && x.e >= d).sort((a, b) => b.priority - a.priority)[0];
+    const busy = blocks.some(b => b.start <= d && b.end > d);
+    const ok = rateDays ? rateDays.has(d) : !!per;
+    pickerNights.push({ d, busy, ok, min: per?.min ?? per?.cmin ?? p.default_min_nights ?? 1, color: per?.color ?? null, season: per?.name ?? null });
+  }
   // Season colours with the price span (weekday–weekend, all coming periods) – exact price comes with the quote
   const seasonRows = await q<{ id: string; kind: string; name: string; color: string | null; min: number; max: number }>(
     `SELECT c.id, c.kind, c.name, c.color, min(v)::int AS min, max(v)::int AS max
@@ -113,9 +127,8 @@ export default async function PropertyPage({ params, searchParams }: { params: P
           <Flash sp={sp} lang={lang} />
           <form method="get">
             <div className="fields">
-              <div><label>{T.checkInDate}</label><input type="date" name="fra" min={today} defaultValue={fra} required /></div>
-              <div><label>{T.checkOutDate}</label><input type="date" name="til" min={addDays(today, 1)} defaultValue={til} required /></div>
             </div>
+            <DateRangePicker nights={pickerNights} start={fra} end={til} lang={lang} today={today} />
             <div className="fields" style={{ marginTop: 14 }}>
               <div><label>{T.adults}</label><input type="number" name="voksne" min={1} max={p.max_guests} defaultValue={adults} /></div>
               <div><label>{T.children}</label><input type="number" name="barn" min={0} max={p.max_guests} defaultValue={children} /></div>
