@@ -24,7 +24,8 @@ export async function requestBookingAction(f: FormData) {
       adults: int(f, 'voksne', 1), children: int(f, 'barn'), infants: int(f, 'sped'), addOns,
       specialRequests: str(f, 'requests'), useRewards: !!f.get('useRewards'), idempotencyKey: str(f, 'idem') || undefined, ownLinen: str(f, 'eget_sengetoy') === '1',
     }, actor);
-    return { redirect: `/medlem/bookinger/${b.id}`, ok: 'Forespørselen er sendt. Du får beskjed når den er behandlet.' };
+    return { redirect: `/medlem/bookinger/${b.id}`, ok: b.status === 'awaiting_payment' ? 'Datoene er holdt av for deg. Fullfør betalingen for å bekrefte bookingen.'
+      : b.status === 'confirmed' ? 'Bookingen er bekreftet.' : 'Forespørselen er sendt. Du får beskjed når den er behandlet.' };
   });
 }
 

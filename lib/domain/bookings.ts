@@ -63,9 +63,10 @@ export async function requestBooking(member: UserLike & { email: string; name: s
   if (!(await isRangeFree(input.propertyId, input.startDate, input.endDate))) {
     throw new DomainError('unavailable', 'Datoene er ikke ledige.');
   }
+  const autoApprove = (await getNum('booking_auto_approve', 0)) === 1;
   const estimatedReward = input.useRewards ? Math.min((await rewardBalance(member.id)).next?.amount ?? 0, quote.subtotal_ore) : 0;
   try {
-    return await tx(async c => {
+    const created = await tx(async c => {
       const b = await one<{ id: string; reference: string }>(
         `INSERT INTO bookings (reference, property_id, member_id, start_date, end_date, adults, children, infants,
            stay_price_ore, cleaning_fee_ore, add_ons_price_ore, extra_guest_fee_ore, reward_discount_ore, price_total_ore, price_breakdown, special_requests, request_idempotency_key, own_linen, own_linen_persons)
@@ -81,20 +82,56 @@ export async function requestBooking(member: UserLike & { email: string; name: s
       await upsertBookingPreparation(c, b!.id, input.propertyId, { adults: input.adults, children: input.children, infants: input.infants, ownLinen: !!quote.own_linen, ownLinenPersons: quote.own_linen_persons ?? 0 });
       await audit(c, actor, 'booking.requested', 'booking', b!.id, undefined, { ...input, total: quote.subtotal_ore });
       const prop = await propertyName(c, input.propertyId);
+      if (autoApprove) return { ...b!, prop };
       await notifyAdmins({ type: 'booking_requested', dedupeKey: `booking_requested:${b!.id}`, subject: `Ny bookingforespørsel ${b!.reference}`,
         body: `${member.name} ønsker ${prop} ${fmtDate(input.startDate)} – ${fmtDate(input.endDate)} (${guests} gjester${input.infants ? ` + ${input.infants} spedbarn` : ''}).\nEstimert pris: ${nok(quote.subtotal_ore)}${input.specialRequests?.trim() ? `\n\nKommentar fra medlemmet:\n${input.specialRequests.trim()}` : ''}\n\nBehandle: ${appUrl('/admin/bookinger/' + b!.id)}` }, c);
       await enqueue({ userId: member.id, to: member.email, type: 'booking_request_received', dedupeKey: `booking_request_received:${b!.id}`,
         subject: `Vi har mottatt forespørselen din (${b!.reference})`,
         body: `Hei ${member.name}!\n\nTakk for forespørselen om ${prop} ${fmtDate(input.startDate)} – ${fmtDate(input.endDate)}. Du får beskjed så snart den er behandlet.` }, c);
-      return b!;
+      return { ...b!, prop };
     });
+    if (!autoApprove) return { id: created.id, reference: created.reference, status: 'pending_review' as const };
+    return await autoApproveBooking(created, member, input, quote.subtotal_ore);
   } catch (e) {
     if (isPgError(e, PG_UNIQUE_VIOLATION) && input.idempotencyKey) {
       // Double-submit: return the booking created by the first click
-      const existing = await one<{ id: string; reference: string }>('SELECT id, reference FROM bookings WHERE member_id=$1 AND request_idempotency_key=$2', [member.id, input.idempotencyKey]);
+      const existing = await one<{ id: string; reference: string; status: string }>('SELECT id, reference, status FROM bookings WHERE member_id=$1 AND request_idempotency_key=$2', [member.id, input.idempotencyKey]);
       if (existing) return existing;
     }
     throw e;
+  }
+}
+
+/**
+ * Direct booking (setting booking_auto_approve=1): the request is approved by the system straight away, so the price is
+ * locked and the dates are held while the member pays. If that fails (e.g. the dates were taken a moment ago) the booking
+ * stays pending and is handled manually as before.
+ */
+async function autoApproveBooking(b: { id: string; reference: string; prop: string }, member: UserLike & { email: string; name: string }, input: BookingRequestInput, estimateOre: number) {
+  const guests = input.adults + input.children;
+  const period = `${b.prop} ${fmtDate(input.startDate)} – ${fmtDate(input.endDate)} (${guests} gjester${input.infants ? ` + ${input.infants} spedbarn` : ''})`;
+  try {
+    const r = await approveBooking(b.id, SYSTEM);
+    const total = (await one<{ price_total_ore: number }>('SELECT price_total_ore FROM bookings WHERE id=$1', [b.id]))!.price_total_ore;
+    await notifyAdmins({ type: 'booking_requested', dedupeKey: `booking_requested:${b.id}`, subject: `Ny booking ${b.reference}${r.status === 'confirmed' ? ' (bekreftet)' : ' (venter på betaling)'}`,
+      body: `${member.name} har booket ${period}.
+Pris: ${nok(total)}
+Status: ${r.status === 'confirmed' ? 'bekreftet' : 'venter på betaling'} (direktebooking – ingen godkjenning nødvendig).${input.specialRequests?.trim() ? `\n\nKommentar fra medlemmet:\n${input.specialRequests.trim()}` : ''}
+
+Se bookingen: ${appUrl('/admin/bookinger/' + b.id)}` });
+    return { id: b.id, reference: b.reference, status: r.status };
+  } catch (e) {
+    await notifyAdmins({ type: 'booking_requested', dedupeKey: `booking_requested:${b.id}`, subject: `Booking ${b.reference} må behandles manuelt`,
+      body: `${member.name} prøvde å booke ${period}, men den kunne ikke godkjennes automatisk (${e instanceof Error ? e.message : 'ukjent feil'}).
+Estimert pris: ${nok(estimateOre)}
+
+Behandle: ${appUrl('/admin/bookinger/' + b.id)}` });
+    await enqueue({ userId: member.id, to: member.email, type: 'booking_request_received', dedupeKey: `booking_request_received:${b.id}`,
+      subject: `Vi har mottatt bookingen din (${b.reference})`,
+      body: `Hei ${member.name}!
+
+Takk for bookingen av ${b.prop} ${fmtDate(input.startDate)} – ${fmtDate(input.endDate)}. Vi må se på den før den kan bekreftes, og du får beskjed så snart den er behandlet.` });
+    return { id: b.id, reference: b.reference, status: 'pending_review' as const };
   }
 }
 
@@ -172,9 +209,11 @@ export async function approveBooking(bookingId: string, actor: Actor): Promise<{
     const m = await memberOf(c, b.member_id);
     const prop = await propertyName(c, b.property_id);
     await enqueue({ userId: m.id, to: m.email, type: 'booking_approved', dedupeKey: `booking_approved:${b.id}`,
-      subject: newStatus === 'confirmed' ? `Bookingen er bekreftet (${b.reference})` : `Bookingen er godkjent – betal innen ${holdHours} timer (${b.reference})`,
+      subject: newStatus === 'confirmed' ? `Bookingen er bekreftet (${b.reference})` : actor.type === 'system' ? `Takk for bookingen – betal innen ${holdHours} timer (${b.reference})` : `Bookingen er godkjent – betal innen ${holdHours} timer (${b.reference})`,
       body: newStatus === 'confirmed'
         ? `Hei ${m.name}!\n\n${prop} ${fmtDate(b.start_date)} – ${fmtDate(b.end_date)} er bekreftet. Hele beløpet ble dekket av bonusen din.`
+        : actor.type === 'system'
+        ? `Hei ${m.name}!\n\nTakk for bookingen av ${prop} ${fmtDate(b.start_date)} – ${fmtDate(b.end_date)}. Datoene holdes av for deg i ${holdHours} timer – bookingen er bekreftet når betalingen er gjennomført.\n\nÅ betale: ${nok(total)}${reward ? ` (etter ${nok(reward)} bonus)` : ''}\nBetal her: ${appUrl('/medlem/bookinger/' + b.id)}`
         : `Hei ${m.name}!\n\nForespørselen om ${prop} ${fmtDate(b.start_date)} – ${fmtDate(b.end_date)} er godkjent. Datoene holdes av for deg i ${holdHours} timer.\n\nÅ betale: ${nok(total)}${reward ? ` (etter ${nok(reward)} bonus)` : ''}\nBetal her: ${appUrl('/medlem/bookinger/' + b.id)}` }, c);
     return { status: newStatus };
   });

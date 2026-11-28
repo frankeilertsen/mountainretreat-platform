@@ -2,7 +2,7 @@ import { q } from '@/lib/db';
 import { getSettings } from '@/lib/settings';
 import { fmtDateTime } from '@/lib/format';
 import { Flash, Status } from '@/components/ui';
-import { saveSettingsAction, togglePaymentMethodAction, runJobsNowAction, registerVippsWebhookAction } from '../../actions/admin';
+import { saveSettingsAction, toggleAutoApproveAction, togglePaymentMethodAction, runJobsNowAction, registerVippsWebhookAction } from '../../actions/admin';
 import { vippsConfigured, vippsEnv, vippsWebhookInfo } from '@/lib/payments/vipps';
 import { stripeProvider } from '@/lib/domain/payments';
 import { saveCancellationTierAction } from '../../actions/properties';
@@ -38,6 +38,15 @@ export default async function Settings({ searchParams }: { searchParams: Promise
           <button className="btn">Lagre</button>
         </form>
         <div className="stack">
+          <div className="card"><h3>Bookinggodkjenning</h3>
+            {(() => { const auto = s.booking_auto_approve === '1'; return (
+              <form action={toggleAutoApproveAction} className="row between" style={{ gap: 12 }}>
+                <span>{auto ? <><strong>Direktebooking</strong><br /><small className="muted">Medlemmer booker selv. Prisen låses og datoene holdes av i {s.booking_hold_duration_hours ?? 48} timer mens de betaler. Du får e-post om hver booking.</small></>
+                  : <><strong>Forhåndsgodkjenning</strong><br /><small className="muted">Hver booking venter på at du godkjenner den før medlemmet kan betale.</small></>}</span>
+                <span className="row"><span className={`badge ${auto ? 'b-ok' : 'b-warn'}`}>{auto ? 'Direkte' : 'Godkjenning'}</span><input type="hidden" name="on" value={auto ? '0' : '1'} /><button className="btn ghost small">{auto ? 'Krev godkjenning' : 'Slå på direktebooking'}</button></span>
+              </form>); })()}
+            <small className="muted" style={{ display: 'block', marginTop: 8 }}>Gjelder nye bookinger. Bookinger som allerede venter på godkjenning, behandler du som før.</small>
+          </div>
           <div className="card"><h3>Betalingsmåter</h3>{methods.map(m => (
             <form key={m.method} action={togglePaymentMethodAction} className="row between" style={{ padding: '6px 0' }}><span>{{ stripe_card: 'Kort (Stripe)', vipps: 'Vipps' }[m.method as string]}<br /><small className="muted">{ready[m.method as string] ? 'Koblet til' : m.method === 'stripe_card' ? 'Mangler Stripe-nøkler (testbetaling brukes)' : !vippsConfigured() ? 'Mangler Vipps-nøkler – vises ikke for medlemmer' : 'Webhook ikke registrert'}</small></span>
               <span className="row"><span className={`badge ${m.enabled ? 'b-ok' : ''}`}>{m.enabled ? 'På' : 'Av'}</span><input type="hidden" name="method" value={m.method} /><button className="btn ghost small">{m.enabled ? 'Slå av' : 'Slå på'}</button></span></form>))}

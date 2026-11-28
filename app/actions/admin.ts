@@ -273,6 +273,18 @@ export async function revokeRewardAction(f: FormData) {
 }
 
 // ------------------------------------------------ settings
+export async function toggleAutoApproveAction(f: FormData) {
+  const { actor } = await admin();
+  await run('/admin/innstillinger', async () => {
+    const on = str(f, 'on') === '1';
+    await tx(async c => {
+      await c.query(`INSERT INTO platform_settings (key, value, updated_by_user_id, updated_at) VALUES ('booking_auto_approve',$1,$2,now()) ON CONFLICT (key) DO UPDATE SET value=$1, updated_by_user_id=$2, updated_at=now()`, [on ? '1' : '0', actor.id]);
+      await audit(c, actor, 'settings.changed', 'platform_setting', null, { key: 'booking_auto_approve', value: on ? '0' : '1' }, { key: 'booking_auto_approve', value: on ? '1' : '0' });
+    });
+    return on ? 'Direktebooking er slått på – medlemmer booker uten godkjenning.' : 'Forhåndsgodkjenning er slått på – alle bookinger må godkjennes av deg.';
+  });
+}
+
 const SETTING_KEYS = ['company_org_nr', 'company_address', 'company_phone', 'company_email', 'booking_hold_duration_hours', 'invoice_due_date_days', 'cancellation_approval_timeout_hours', 'ical_poll_interval_minutes', 'ical_failure_alert_threshold',
   'invitation_validity_days', 'referral_reward_type', 'referral_reward_referrer_ore', 'referral_reward_referred_ore', 'referral_reward_percentage', 'referral_reward_max_ore',
   'referral_reward_vesting_days', 'referral_reward_validity_days', 'referral_reward_validity_months', 'referral_reward_max_per_booking', 'referral_min_qualifying_amount_ore', 'audit_log_retention_days', 'notification_log_retention_days', 'short_turnaround_hours', 'invoice_bank_account', 'company_name', 'member_base_discount_pct', 'airbnb_guest_fee_pct', 'referral_reward_max_unused', 'member_loyalty_step_pct', 'member_loyalty_max_pct', 'member_loyalty_steps', 'member_holiday_discount_pct', 'member_discount_cap_pct', 'member_loyalty_in_holiday', 'launch_discount_pct', 'launch_discount_from', 'launch_discount_to', 'cancellation_payment_fee_pct', 'cancellation_payment_fee_fixed_ore', 'cleaning_same_day_reminder_hour', 'long_term_contact_email', 'invitation_weekly_limit'];

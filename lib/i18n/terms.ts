@@ -8,7 +8,7 @@ import type { Lang } from './dict';
  */
 export type TermsInput = {
   company: string; orgNr: string; address: string; phone: string; email: string;
-  holdHours: number; cancelTimeoutHours: number; feePct?: number; feeFixedKr?: number;
+  holdHours: number; cancelTimeoutHours: number; autoApprove?: boolean; feePct?: number; feeFixedKr?: number;
   tiers: { min: number; max: number | null; pct: number; approval: boolean }[];
   checkIn: string; checkOut: string;
 };
@@ -37,9 +37,15 @@ export function termsSections(lang: Lang, i: TermsInput): { title: string; lead:
         'Buyer and tenant: the Retreat Club member who makes the booking (“you”). Membership is by invitation only, and you must be at least 18 years old. You are responsible for the guests who stay with you.',
       ] },
       { h: '2. Booking and agreement', p: [
+        ...(i.autoApprove ? [
+          'You book by choosing dates, number of guests and any extras in the member portal. The booking is not binding for either party until payment has been completed.',
+          `When you place the booking, the price is locked and the dates are held for you for ${i.holdHours} hours. The agreement is binding when the payment has been completed and you have received a booking confirmation by e-mail. In some cases we need to review a booking before it can be paid – you will then be notified by e-mail.`,
+          'If payment is not completed within the deadline, the dates are released and the booking lapses at no cost.',
+        ] : [
         'You send a booking request with dates, number of guests and any extras. The request is not binding for either party until we have approved it.',
         `When we approve the request, the price is locked and the dates are held for you for ${i.holdHours} hours. The agreement is binding when the payment has been completed and you have received a booking confirmation by e-mail.`,
         'If payment is not completed within the deadline, the dates are released and the request lapses at no cost.',
+        ]),
       ] },
       { h: '3. Prices', p: [
         'All prices are in Norwegian kroner (NOK) and include any applicable taxes and fees. The total price is shown before you pay and specifies the stay, final cleaning, extra guests, extras and any discounts or bonuses.',
@@ -99,9 +105,15 @@ export function termsSections(lang: Lang, i: TermsInput): { title: string; lead:
         'Kjøper og leietaker: medlemmet av Retreat Club som gjør bookingen («du»). Medlemskap skjer kun gjennom invitasjon, og du må være minst 18 år. Du er ansvarlig for gjestene som bor sammen med deg.',
       ] },
       { h: '2. Bestilling og avtale', p: [
+        ...(i.autoApprove ? [
+          'Du booker ved å velge datoer, antall gjester og eventuelle tillegg i medlemsportalen. Bookingen er ikke bindende for noen av partene før betalingen er gjennomført.',
+          `Når du sender bookingen, låses prisen, og datoene holdes av til deg i ${i.holdHours} timer. Avtalen er bindende når betalingen er gjennomført og du har fått bookingbekreftelse på e-post. I enkelte tilfeller må vi se på en booking før den kan betales – da får du beskjed på e-post.`,
+          'Blir betalingen ikke gjennomført innen fristen, frigis datoene, og bookingen faller bort uten kostnad.',
+        ] : [
         'Du sender en bookingforespørsel med datoer, antall gjester og eventuelle tillegg. Forespørselen er ikke bindende for noen av partene før vi har godkjent den.',
         `Når vi godkjenner forespørselen, låses prisen, og datoene holdes av til deg i ${i.holdHours} timer. Avtalen er bindende når betalingen er gjennomført og du har fått bookingbekreftelse på e-post.`,
         'Blir betalingen ikke gjennomført innen fristen, frigis datoene, og forespørselen faller bort uten kostnad.',
+        ]),
       ] },
       { h: '3. Priser', p: [
         'Alle priser er i norske kroner (NOK) og inkluderer eventuelle avgifter. Totalprisen vises før du betaler, og spesifiserer oppholdet, sluttrengjøring, ekstra gjester, tillegg og eventuelle rabatter og bonuser.',

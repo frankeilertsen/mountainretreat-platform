@@ -30,6 +30,8 @@ const EXACT: Record<string, string> = {
   'Invitasjonen er utløpt. Be personen som inviterte deg om en ny.': 'The invitation has expired. Please ask the person who invited you for a new one.',
   'Det finnes allerede en konto for denne e-postadressen.': 'An account already exists for this email address.',
   'Mobilnummer er påkrevd for renholdere (brukes til varsler).': 'A mobile number is required for cleaners (used for alerts).',
+  'Datoene er holdt av for deg. Fullfør betalingen for å bekrefte bookingen.': 'The dates are held for you. Complete the payment to confirm your booking.',
+  'Bookingen er bekreftet.': 'Your booking is confirmed.',
   'Forespørselen er sendt. Du får beskjed når den er behandlet.': 'Your request has been sent. We will let you know once it has been reviewed.',
   'Datoene er ikke ledige.': 'The dates are not available.',
   'Disse datoene ble nettopp tatt. Velg andre datoer.': 'These dates were just taken. Please choose other dates.',

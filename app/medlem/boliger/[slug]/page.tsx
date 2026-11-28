@@ -21,6 +21,7 @@ import { BED_LABELS } from '@/lib/domain/beds';
 const BED_LABELS_EN: Record<string, string> = { double: 'Double bed', single: 'Single bed', bunk_lower: 'Bunk bed (lower)', bunk_upper: 'Bunk bed (upper)', sofa_bed: 'Sofa bed', extra_mattress: 'Extra mattress', cot: 'Cot' };
 import { requestBookingAction } from '../../../actions/member';
 import crypto from 'crypto';
+import { getNum } from '@/lib/settings';
 
 export const dynamic = 'force-dynamic';
 
@@ -30,6 +31,9 @@ export default async function PropertyPage({ params, searchParams }: { params: P
   const u = await requireUser('request_booking');
   const { lang, t } = await getT();
   const T = t.property;
+  const direct = (await getNum('booking_auto_approve', 0)) === 1;
+  const en = lang === 'en';
+  const requestLabel = direct ? (en ? 'Book now' : 'Book nå') : T.request;
   const nok = (o: number) => nokL(o, lang), fmtDate = (d: string, w?: boolean) => fmtDateL(d, lang, w);
   const bedLabel = (k: string) => lang === 'en' ? (BED_LABELS_EN[k] ?? k) : (BED_LABELS[k] ?? k);
   const p = await one(`SELECT id, name, address, description, pricing_mode, included_guests, extra_guest_fee_ore, extra_guest_fee_basis, extra_guest_fee_includes, amenities, house_rules, max_guests, to_char(check_in_time,'HH24:MI') AS cin, to_char(check_out_time,'HH24:MI') AS cout, cleaning_fee_ore, own_linen_discount_ore, default_min_nights,
@@ -123,7 +127,7 @@ export default async function PropertyPage({ params, searchParams }: { params: P
         </div>
 
         <div className="card" style={{ position: 'sticky', top: 84 }}>
-          <h2>{T.request}</h2>
+          <h2>{requestLabel}</h2>
           <Flash sp={sp} lang={lang} />
           <form method="get">
             <div className="fields">
@@ -148,8 +152,8 @@ export default async function PropertyPage({ params, searchParams }: { params: P
           {quoteErr && <div className="flash err" style={{ marginTop: 16 }}>{quoteErr}</div>}
           {quote && (
             <form action={requestBookingAction} style={{ marginTop: 20 }}>
-              <SavingsBreakdown quote={quote} rewardOre={bal.next ? Math.min(bal.next.amount, quote.subtotal_ore) : 0} rewardEstimated lang={lang} />
-              <p className="muted" style={{ fontSize: '.82rem' }}>{fmtDate(fra!, true)} – {fmtDate(til!, true)}. {T.lockNote}</p>
+              <SavingsBreakdown quote={quote} rewardOre={bal.next ? Math.min(bal.next.amount, quote.subtotal_ore) : 0} rewardEstimated={!direct} lang={lang} />
+              <p className="muted" style={{ fontSize: '.82rem' }}>{fmtDate(fra!, true)} – {fmtDate(til!, true)}. {direct ? (en ? 'The price is locked when you book, and the dates are held for you while you pay.' : 'Prisen låses når du booker, og datoene holdes av for deg mens du betaler.') : T.lockNote}</p>
               <input type="hidden" name="propertyId" value={p.id} /><input type="hidden" name="slug" value={slug} />
               <input type="hidden" name="fra" value={fra} /><input type="hidden" name="til" value={til} />
               <input type="hidden" name="voksne" value={adults} /><input type="hidden" name="barn" value={children} /><input type="hidden" name="sped" value={infants} />
@@ -157,7 +161,7 @@ export default async function PropertyPage({ params, searchParams }: { params: P
               <input type="hidden" name="idem" value={crypto.randomUUID()} />
               {bal.next && <label className="check field"><input type="checkbox" name="useRewards" defaultChecked /> {T.useBonus(nok(Math.min(bal.next.amount, quote.subtotal_ore)), fmtDate(bal.next.expiresAt), bal.next.count, bal.unused)}</label>}
               <div className="field"><label>{T.comment}</label><textarea name="requests" maxLength={2000} placeholder={T.commentPh} /></div>
-              <button className="btn block">{T.request}</button>
+              <button className="btn block">{requestLabel}</button>
             </form>
           )}
         </div>
