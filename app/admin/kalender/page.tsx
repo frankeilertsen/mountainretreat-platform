@@ -3,6 +3,7 @@ import { q } from '@/lib/db';
 import { addDays, fmtDate, isoWeekday, todayOslo } from '@/lib/format';
 import { Flash } from '@/components/ui';
 import { manualBlockAction, removeBlockAction } from '../../actions/admin';
+import { PrintButton } from '@/components/Print';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Kalender' };
@@ -51,6 +52,7 @@ export default async function CentralCalendar({ searchParams }: { searchParams: 
           </form>
           <Link className="btn ghost small" href={`/admin/kalender?fra=${addDays(from, -28)}`}>←</Link>
           <Link className="btn ghost small" href="/admin/kalender">I dag</Link>
+          <PrintButton />
           <Link className="btn ghost small" href={`/admin/kalender?fra=${addDays(from, 28)}`}>→</Link>
         </div>
       </div>

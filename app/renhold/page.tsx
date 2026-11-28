@@ -25,7 +25,7 @@ export default async function CleaningToday({ searchParams }: { searchParams: Pr
   return (
     <>
       <span className="eyebrow">{fmtDateL(today, lang, true)}</span>
-      <h1>{C.title}</h1>
+      <div className="row between"><h1>{C.title}</h1><a href={`/renhold/utskrift?fra=${today}&til=${addDays(today, 14)}`} className="btn ghost small no-print">🖨 {lang === 'en' ? 'Print list' : 'Skriv ut liste'}</a></div>
       <Flash sp={sp} lang={lang} />
       <div className="grid" style={{ gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 20 }}>
         <div className="card" style={{ padding: 16 }}><small>{C.checkout}</small><div className="big-num">{counts.out}</div></div>

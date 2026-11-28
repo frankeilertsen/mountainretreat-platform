@@ -1,6 +1,7 @@
 import { q } from '@/lib/db';
 import { nok } from '@/lib/format';
 import { BarChart } from '@/components/charts';
+import { PrintButton } from '@/components/Print';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Rapporter' };
@@ -21,7 +22,7 @@ export default async function Reports() {
   const cap = (props[0]?.n || 1) * 30;
   return (
     <>
-      <div className="page-head"><h1>Rapporter</h1></div>
+      <div className="page-head row between"><h1>Rapporter</h1><PrintButton /></div>
       <div className="report-grid" style={{ alignItems: 'start' }}>
         <div className="card"><h3>Innbetalt per måned (netto)</h3><small className="muted">Siste 12 måneder · totalt {nok(revenue.reduce((t, r) => t + Number(r.amount), 0))}</small>
           <BarChart money data={revenue.map(r => ({ label: M[Number(r.month.slice(5)) - 1], value: Number(r.amount) }))} /></div>

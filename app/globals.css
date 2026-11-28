@@ -432,3 +432,43 @@ main { padding: 44px 0 90px; }
 .sleep-count { display: flex; align-items: center; gap: 8px; margin: 0; font-size: .82rem; }
 .sleep-count select { width: 70px; }
 @media (max-width: 560px) { .sleep-room { grid-template-columns: 1fr; } .sleep-room img { aspect-ratio: 16/9; } .sleep-bed { grid-template-columns: 1fr auto; } .sleep-bed .check { grid-column: 1 / -1; } }
+
+/* ---------------------------------------------------------------- print */
+.print-stamp, .print-only { display: none; }
+#print-area { display: none; }
+@media print {
+  @page { size: A4; margin: 14mm 12mm 16mm; }
+  :root { color-scheme: light; --ink: #111; --ink-2: #222; --muted: #555; --line: #ccc; --line-2: #bbb; --gold: #8a6a2a; --gold-2: #7a5a1a; --surface: #fff; --surface-2: #fff; --bg: #fff; --bg-2: #fff; --raise: #f3f3f3; }
+  html, body { background: #fff !important; color: #111 !important; font-size: 10.5pt; }
+  body { background: #fff !important; }
+  * { box-shadow: none !important; text-shadow: none !important; backdrop-filter: none !important; }
+  .print-stamp { display: flex !important; justify-content: space-between; gap: 12px; font-size: 8.5pt; color: #333; border-bottom: 1px solid #999; padding-bottom: 4px; margin-bottom: 10px; }
+  .print-only { display: block !important; }
+  #print-area { display: block !important; }
+  .sidebar, .topbar, .tabbar, .no-print, .btn, button, form button, .nav, .flash, input[type=submit], .live-badges, nav.tabbar, .site-footer, footer { display: none !important; }
+  form input, form select, form textarea { border: 1px solid #bbb !important; background: #fff !important; color: #111 !important; }
+  .admin-shell { display: block !important; min-height: 0; }
+  .admin-main, .clean, .container, main { padding: 0 !important; margin: 0 !important; max-width: none !important; width: auto !important; }
+  .card, .task, .stat, .note { background: #fff !important; border: 1px solid #bbb !important; border-radius: 6px !important; padding: 10px 12px !important; break-inside: avoid; color: #111 !important; }
+  .task { display: block; text-decoration: none; margin-bottom: 8px; }
+  a { color: #111 !important; text-decoration: none !important; }
+  h1, h2, h3, .eyebrow { color: #111 !important; break-after: avoid; }
+  h1 { font-size: 18pt; margin: 0 0 8px; }
+  .badge { border: 1px solid #999 !important; background: #fff !important; color: #111 !important; }
+  .table-wrap { overflow: visible !important; }
+  table { width: 100%; border-collapse: collapse; font-size: 9pt; }
+  th, td { border-bottom: 1px solid #ccc !important; padding: 4px 6px !important; color: #111 !important; background: #fff !important; }
+  thead { display: table-header-group; }
+  tr { break-inside: avoid; }
+  .grid { gap: 8px !important; }
+  .grid.g4 { grid-template-columns: repeat(4, minmax(0, 1fr)) !important; }
+  .grid.g3 { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
+  .grid.g2 { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+  .print-generated-row { display: flex !important; justify-content: space-between; font-size: 8.5pt; color: #333; border-bottom: 1px solid #999; padding-bottom: 4px; margin-bottom: 10px; }
+  .print-generated-row .print-generated { display: inline !important; font-size: 8.5pt; }
+  svg text { fill: #111 !important; }
+  .print-page { break-before: page; }
+  .print-avoid { break-inside: avoid; }
+  /* print a single section (cloned into #print-area) */
+  body.print-focus > *:not(#print-area):not(.print-stamp) { display: none !important; }
+}

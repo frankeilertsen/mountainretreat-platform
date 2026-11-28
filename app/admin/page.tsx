@@ -4,6 +4,7 @@ import { addDays, fmtDate, fmtDateTime, nok, todayOslo } from '@/lib/format';
 import { Flash, Status, Empty } from '@/components/ui';
 import { approveAction, loyaltyDecisionAction } from '../actions/admin';
 import { BarChart, Ring } from '@/components/charts';
+import { PrintButton } from '@/components/Print';
 const MN = ['jan','feb','mar','apr','mai','jun','jul','aug','sep','okt','nov','des'];
 
 export const dynamic = 'force-dynamic';
@@ -44,7 +45,7 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
   const queueEmpty = !pending.length && !cancels.length && !loyalty.length;
   return (
     <>
-      <div className="page-head"><span className="eyebrow">{fmtDate(today, true)}</span><h1>Oversikt</h1></div>
+      <div className="page-head row between"><div><span className="eyebrow">{fmtDate(today, true)}</span><h1>Oversikt</h1></div><PrintButton label="Skriv ut oversikt" /></div>
       <Flash sp={sp} />
       <div className="grid g4" style={{ marginBottom: 24 }}>
         <div className="card kpi-card"><span className="kpi-label">Venter godkjenning</span><div className="kpi">{pending.length}</div><small>forespørsler i kø</small></div>

@@ -7,6 +7,7 @@ import '@fontsource/inter/400.css';
 import '@fontsource/inter/500.css';
 import '@fontsource/inter/600.css';
 import type { Metadata, Viewport } from 'next';
+import { PrintStamp } from '@/components/Print';
 
 export const metadata: Metadata = {
   title: { default: 'Mountain Retreat', template: '%s · Mountain Retreat' },
@@ -16,5 +17,5 @@ export const metadata: Metadata = {
 export const viewport: Viewport = { width: 'device-width', initialScale: 1, themeColor: '#0e0e0d' };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
-  return <html lang="nb"><body>{children}</body></html>;
+  return <html lang="nb"><body><PrintStamp />{children}</body></html>;
 }

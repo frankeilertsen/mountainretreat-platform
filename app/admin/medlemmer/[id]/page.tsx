@@ -10,6 +10,7 @@ import { invitationsWithOutcome, STAGE_LABEL } from '@/lib/domain/memberOverview
 import { Flash, Status } from '@/components/ui';
 import * as A from '../../../actions/admin';
 import { ValueButton } from '@/components/ValueButton';
+import { PrintButton } from '@/components/Print';
 
 export const dynamic = 'force-dynamic';
 
@@ -34,7 +35,7 @@ export default async function MemberDetail({ params, searchParams }: { params: P
   return (
     <>
       <Link href="/admin/medlemmer" className="muted">← Medlemmer</Link>
-      <div className="page-head row between" style={{ marginTop: 10 }}><div><span className="eyebrow">{u.system_role}</span><h1 style={{ marginBottom: 0 }}>{u.name}</h1></div><div className="row">{u.system_role === 'member' && <><Link href={`/admin/meldinger?medlem=${u.id}`} className="btn ghost small">Samtaler</Link><Link href={`/admin/meldinger/ny?medlem=${u.id}`} className="btn secondary small">Send melding</Link></>}<Status s={u.status} /></div></div>
+      <div className="page-head row between" style={{ marginTop: 10 }}><div><span className="eyebrow">{u.system_role}</span><h1 style={{ marginBottom: 0 }}>{u.name}</h1></div><div className="row"><PrintButton />{u.system_role === 'member' && <><Link href={`/admin/meldinger?medlem=${u.id}`} className="btn ghost small">Samtaler</Link><Link href={`/admin/meldinger/ny?medlem=${u.id}`} className="btn secondary small">Send melding</Link></>}<Status s={u.status} /></div></div>
       <Flash sp={sp} />
       <div className="grid g2" style={{ alignItems: 'start' }}>
         <div className="stack">

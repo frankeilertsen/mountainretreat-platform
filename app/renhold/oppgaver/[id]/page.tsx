@@ -7,6 +7,7 @@ import { one, q } from '@/lib/db';
 import { fmtDate, fmtDateTime, fmtTime } from '@/lib/format';
 import { Flash, Status } from '@/components/ui';
 import { RoomPlan } from '@/components/RoomPlan';
+import { PrintButton } from '@/components/Print';
 import { startTaskAction, completeTaskAction, roomDoneAction, reportAction, taskPhotoAction } from '../../../actions/cleaning';
 import { ImageInput } from '@/components/forms/ImageInput';
 import { getLang } from '@/lib/i18n/lang';
@@ -42,8 +43,8 @@ export default async function TaskPage({ params, searchParams }: { params: Promi
   const isAdmin = ['admin', 'super_admin'].includes((u as any).system_role);
   return (
     <>
-      <Link href="/renhold" className="muted">{C.back}</Link>
-      <div className="row between" style={{ margin: '12px 0' }}><h1 style={{ margin: 0 }}>{t.property}</h1><Status s={t.status} lang={lang} /></div>
+      <Link href="/renhold" className="muted no-print">{C.back}</Link>
+      <div className="row between" style={{ margin: '12px 0' }}><h1 style={{ margin: 0 }}>{t.property}</h1><div className="row"><PrintButton label={lang === 'en' ? 'Print job' : 'Skriv ut jobb'} /><Status s={t.status} lang={lang} /></div></div>
       <p className="muted" style={{ marginTop: -6 }}>{t.address}</p>
       <Flash sp={sp} lang={lang} />
       <div className="card" style={{ padding: 18 }}>
@@ -62,7 +63,7 @@ export default async function TaskPage({ params, searchParams }: { params: Promi
       </div>
 
       {t.status === 'not_needed' && <p className="muted" style={{ marginTop: 16 }}>{C.notNeeded}</p>}
-      {isAdmin && <div style={{ marginTop: 20 }}><AdminStayEditor back={`/renhold/oppgaver/${id}`} task={{ id, notes: t.notes }}
+      {isAdmin && <div className="no-print" style={{ marginTop: 20 }}><AdminStayEditor back={`/renhold/oppgaver/${id}`} task={{ id, notes: t.notes }}
         prep={t.prep_id ? { id: t.prep_id, adults: t.adults ?? 0, children: t.children ?? 0, infants: t.infants ?? 0, arrival: t.arrival, comment: t.comment_for_cleaner } : null} plan={plan as any} /></div>}
 
       <h2 style={{ marginTop: 28 }}>{C.bedsTitle} {t.next_checkin && <small className="muted" style={{ fontSize: '.9rem' }}>{C.forNext}</small>}</h2>
@@ -76,7 +77,7 @@ export default async function TaskPage({ params, searchParams }: { params: Promi
       <h2 style={{ marginTop: 28 }}>{C.reports}</h2>
       {reports.map((r, i) => <div key={i} className="card flat" style={{ padding: 14, marginBottom: 10 }}><span className="badge">{KIND[r.kind]}</span> <small className="muted">{dt(r.created_at)}{r.resolved_at ? ` · ${C.resolved}` : ''}</small><p style={{ margin: '6px 0 0' }}>{r.description}</p>
         {r.photos && <div className="row" style={{ marginTop: 8 }}>{r.photos.map((ph: string) => <img key={ph} src={`/api/photos/${ph}`} alt="" style={{ width: 80, height: 64, objectFit: 'cover', borderRadius: 6 }} />)}</div>}</div>)}
-      <details className="card flat" style={{ padding: 16 }}>
+      <details className="card flat no-print" style={{ padding: 16 }}>
         <summary><strong>{C.newReport}</strong></summary>
         <form action={reportAction} style={{ marginTop: 12 }}>
           <input type="hidden" name="taskId" value={id} />
@@ -89,10 +90,10 @@ export default async function TaskPage({ params, searchParams }: { params: Promi
 
       <h2 style={{ marginTop: 28 }}>{C.photos}</h2>
       <div className="row">{photos.map(p => <img key={p.id} src={`/api/photos/${p.id}`} alt="" style={{ width: 96, height: 76, objectFit: 'cover', borderRadius: 8 }} />)}</div>
-      <form action={taskPhotoAction} className="row" style={{ marginTop: 10 }}><input type="hidden" name="taskId" value={id} /><ImageInput name="photo" capture="environment" required style={{ flex: 1 }} /><button className="btn ghost small">{C.upload}</button></form>
+      <form action={taskPhotoAction} className="row no-print" style={{ marginTop: 10 }}><input type="hidden" name="taskId" value={id} /><ImageInput name="photo" capture="environment" required style={{ flex: 1 }} /><button className="btn ghost small">{C.upload}</button></form>
 
       {open && (
-        <div className="sticky-actions">
+        <div className="sticky-actions no-print">
           {t.status !== 'in_progress' && <form action={startTaskAction}><input type="hidden" name="taskId" value={id} /><button className="btn secondary block">{C.start}</button></form>}
           <form action={completeTaskAction} className="card" style={{ padding: 12 }}>
             <input type="hidden" name="taskId" value={id} />

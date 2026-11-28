@@ -9,6 +9,7 @@ import { getSettings } from '@/lib/settings';
 import { listPresentations } from '@/lib/domain/presentations';
 import { InviteExtras } from '@/components/InviteExtras';
 import { adminInviteAction, adminRevokeInviteAction, createStaffAction, inviteHelperAction } from '../../actions/admin';
+import { PrintButton } from '@/components/Print';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Medlemmer' };
@@ -27,15 +28,16 @@ export default async function Members({ searchParams }: { searchParams: Promise<
   const tree = await q(`WITH RECURSIVE t AS (
       SELECT u.id, u.name, u.invited_by_user_id, 0 AS depth, ARRAY[u.name] AS path FROM users u WHERE u.invited_by_user_id IS NULL AND u.system_role IN ('super_admin','admin') AND u.status <> 'anonymized'
       UNION ALL SELECT u.id, u.name, u.invited_by_user_id, t.depth+1, t.path || u.name FROM users u JOIN t ON u.invited_by_user_id = t.id WHERE t.depth < 10)
-    SELECT t.id, t.name, t.depth, r.status FROM t LEFT JOIN referrals r ON r.referred_user_id = t.id ORDER BY t.path`);
+    SELECT t.id, t.name, t.depth, r.status, (SELECT count(*) FROM users c WHERE c.invited_by_user_id=t.id AND c.status <> 'anonymized')::int AS children FROM t LEFT JOIN referrals r ON r.referred_user_id = t.id ORDER BY t.path`);
   const props = await q(`SELECT id, name FROM properties WHERE active ORDER BY name`);
   const s = await getSettings();
   const std = Number(s.member_base_discount_pct); const ls = await loyaltySettings();
   return (
     <>
-      <div className="page-head"><h1>Medlemmer og ansatte</h1></div>
+      <div className="page-head row between"><h1>Medlemmer og ansatte</h1><div className="row"><PrintButton label="Skriv ut medlemsliste" target="medlemsliste" /><PrintButton label="Skriv ut vervetre" target="vervetre" /></div></div>
       <Flash sp={sp} />
-      <div className="card" style={{ marginBottom: 20 }}>
+      <div className="card" id="medlemsliste" style={{ marginBottom: 20 }}>
+        <h3 className="print-only">Medlemmer og ansatte ({users.length})</h3>
         <div className="table-wrap"><table><thead><tr><th>Navn</th><th>Rolle</th><th>Invitert av</th><th>Invitasjonsrett</th><th>Opphold</th><th>Rabatt</th><th>Vervet</th><th>Status</th></tr></thead><tbody>
           {users.map(u => (
             <tr key={u.id}><td><Link href={`/admin/medlemmer/${u.id}`}>{u.name}</Link><br /><small className="muted">{u.email}</small></td><td>{ROLE[u.system_role]}</td><td><small>{u.inviter ?? '–'}</small></td>
@@ -78,9 +80,9 @@ export default async function Members({ searchParams }: { searchParams: Promise<
             </div>
           )}
         </div>
-        <div className="card">
+        <div className="card" id="vervetre">
           <h3>Vervetre</h3>
-          <ul className="list">{tree.map(t => <li key={t.id} style={{ paddingLeft: t.depth * 18, paddingTop: 6, paddingBottom: 6 }}>{t.depth > 0 ? '└ ' : ''}<Link href={`/admin/medlemmer/${t.id}`}>{t.name}</Link> {t.status === 'qualified' && <span className="badge b-ok">✓</span>}</li>)}</ul>
+          <ul className="list">{tree.map(t => <li key={t.id} style={{ paddingLeft: t.depth * 18, paddingTop: 6, paddingBottom: 6 }}>{t.depth > 0 ? '└ ' : ''}<Link href={`/admin/medlemmer/${t.id}`}>{t.name}</Link> {t.children > 0 && <small className="muted"> · {t.children} invitert</small>} {t.status === 'qualified' && <span className="badge b-ok">✓</span>}</li>)}</ul>
         </div>
       </div>
     </>

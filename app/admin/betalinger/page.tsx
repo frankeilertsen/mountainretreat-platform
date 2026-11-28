@@ -4,6 +4,7 @@ import { fmtDate, fmtDateTime, nok } from '@/lib/format';
 import { stripeProvider, mockProvider, vippsProvider } from '@/lib/domain/payments';
 import { Flash, Status } from '@/components/ui';
 import { markInvoicePaidAction, retryRefundAction, manualRefundDoneAction } from '../../actions/admin';
+import { PrintButton } from '@/components/Print';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Betalinger' };
@@ -17,7 +18,7 @@ export default async function Payments({ searchParams }: { searchParams: Promise
   const prov = [['Stripe (kort)', stripeProvider.configured() ? 'Aktiv' : 'Mangler nøkler'], ['Vipps', vippsProvider.configured() ? 'Aktiv' : 'Ikke koblet til'], ['Testleverandør', mockProvider.configured() ? 'PÅ (kun utvikling)' : 'Av']];
   return (
     <>
-      <div className="page-head"><h1>Betalinger</h1></div>
+      <div className="page-head row between"><h1>Betalinger</h1><PrintButton /></div>
       <Flash sp={sp} />
       <div className="grid g4" style={{ marginBottom: 20 }}>
         <div className="card kpi-card"><span className="kpi-label">Innbetalt</span><div className="kpi">{nok(Number(t.paid))}</div></div>

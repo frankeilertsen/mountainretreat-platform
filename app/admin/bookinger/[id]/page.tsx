@@ -10,6 +10,7 @@ import { Flash, Status } from '@/components/ui';
 import { RoomPlan } from '@/components/RoomPlan';
 import { adjustPriceAction, approveAction, rejectAction, adminCancelAction, decideCancellationAction, adminPreparationAction, sleepingPlanAction, markInvoicePaidAction, goodwillRefundAction, bookingCleaningSelfAction } from '../../../actions/admin';
 import { ValueButton } from '@/components/ValueButton';
+import { PrintButton } from '@/components/Print';
 
 export const dynamic = 'force-dynamic';
 
@@ -43,7 +44,7 @@ export default async function AdminBooking({ params, searchParams }: { params: P
     <>
       <Link href="/admin/bookinger" className="muted">← Bookinger</Link>
       <div className="page-head row between" style={{ marginTop: 10 }}>
-        <div><span className="eyebrow">{b.reference}</span><h1 style={{ marginBottom: 0 }}>{b.member} · {b.property}</h1></div><div className="row"><Link href={`/admin/meldinger/ny?medlem=${b.member_id}&booking=${b.id}`} className="btn secondary small">Send melding om bookingen</Link><Status s={b.status} /></div>
+        <div><span className="eyebrow">{b.reference}</span><h1 style={{ marginBottom: 0 }}>{b.member} · {b.property}</h1></div><div className="row"><PrintButton /><Link href={`/admin/meldinger/ny?medlem=${b.member_id}&booking=${b.id}`} className="btn secondary small">Send melding om bookingen</Link><Status s={b.status} /></div>
       </div>
       <Flash sp={sp} />
       <div className="grid g2" style={{ alignItems: 'start' }}>

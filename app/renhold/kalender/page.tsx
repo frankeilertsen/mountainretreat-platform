@@ -36,6 +36,7 @@ export default async function CleaningCalendar({ searchParams }: { searchParams:
         <h2 style={{ margin: 0, textTransform: 'capitalize' }}>{title}</h2>
         <Link className="btn ghost small" href={`?visning=${view}&dato=${next}`}>→</Link>
       </div>
+      <div className="row no-print" style={{ justifyContent: 'center', marginBottom: 10 }}><Link className="btn ghost small" href={`/renhold/utskrift?fra=${from}&til=${to}`}>🖨 {lang === 'en' ? 'Print this period' : 'Skriv ut perioden'}</Link></div>
       <div className="nav" style={{ marginBottom: 16, justifyContent: 'center' }}>
         {[['dag', C.tabs.day], ['uke', C.tabs.week], ['maaned', C.tabs.month]].map(([k, l]) => <Link key={k} href={`?visning=${k}&dato=${anchor}`} className={view === k ? 'active' : ''}>{l}</Link>)}
       </div>

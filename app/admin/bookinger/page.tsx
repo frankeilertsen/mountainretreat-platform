@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { q } from '@/lib/db';
 import { fmtDate, nok } from '@/lib/format';
 import { Flash, Status, Empty } from '@/components/ui';
+import { PrintButton } from '@/components/Print';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Bookinger' };
@@ -37,7 +38,7 @@ export default async function AdminBookings({ searchParams }: { searchParams: Pr
 function Head({ f, search, sp }: { f: string; search: string; sp: Record<string, string> }) {
   return (<>
     <div className="page-head row between"><h1>Bookinger</h1>
-      <form className="row" method="get"><input type="hidden" name="status" value={f} /><input name="q" defaultValue={search} placeholder="Søk navn, e-post, ref." style={{ width: 240 }} /></form></div>
+      <div className="row"><form className="row no-print" method="get"><input type="hidden" name="status" value={f} /><input name="q" defaultValue={search} placeholder="Søk navn, e-post, ref." style={{ width: 240 }} /></form><PrintButton label="Skriv ut liste" /></div></div>
     <Flash sp={sp} />
     <div className="nav" style={{ marginBottom: 20 }}>{FILTERS.map(([k, l]) => <Link key={k} href={`/admin/bookinger?status=${k}`} className={k === f ? 'active' : ''}>{l}</Link>)}</div>
   </>);

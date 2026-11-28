@@ -3,6 +3,7 @@ import { q } from '@/lib/db';
 import { addDays, fmtDate, fmtDateTime, todayOslo } from '@/lib/format';
 import { Flash, Status, Empty } from '@/components/ui';
 import { assignTaskAction, resolveReportAction, manualTaskAction , skipTaskAction, reactivateTaskAction } from '../../actions/admin';
+import { PrintButton } from '@/components/Print';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Renhold' };
@@ -23,7 +24,7 @@ export default async function CleaningAdmin({ searchParams }: { searchParams: Pr
   const KIND: Record<string, string> = { damage: 'Skade', missing_item: 'Mangler', issue: 'Avvik', comment: 'Kommentar' };
   return (
     <>
-      <div className="page-head row between"><h1>Renhold</h1><Link href="/renhold/kalender" className="btn ghost small">Renholdskalender →</Link></div>
+      <div className="page-head row between"><h1>Renhold</h1><div className="row"><Link href="/renhold/utskrift" className="btn ghost small no-print">🖨 Utskrift av vaskejobber</Link><PrintButton label="Skriv ut siden" /><Link href="/renhold/kalender" className="btn ghost small">Renholdskalender →</Link></div></div>
       <Flash sp={sp} />
       {reports.length > 0 && (
         <div className="card" style={{ borderColor: 'var(--clay)', marginBottom: 20 }}>

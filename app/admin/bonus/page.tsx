@@ -6,6 +6,7 @@ import { fmtDate, nok } from '@/lib/format';
 import { getSettings } from '@/lib/settings';
 import { Flash, Status } from '@/components/ui';
 import { revokeRewardAction, saveSettingsAction } from '../../actions/admin';
+import { PrintButton } from '@/components/Print';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Medlemsfordeler' };
@@ -21,6 +22,7 @@ export default async function RewardsAdmin({ searchParams }: { searchParams: Pro
   return (
     <>
       <div className="page-head"><span className="eyebrow">Rabatt · lojalitet · verving</span><h1>Medlemsfordeler</h1></div>
+      <div className="row no-print" style={{ justifyContent: 'flex-end', marginTop: -12, marginBottom: 12 }}><PrintButton /></div>
       <Flash sp={sp} />
       <div className="grid g4" style={{ marginBottom: 20 }}>
         <div className="card kpi-card"><span className="kpi-label">Utdelt totalt</span><div className="kpi">{nok(Number(totals.granted))}</div></div>
