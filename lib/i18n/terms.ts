@@ -1,3 +1,4 @@
+import { hoursText } from '../format';
 import type { Lang } from './dict';
 
 /**
@@ -39,11 +40,11 @@ export function termsSections(lang: Lang, i: TermsInput): { title: string; lead:
       { h: '2. Booking and agreement', p: [
         ...(i.autoApprove ? [
           'You book by choosing dates, number of guests and any extras in the member portal. The booking is not binding for either party until payment has been completed.',
-          `When you place the booking, the price is locked and the dates are held for you for ${i.holdHours} hours. The agreement is binding when the payment has been completed and you have received a booking confirmation by e-mail. In some cases we need to review a booking before it can be paid – you will then be notified by e-mail.`,
+          `When you place the booking, the price is locked and the dates are held for you for ${hoursText(i.holdHours, 'en')}. The agreement is binding when the payment has been completed and you have received a booking confirmation by e-mail. In some cases we need to review a booking before it can be paid – you will then be notified by e-mail.`,
           'If payment is not completed within the deadline, the dates are released and the booking lapses at no cost.',
         ] : [
         'You send a booking request with dates, number of guests and any extras. The request is not binding for either party until we have approved it.',
-        `When we approve the request, the price is locked and the dates are held for you for ${i.holdHours} hours. The agreement is binding when the payment has been completed and you have received a booking confirmation by e-mail.`,
+        `When we approve the request, the price is locked and the dates are held for you for ${hoursText(i.holdHours, 'en')}. The agreement is binding when the payment has been completed and you have received a booking confirmation by e-mail.`,
         'If payment is not completed within the deadline, the dates are released and the request lapses at no cost.',
         ]),
       ] },
@@ -107,11 +108,11 @@ export function termsSections(lang: Lang, i: TermsInput): { title: string; lead:
       { h: '2. Bestilling og avtale', p: [
         ...(i.autoApprove ? [
           'Du booker ved å velge datoer, antall gjester og eventuelle tillegg i medlemsportalen. Bookingen er ikke bindende for noen av partene før betalingen er gjennomført.',
-          `Når du sender bookingen, låses prisen, og datoene holdes av til deg i ${i.holdHours} timer. Avtalen er bindende når betalingen er gjennomført og du har fått bookingbekreftelse på e-post. I enkelte tilfeller må vi se på en booking før den kan betales – da får du beskjed på e-post.`,
+          `Når du sender bookingen, låses prisen, og datoene holdes av til deg i ${hoursText(i.holdHours)}. Avtalen er bindende når betalingen er gjennomført og du har fått bookingbekreftelse på e-post. I enkelte tilfeller må vi se på en booking før den kan betales – da får du beskjed på e-post.`,
           'Blir betalingen ikke gjennomført innen fristen, frigis datoene, og bookingen faller bort uten kostnad.',
         ] : [
         'Du sender en bookingforespørsel med datoer, antall gjester og eventuelle tillegg. Forespørselen er ikke bindende for noen av partene før vi har godkjent den.',
-        `Når vi godkjenner forespørselen, låses prisen, og datoene holdes av til deg i ${i.holdHours} timer. Avtalen er bindende når betalingen er gjennomført og du har fått bookingbekreftelse på e-post.`,
+        `Når vi godkjenner forespørselen, låses prisen, og datoene holdes av til deg i ${hoursText(i.holdHours)}. Avtalen er bindende når betalingen er gjennomført og du har fått bookingbekreftelse på e-post.`,
         'Blir betalingen ikke gjennomført innen fristen, frigis datoene, og forespørselen faller bort uten kostnad.',
         ]),
       ] },

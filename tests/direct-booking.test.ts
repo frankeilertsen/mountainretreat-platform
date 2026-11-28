@@ -1,7 +1,7 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { getPool, one, q } from '../lib/db';
 import { user, property, d } from './factory';
-import { requestBooking } from '../lib/domain/bookings';
+import { requestBooking, sendHoldReminders } from '../lib/domain/bookings';
 import { createManualBlock } from '../lib/domain/availability';
 
 const setAuto = (v: '0' | '1') => getPool().query(`INSERT INTO platform_settings (key, value) VALUES ('booking_auto_approve',$1) ON CONFLICT (key) DO UPDATE SET value=$1`, [v]);
@@ -44,5 +44,20 @@ describe('direct booking (booking_auto_approve)', () => {
     const b = await req(m, pid, 50, 52);
     expect(b.status).toBe('pending_review');
     expect(await one(`SELECT 1 FROM availability_blocks WHERE reference_id=$1`, [b.id])).toBeNull();
+  });
+
+  it('1-hour deadline: no reminder right away, one reminder when ~20 minutes are left', async () => {
+    await setAuto('1');
+    const m = await user('member', { invite_tier: 'admin_invited' });
+    const pid = await property();
+    const b = await req(m, pid, 60, 62);
+    const h = await one<any>(`SELECT hold_duration_hours_at_creation AS hh, expires_at - created_at AS len FROM booking_holds WHERE booking_id=$1`, [b.id]);
+    expect(h.hh).toBe(1);
+    const count = async () => (await q(`SELECT 1 FROM notifications WHERE type='payment_reminder' AND dedupe_key LIKE '%' || $1 || '%'`, [b.id])).length;
+    await sendHoldReminders();
+    expect(await count()).toBe(0);
+    await getPool().query(`UPDATE booking_holds SET expires_at = now() + interval '15 minutes' WHERE booking_id=$1`, [b.id]);
+    await sendHoldReminders(); await sendHoldReminders();
+    expect(await count()).toBe(1);
   });
 });

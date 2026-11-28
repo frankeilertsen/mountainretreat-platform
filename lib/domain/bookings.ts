@@ -5,7 +5,7 @@ import { audit, Actor, SYSTEM } from '../audit';
 import { appUrl, enqueue, notifyAdmins } from '../notify';
 import { getNum } from '../settings';
 import { humanCode } from '../crypto';
-import { fmtDate, nightsBetween, nok, pctNo, todayOslo } from '../format';
+import { fmtDate, hoursText, nightsBetween, nok, pctNo, todayOslo } from '../format';
 import { isAdmin, can, UserLike } from '../auth/rbac';
 import { quoteFor } from './pricing';
 import { insertBlock, isRangeFree, removeBlocksFor } from './availability';
@@ -192,7 +192,7 @@ export async function approveBooking(bookingId: string, actor: Actor): Promise<{
     const useRewards = !!b.price_breakdown?.use_rewards;
     const reward = useRewards ? await redeemForBooking(c, b.member_id, b.id, quote.subtotal_ore) : 0;
     const total = quote.subtotal_ore - reward;
-    const holdHours = await getNum('booking_hold_duration_hours', 48, c);
+    const holdHours = await getNum('booking_hold_duration_hours', 1, c);
     const newStatus = total === 0 ? 'confirmed' : 'awaiting_payment';
     await c.query(
       `UPDATE bookings SET status=$2, stay_price_ore=$3, cleaning_fee_ore=$4, add_ons_price_ore=$5, reward_discount_ore=$6, price_total_ore=$7, extra_guest_fee_ore=$10,
@@ -209,12 +209,12 @@ export async function approveBooking(bookingId: string, actor: Actor): Promise<{
     const m = await memberOf(c, b.member_id);
     const prop = await propertyName(c, b.property_id);
     await enqueue({ userId: m.id, to: m.email, type: 'booking_approved', dedupeKey: `booking_approved:${b.id}`,
-      subject: newStatus === 'confirmed' ? `Bookingen er bekreftet (${b.reference})` : actor.type === 'system' ? `Takk for bookingen – betal innen ${holdHours} timer (${b.reference})` : `Bookingen er godkjent – betal innen ${holdHours} timer (${b.reference})`,
+      subject: newStatus === 'confirmed' ? `Bookingen er bekreftet (${b.reference})` : actor.type === 'system' ? `Takk for bookingen – betal innen ${hoursText(holdHours)} (${b.reference})` : `Bookingen er godkjent – betal innen ${hoursText(holdHours)} (${b.reference})`,
       body: newStatus === 'confirmed'
         ? `Hei ${m.name}!\n\n${prop} ${fmtDate(b.start_date)} – ${fmtDate(b.end_date)} er bekreftet. Hele beløpet ble dekket av bonusen din.`
         : actor.type === 'system'
-        ? `Hei ${m.name}!\n\nTakk for bookingen av ${prop} ${fmtDate(b.start_date)} – ${fmtDate(b.end_date)}. Datoene holdes av for deg i ${holdHours} timer – bookingen er bekreftet når betalingen er gjennomført.\n\nÅ betale: ${nok(total)}${reward ? ` (etter ${nok(reward)} bonus)` : ''}\nBetal her: ${appUrl('/medlem/bookinger/' + b.id)}`
-        : `Hei ${m.name}!\n\nForespørselen om ${prop} ${fmtDate(b.start_date)} – ${fmtDate(b.end_date)} er godkjent. Datoene holdes av for deg i ${holdHours} timer.\n\nÅ betale: ${nok(total)}${reward ? ` (etter ${nok(reward)} bonus)` : ''}\nBetal her: ${appUrl('/medlem/bookinger/' + b.id)}` }, c);
+        ? `Hei ${m.name}!\n\nTakk for bookingen av ${prop} ${fmtDate(b.start_date)} – ${fmtDate(b.end_date)}. Datoene holdes av for deg i ${hoursText(holdHours)} – bookingen er bekreftet når betalingen er gjennomført. Betaler du ikke innen fristen, frigis datoene.\n\nÅ betale: ${nok(total)}${reward ? ` (etter ${nok(reward)} bonus)` : ''}\nBetal her: ${appUrl('/medlem/bookinger/' + b.id)}`
+        : `Hei ${m.name}!\n\nForespørselen om ${prop} ${fmtDate(b.start_date)} – ${fmtDate(b.end_date)} er godkjent. Datoene holdes av for deg i ${hoursText(holdHours)}. Betaler du ikke innen fristen, frigis datoene.\n\nÅ betale: ${nok(total)}${reward ? ` (etter ${nok(reward)} bonus)` : ''}\nBetal her: ${appUrl('/medlem/bookinger/' + b.id)}` }, c);
     return { status: newStatus };
   });
 }
@@ -571,24 +571,37 @@ export async function expireHolds(): Promise<number> {
       await reverseRedemptions(c, b.id);
       await audit(c, SYSTEM, 'booking.hold_expired', 'booking', b.id);
       const m = await memberOf(c, b.member_id);
-      await enqueue({ userId: m.id, to: m.email, type: 'hold_expired', dedupeKey: `hold_expired:${b.id}`, subject: `Betalingsfristen gikk ut (${b.reference})`, body: `Hei ${m.name}. Datoene er frigitt. Du kan sende en ny forespørsel hvis de fortsatt er ledige.` }, c);
+      await enqueue({ userId: m.id, to: m.email, type: 'hold_expired', dedupeKey: `hold_expired:${b.id}`, subject: `Betalingsfristen gikk ut (${b.reference})`, body: `Hei ${m.name}. Betalingen ble ikke fullført innen fristen, så datoene er frigitt. Du kan booke på nytt hvis de fortsatt er ledige: ${appUrl('/medlem')}` }, c);
     });
   }
   return due.length;
 }
 
 export async function sendHoldReminders(): Promise<number> {
-  const rows = await q<{ booking_id: string; reference: string; email: string; name: string; member_id: string; hours_left: number }>(
-    `SELECT b.id AS booking_id, b.reference, u.email, u.name, u.id AS member_id, EXTRACT(EPOCH FROM (h.expires_at - now()))/3600 AS hours_left
+  const rows = await q<{ booking_id: string; reference: string; email: string; name: string; member_id: string; hours_left: number; hold_hours: number }>(
+    `SELECT b.id AS booking_id, b.reference, u.email, u.name, u.id AS member_id, EXTRACT(EPOCH FROM (h.expires_at - now()))/3600 AS hours_left,
+            h.hold_duration_hours_at_creation AS hold_hours
      FROM booking_holds h JOIN bookings b ON b.id=h.booking_id JOIN users u ON u.id=b.member_id
      WHERE h.released_at IS NULL AND b.status='awaiting_payment' AND h.expires_at > now() AND h.expires_at < now() + interval '24 hours'`);
+  let sent = 0;
   for (const r of rows) {
+    const link = appUrl('/medlem/bookinger/' + r.booking_id);
+    if (Number(r.hold_hours) < 6) {
+      // Short deadline: one reminder when about 20 minutes are left.
+      const min = Math.round(Number(r.hours_left) * 60);
+      if (min > 20) continue;
+      await enqueue({ userId: r.member_id, to: r.email, type: 'payment_reminder', dedupeKey: `payment_reminder:${r.booking_id}:last`,
+        subject: `Påminnelse: betal innen ${Math.max(1, min)} minutter (${r.reference})`,
+        body: `Hei ${r.name}! Datoene er holdt av for deg i ${Math.max(1, min)} minutter til. Betal nå for å beholde dem: ${link}` });
+      sent++; continue;
+    }
     const bucket = r.hours_left <= 4 ? '4h' : '24h';
     await enqueue({ userId: r.member_id, to: r.email, type: 'payment_reminder', dedupeKey: `payment_reminder:${r.booking_id}:${bucket}`,
-      subject: `Påminnelse: betal innen ${Math.max(1, Math.floor(r.hours_left))} timer (${r.reference})`,
-      body: `Hei ${r.name}! Husk å betale for å beholde datoene: ${appUrl('/medlem/bookinger/' + r.booking_id)}` });
+      subject: `Påminnelse: betal innen ${hoursText(Math.max(1, Math.floor(r.hours_left)))} (${r.reference})`,
+      body: `Hei ${r.name}! Husk å betale for å beholde datoene: ${link}` });
+    sent++;
   }
-  return rows.length;
+  return sent;
 }
 
 export async function autoResolveCancellations(): Promise<number> {

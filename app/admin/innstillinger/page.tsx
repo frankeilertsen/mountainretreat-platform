@@ -6,12 +6,13 @@ import { saveSettingsAction, toggleAutoApproveAction, togglePaymentMethodAction,
 import { vippsConfigured, vippsEnv, vippsWebhookInfo } from '@/lib/payments/vipps';
 import { stripeProvider } from '@/lib/domain/payments';
 import { saveCancellationTierAction } from '../../actions/properties';
+import { hoursText } from '@/lib/format';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Innstillinger' };
 const FIELDS: [string, string][] = [
   ['company_name', 'Firmanavn'], ['company_org_nr', 'Organisasjonsnummer'], ['company_address', 'Forretningsadresse'], ['company_phone', 'Telefon'], ['company_email', 'E-post for kunder'],
-  ['booking_hold_duration_hours', 'Betalingsfrist etter godkjenning (timer)'],
+  ['booking_hold_duration_hours', 'Betalingsfrist etter booking/godkjenning (timer)'],
   ['cancellation_approval_timeout_hours', 'Frist for å behandle kansellering (timer)'],
   ['cancellation_payment_fee_pct', 'Betalingsgebyr som trekkes ved avbestilling (%)'], ['cancellation_payment_fee_fixed_ore', 'Betalingsgebyr, fast del (i øre – 200 = 2 kr)'], ['invitation_validity_days', 'Invitasjon gyldig (dager)'],
   ['ical_poll_interval_minutes', 'Hent kanalkalendere hvert (minutt)'], ['ical_failure_alert_threshold', 'Varsle etter antall feilede synker'],
@@ -41,7 +42,7 @@ export default async function Settings({ searchParams }: { searchParams: Promise
           <div className="card"><h3>Bookinggodkjenning</h3>
             {(() => { const auto = s.booking_auto_approve === '1'; return (
               <form action={toggleAutoApproveAction} className="row between" style={{ gap: 12 }}>
-                <span>{auto ? <><strong>Direktebooking</strong><br /><small className="muted">Medlemmer booker selv. Prisen låses og datoene holdes av i {s.booking_hold_duration_hours ?? 48} timer mens de betaler. Du får e-post om hver booking.</small></>
+                <span>{auto ? <><strong>Direktebooking</strong><br /><small className="muted">Medlemmer booker selv. Prisen låses og datoene holdes av i {hoursText(Number(s.booking_hold_duration_hours ?? 1))} mens de betaler. Du får e-post om hver booking.</small></>
                   : <><strong>Forhåndsgodkjenning</strong><br /><small className="muted">Hver booking venter på at du godkjenner den før medlemmet kan betale.</small></>}</span>
                 <span className="row"><span className={`badge ${auto ? 'b-ok' : 'b-warn'}`}>{auto ? 'Direkte' : 'Godkjenning'}</span><input type="hidden" name="on" value={auto ? '0' : '1'} /><button className="btn ghost small">{auto ? 'Krev godkjenning' : 'Slå på direktebooking'}</button></span>
               </form>); })()}

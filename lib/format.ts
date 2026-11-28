@@ -44,3 +44,8 @@ export function fmtTime(t: string | null | undefined): string {
 /** Percent with Norwegian decimal comma (1,5) or English point (1.5). */
 export const pctNo = (n: number) => n.toLocaleString('nb-NO', { maximumFractionDigits: 2 });
 export const pctL = (n: number, lang: 'no' | 'en' = 'no') => n.toLocaleString(lang === 'en' ? 'en-GB' : 'nb-NO', { maximumFractionDigits: 2 });
+
+/** "1 time" / "3 timer" (en: "1 hour" / "3 hours"). */
+export function hoursText(n: number, lang: 'no' | 'en' = 'no') {
+  return lang === 'en' ? `${n} ${n === 1 ? 'hour' : 'hours'}` : `${n} ${n === 1 ? 'time' : 'timer'}`;
+}

@@ -13,7 +13,7 @@ export default async function Terms() {
   const { lang, t } = await getT();
   const [company, orgNr, address, phone, email, holdHours, cancelTimeoutHours] = await Promise.all([
     getStr('company_name', 'FKE Property AS'), getStr('company_org_nr', ''), getStr('company_address', ''), getStr('company_phone', ''),
-    getStr('company_email', 'post@mountainretreat.no'), getNum('booking_hold_duration_hours', 48), getNum('cancellation_approval_timeout_hours', 48),
+    getStr('company_email', 'post@mountainretreat.no'), getNum('booking_hold_duration_hours', 1), getNum('cancellation_approval_timeout_hours', 48),
   ]);
   const tiers = (await q<{ min: number; max: number | null; pct: string; approval: boolean }>(
     `SELECT days_before_checkin_min AS min, days_before_checkin_max AS max, refund_percentage AS pct, requires_admin_approval AS approval
