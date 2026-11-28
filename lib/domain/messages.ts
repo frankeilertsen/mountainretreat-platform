@@ -4,6 +4,8 @@ import { appUrl, enqueue, notifyAdmins } from '../notify';
 import { DomainError, forbidden } from '../errors';
 import { can, isAdmin, UserLike } from '../auth/rbac';
 import { rateLimit } from '../ratelimit';
+import { putObject, deleteObject } from '../storage';
+import { validateMessageFiles, IncomingFile } from './messageFiles';
 
 /**
  * Messages between members and the administration.
@@ -20,13 +22,16 @@ export type ConversationRow = {
   id: string; member_id: string; member_name: string; subject: string; status: 'open' | 'closed'; booking_id: string | null; booking_ref: string | null;
   last_message_at: string; last_message_by: Side; unread: number; preview: string; message_count: number;
 };
-export type MessageRow = { id: string; sender_side: Side; sender_name: string; body: string; created_at: string };
+export type MessageAttachment = { id: string; filename: string; mime_type: string; size_bytes: number };
+export type MessageRow = { id: string; sender_side: Side; sender_name: string; body: string; created_at: string; attachments: MessageAttachment[] };
+export const ATTACHMENT_ONLY_BODY = '📎';
 
 const sideOf = (u: UserLike): Side => (isAdmin(u) ? 'admin' : 'member');
 const clean = (s: string, max: number) => s.replace(/\r\n/g, '\n').replace(/\n{4,}/g, '\n\n\n').trim().slice(0, max);
 
-function checkBody(body: string) {
+function checkBody(body: string, hasFiles = false) {
   const b = clean(body, 5000);
+  if (b.length < 1 && hasFiles) return ATTACHMENT_ONLY_BODY;
   if (b.length < 1) throw new DomainError('empty', 'Skriv en melding.');
   if (body.trim().length > 5000) throw new DomainError('too_long', 'Meldingen er for lang (maks 5000 tegn).');
   return b;
@@ -41,14 +46,32 @@ async function loadFor(u: UserLike, id: string, db: Db = getPool()) {
   return c;
 }
 
+/** Upload validated files to storage before the transaction; returns rows to insert. */
+async function uploadFiles(files: IncomingFile[] | undefined) {
+  const ok = validateMessageFiles(files ?? []);
+  const stored: { key: string; name: string; type: string; size: number }[] = [];
+  try {
+    for (const f of ok) {
+      const key = `messages/${crypto.randomUUID()}.${f.ext}`;
+      await putObject(key, f.data, f.type);
+      stored.push({ key, name: f.name, type: f.type, size: f.data.length });
+    }
+  } catch (e) { for (const x of stored) await deleteObject(x.key).catch(() => {}); throw e; }
+  return stored;
+}
+async function insertFiles(c: Db, messageId: string, stored: { key: string; name: string; type: string; size: number }[]) {
+  for (const f of stored) await c.query(`INSERT INTO message_attachments (message_id, storage_key, filename, mime_type, size_bytes) VALUES ($1,$2,$3,$4,$5)`, [messageId, f.key, f.name, f.type, f.size]);
+}
+
 /** Start a conversation. Members start their own; admins start one with a chosen member. */
-export async function startConversation(u: Actorish, input: { subject: string; body: string; memberId?: string; bookingId?: string | null }, actor: Actor): Promise<string> {
+export async function startConversation(u: Actorish, input: { subject: string; body: string; memberId?: string; bookingId?: string | null; files?: IncomingFile[] }, actor: Actor): Promise<string> {
   if (!can(u, 'request_booking')) throw forbidden();
   const side = sideOf(u);
   const subject = clean(input.subject, 160).replace(/\n/g, ' ');
   if (subject.length < 2) throw new DomainError('subject', 'Skriv et emne.');
-  const body = checkBody(input.body);
+  const body = checkBody(input.body, (input.files ?? []).some(f => f.data.length > 0));
   await rateLimit(`msg:${u.id}`, side === 'admin' ? 300 : 30, 3600);
+  const stored = await uploadFiles(input.files);
   const memberId = side === 'admin' ? input.memberId : u.id;
   if (!memberId) throw new DomainError('member', 'Velg et medlem.');
   return tx(async c => {
@@ -63,19 +86,22 @@ export async function startConversation(u: Actorish, input: { subject: string; b
     const conv = (await one<{ id: string }>(
       `INSERT INTO conversations (member_id, subject, booking_id, started_by, created_by_user_id, last_message_by, ${side === 'admin' ? 'admin_last_read_at' : 'member_last_read_at'})
        VALUES ($1,$2,$3,$4,$5,$4, now()) RETURNING id`, [memberId, subject, bookingId, side, u.id], c))!;
-    await c.query(`INSERT INTO messages (conversation_id, sender_user_id, sender_side, body) VALUES ($1,$2,$3,$4)`, [conv.id, u.id, side, body]);
-    await audit(c, actor, 'conversation.started', 'conversation', conv.id, undefined, { subject, booking_id: bookingId, side });
-    await notifyOtherSide(c, conv.id, side, u, subject, body, true);
+    const msg = (await one<{ id: string }>(`INSERT INTO messages (conversation_id, sender_user_id, sender_side, body) VALUES ($1,$2,$3,$4) RETURNING id`, [conv.id, u.id, side, body], c))!;
+    await insertFiles(c, msg.id, stored);
+    await audit(c, actor, 'conversation.started', 'conversation', conv.id, undefined, { subject, booking_id: bookingId, side, files: stored.length });
+    await notifyOtherSide(c, conv.id, side, u, subject, body, true, stored.length);
     return conv.id;
   });
 }
 
 /** Reply in a conversation. A member reply re-opens a closed conversation. */
-export async function postMessage(u: Actorish, conversationId: string, rawBody: string, actor: Actor): Promise<void> {
+export async function postMessage(u: Actorish, conversationId: string, rawBody: string, actor: Actor, files?: IncomingFile[]): Promise<void> {
   if (!can(u, 'request_booking')) throw forbidden();
   const side = sideOf(u);
-  const body = checkBody(rawBody);
+  const body = checkBody(rawBody, (files ?? []).some(f => f.data.length > 0));
   await rateLimit(`msg:${u.id}`, side === 'admin' ? 300 : 30, 3600);
+  await loadFor(u, conversationId);
+  const stored = await uploadFiles(files);
   await tx(async c => {
     const conv = await loadFor(u, conversationId, c);
     await c.query(`SELECT 1 FROM conversations WHERE id=$1 FOR UPDATE`, [conv.id]);
@@ -83,16 +109,20 @@ export async function postMessage(u: Actorish, conversationId: string, rawBody: 
     // Was the other side already notified about something they haven't read yet?
     const otherRead = side === 'member' ? conv.admin_last_read_at : conv.member_last_read_at;
     const pending = await one(`SELECT 1 FROM messages WHERE conversation_id=$1 AND sender_side=$2 AND ($3::timestamptz IS NULL OR created_at > $3) LIMIT 1`, [conv.id, side, otherRead], c);
-    await c.query(`INSERT INTO messages (conversation_id, sender_user_id, sender_side, body) VALUES ($1,$2,$3,$4)`, [conv.id, u.id, side, body]);
+    const msg = (await one<{ id: string }>(`INSERT INTO messages (conversation_id, sender_user_id, sender_side, body) VALUES ($1,$2,$3,$4) RETURNING id`, [conv.id, u.id, side, body], c))!;
+    await insertFiles(c, msg.id, stored);
     await c.query(`UPDATE conversations SET last_message_at=now(), last_message_by=$2, ${side === 'admin' ? 'admin_last_read_at' : 'member_last_read_at'}=now(),
                    status='open', closed_at=NULL WHERE id=$1`, [conv.id, side]);
     if (conv.status === 'closed') await audit(c, actor, 'conversation.reopened', 'conversation', conv.id, undefined, { by: side });
-    if (!pending) await notifyOtherSide(c, conv.id, side, u, conv.subject, body, false);
+    if (!pending) await notifyOtherSide(c, conv.id, side, u, conv.subject, body, false, stored.length);
   });
 }
 
-async function notifyOtherSide(c: Db, conversationId: string, from: Side, sender: Actorish, subject: string, body: string, isNew: boolean) {
-  const excerpt = body.length > 600 ? body.slice(0, 600) + ' …' : body;
+async function notifyOtherSide(c: Db, conversationId: string, from: Side, sender: Actorish, subject: string, body: string, isNew: boolean, fileCount = 0) {
+  const text = body === ATTACHMENT_ONLY_BODY ? '' : body;
+  const excerptNo = (text.length > 600 ? text.slice(0, 600) + ' …' : text) + (fileCount ? `${text ? '\n\n' : ''}📎 ${fileCount} vedlegg` : '');
+  const excerptEn = (text.length > 600 ? text.slice(0, 600) + ' …' : text) + (fileCount ? `${text ? '\n\n' : ''}📎 ${fileCount} attachment${fileCount === 1 ? '' : 's'}` : '');
+  const excerpt = excerptNo;
   if (from === 'member') {
     await notifyAdmins({
       type: 'message_from_member', subject: `${isNew ? 'Ny melding' : 'Nytt svar'} fra ${sender.name}: ${subject}`,
@@ -107,7 +137,7 @@ async function notifyOtherSide(c: Db, conversationId: string, from: Side, sender
   const first = m.name.split(' ')[0];
   await enqueue(m.preferred_lang === 'en'
     ? { userId: m.id, to: m.email, type: 'message_from_admin', subject: `New message from Mountain Retreat: ${subject}`,
-        body: `Hi ${first}!\n\nYou have a new message from Mountain Retreat:\n\n${excerpt}\n\nRead and reply: ${link}` }
+        body: `Hi ${first}!\n\nYou have a new message from Mountain Retreat:\n\n${excerptEn}\n\nRead and reply: ${link}` }
     : { userId: m.id, to: m.email, type: 'message_from_admin', subject: `Ny melding fra Mountain Retreat: ${subject}`,
         body: `Hei ${first}!\n\nDu har fått en ny melding fra Mountain Retreat:\n\n${excerpt}\n\nLes og svar: ${link}` }, c);
 }
@@ -122,7 +152,10 @@ export async function openConversation(u: UserLike, id: string, opts: { markRead
     await getPool().query(`UPDATE conversations SET ${isAdmin(u) ? 'admin_last_read_at' : 'member_last_read_at'}=now() WHERE id=$1`, [conv.id]);
   }
   const messages = await q<MessageRow>(
-    `SELECT m.id, m.sender_side, u.name AS sender_name, m.body, m.created_at FROM messages m JOIN users u ON u.id=m.sender_user_id
+    `SELECT m.id, m.sender_side, u.name AS sender_name, m.body, m.created_at,
+       COALESCE((SELECT json_agg(json_build_object('id', a.id, 'filename', a.filename, 'mime_type', a.mime_type, 'size_bytes', a.size_bytes) ORDER BY a.created_at, a.id)
+                 FROM message_attachments a WHERE a.message_id=m.id), '[]') AS attachments
+     FROM messages m JOIN users u ON u.id=m.sender_user_id
      WHERE m.conversation_id=$1 ORDER BY m.created_at, m.id`, [conv.id]);
   const meta = await one<{ member_name: string; member_email: string; member_phone: string | null; booking_ref: string | null; booking_id: string | null; property: string | null }>(
     `SELECT u.name AS member_name, u.email AS member_email, u.phone AS member_phone, b.reference AS booking_ref, b.id AS booking_id, p.name AS property
@@ -134,7 +167,7 @@ const LIST_SQL = (side: Side) => `
   SELECT cv.id, cv.member_id, u.name AS member_name, cv.subject, cv.status, cv.booking_id, b.reference AS booking_ref, cv.last_message_at, cv.last_message_by,
     (SELECT count(*) FROM messages m WHERE m.conversation_id=cv.id AND m.sender_side <> '${side}'
        AND (cv.${side}_last_read_at IS NULL OR m.created_at > cv.${side}_last_read_at))::int AS unread,
-    (SELECT left(m.body, 140) FROM messages m WHERE m.conversation_id=cv.id ORDER BY m.created_at DESC, m.id DESC LIMIT 1) AS preview,
+    (SELECT CASE WHEN m.body = '📎' THEN '📎 Vedlegg' ELSE left(m.body, 140) END FROM messages m WHERE m.conversation_id=cv.id ORDER BY m.created_at DESC, m.id DESC LIMIT 1) AS preview,
     (SELECT count(*) FROM messages m WHERE m.conversation_id=cv.id)::int AS message_count
   FROM conversations cv JOIN users u ON u.id=cv.member_id LEFT JOIN bookings b ON b.id=cv.booking_id`;
 
@@ -176,4 +209,14 @@ export async function setConversationStatus(u: UserLike, id: string, status: 'op
     await c.query(`UPDATE conversations SET status=$2, closed_at=CASE WHEN $2='closed' THEN now() ELSE NULL END WHERE id=$1`, [id, status]);
     await audit(c, actor, status === 'closed' ? 'conversation.closed' : 'conversation.reopened', 'conversation', id);
   });
+}
+
+/** An attachment the user may open (members: only in their own conversations). */
+export async function attachmentFor(u: UserLike, attachmentId: string) {
+  if (!/^[0-9a-f-]{36}$/i.test(attachmentId)) return null;
+  const a = await one<{ storage_key: string; filename: string; mime_type: string; conversation_id: string }>(
+    `SELECT a.storage_key, a.filename, a.mime_type, m.conversation_id FROM message_attachments a JOIN messages m ON m.id=a.message_id WHERE a.id=$1`, [attachmentId]);
+  if (!a) return null;
+  await loadFor(u, a.conversation_id);
+  return a;
 }

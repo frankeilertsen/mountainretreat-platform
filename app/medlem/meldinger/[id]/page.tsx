@@ -6,9 +6,10 @@ import { DomainError } from '@/lib/errors';
 import { getT } from '@/lib/i18n/lang';
 import { fmtDateTimeL } from '@/lib/i18n/format';
 import { Flash } from '@/components/ui';
-import { AutoRefresh, MessageBox, RefreshOnce, SendButton } from '@/components/Chat';
+import { AutoRefresh, MessageBox, RefreshOnce, SendButton, AttachmentPicker } from '@/components/Chat';
 import { Thread } from '@/components/Thread';
 import { replyAction } from '../../../actions/messages';
+import { MSG_FILE_ACCEPT } from '@/lib/domain/messageFiles';
 
 export const dynamic = 'force-dynamic';
 
@@ -39,7 +40,8 @@ export default async function MemberThread({ params, searchParams }: { params: P
         <form action={replyAction} style={{ marginTop: 18, borderTop: '1px solid var(--line)', paddingTop: 18 }}>
           <input type="hidden" name="conversationId" value={conv.id} />
           <label htmlFor="body">{M.reply}</label>
-          <MessageBox id="body" name="body" required rows={4} maxLength={5000} placeholder={M.replyPh} />
+          <MessageBox id="body" name="body" rows={4} maxLength={5000} placeholder={M.replyPh} />
+          <AttachmentPicker accept={MSG_FILE_ACCEPT} lang={lang} />
           <div className="row between" style={{ marginTop: 10 }}><small className="muted">{M.enterHint} · {M.autoUpdate}</small><SendButton label={M.sendReply} busy={M.sending} /></div>
         </form>
       </div>

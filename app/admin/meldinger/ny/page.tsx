@@ -2,8 +2,9 @@ import Link from 'next/link';
 import { q } from '@/lib/db';
 import { fmtDate } from '@/lib/format';
 import { Flash } from '@/components/ui';
-import { MessageBox, SendButton } from '@/components/Chat';
+import { MessageBox, SendButton, AttachmentPicker } from '@/components/Chat';
 import { adminStartConversationAction } from '../../../actions/messages';
+import { MSG_FILE_ACCEPT } from '@/lib/domain/messageFiles';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Ny melding' };
@@ -32,7 +33,8 @@ export default async function AdminNewMessage({ searchParams }: { searchParams: 
           <div className="field"><label htmlFor="subject">Emne</label><input id="subject" name="subject" required maxLength={160} /></div>
           {bookings.length > 0 && <div className="field"><label htmlFor="bookingId">Gjelder booking (valgfritt)</label>
             <select id="bookingId" name="bookingId" defaultValue={bookings.some(b => b.id === sp.booking) ? sp.booking : ''}><option value="">Ingen bestemt booking</option>{bookings.map(b => <option key={b.id} value={b.id}>{b.reference} · {b.property} · {fmtDate(b.start)}</option>)}</select></div>}
-          <div className="field"><label htmlFor="body">Melding</label><MessageBox id="body" name="body" required rows={7} maxLength={5000} /></div>
+          <div className="field"><label htmlFor="body">Melding</label><MessageBox id="body" name="body" rows={7} maxLength={5000} />
+          <AttachmentPicker accept={MSG_FILE_ACCEPT} /></div>
           <SendButton label="Send melding" busy="Sender …" />
         </form>
       )}

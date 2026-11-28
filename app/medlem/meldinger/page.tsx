@@ -5,8 +5,9 @@ import { memberConversations } from '@/lib/domain/messages';
 import { getT } from '@/lib/i18n/lang';
 import { fmtDateL, fmtDateTimeL } from '@/lib/i18n/format';
 import { Flash, Empty } from '@/components/ui';
-import { AutoRefresh, MessageBox, SendButton } from '@/components/Chat';
+import { AutoRefresh, MessageBox, SendButton, AttachmentPicker } from '@/components/Chat';
 import { memberStartConversationAction } from '../../actions/messages';
+import { MSG_FILE_ACCEPT } from '@/lib/domain/messageFiles';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Meldinger' };
@@ -33,7 +34,8 @@ export default async function MemberMessages({ searchParams }: { searchParams: P
           {bookings.length > 0 && <div className="field"><label htmlFor="bookingId">{M.booking}</label>
             <select id="bookingId" name="bookingId" defaultValue={preBooking}><option value="">{M.noBooking}</option>
               {bookings.map(b => <option key={b.id} value={b.id}>{b.property} · {fmtDateL(b.start, lang)} – {fmtDateL(b.end, lang)} ({b.reference})</option>)}</select></div>}
-          <div className="field"><label htmlFor="body">{M.message}</label><MessageBox id="body" name="body" required rows={6} maxLength={5000} placeholder={M.messagePh} autoFocus={!!preBooking} /></div>
+          <div className="field"><label htmlFor="body">{M.message}</label><MessageBox id="body" name="body" rows={6} maxLength={5000} placeholder={M.messagePh} autoFocus={!!preBooking} />
+          <AttachmentPicker accept={MSG_FILE_ACCEPT} lang={lang} /></div>
           <SendButton label={M.send} busy={M.sending} className="btn block" />
           <small className="muted" style={{ display: 'block', marginTop: 8 }}>{M.enterHint}</small>
         </form>

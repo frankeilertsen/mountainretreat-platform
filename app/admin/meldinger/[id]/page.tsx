@@ -5,10 +5,11 @@ import { openConversation } from '@/lib/domain/messages';
 import { DomainError } from '@/lib/errors';
 import { fmtDateTime } from '@/lib/format';
 import { Flash } from '@/components/ui';
-import { AutoRefresh, MessageBox, RefreshOnce, SendButton } from '@/components/Chat';
+import { AutoRefresh, MessageBox, RefreshOnce, SendButton, AttachmentPicker } from '@/components/Chat';
 import { Thread } from '@/components/Thread';
 import { replyAction, setConversationStatusAction } from '../../../actions/messages';
 import { ValueButton } from '@/components/ValueButton';
+import { MSG_FILE_ACCEPT } from '@/lib/domain/messageFiles';
 
 export const dynamic = 'force-dynamic';
 
@@ -41,7 +42,8 @@ export default async function AdminThread({ params, searchParams }: { params: Pr
             <form action={replyAction} style={{ marginTop: 18, borderTop: '1px solid var(--line)', paddingTop: 18 }}>
               <input type="hidden" name="conversationId" value={conv.id} /><input type="hidden" name="area" value="admin" />
               <label htmlFor="body">Svar til {meta.member_name.split(' ')[0]}</label>
-              <MessageBox id="body" name="body" required rows={4} maxLength={5000} placeholder="Skriv et svar … (medlemmet får e-post)" autoFocus />
+              <MessageBox id="body" name="body" rows={4} maxLength={5000} placeholder="Skriv et svar … (medlemmet får e-post)" autoFocus />
+          <AttachmentPicker accept={MSG_FILE_ACCEPT} />
               <div className="row between" style={{ marginTop: 10 }}><small className="muted">Ctrl/⌘ + Enter sender · oppdateres automatisk</small><SendButton label="Send svar" busy="Sender …" /></div>
             </form>)}
         </div>

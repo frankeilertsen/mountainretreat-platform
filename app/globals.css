@@ -472,3 +472,13 @@ main { padding: 44px 0 90px; }
   /* print a single section (cloned into #print-area) */
   body.print-focus > *:not(#print-area):not(.print-stamp) { display: none !important; }
 }
+
+/* message attachments */
+.attach-picker { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 10px; }
+.attach-list { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.attach-chip { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border: 1px solid var(--line-2); border-radius: 999px; font-size: .82rem; background: var(--surface); color: var(--ink); text-decoration: none; max-width: 100%; overflow-wrap: anywhere; }
+.attach-chip small { color: var(--muted); }
+.link-btn { background: none; border: 0; padding: 0; color: var(--muted); text-decoration: underline; cursor: pointer; font-size: .82rem; }
+.bubble-files { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 8px; margin-top: 8px; }
+.bubble-files .attach-chip { align-self: flex-start; }
+.bubble-img img { display: block; max-width: 220px; max-height: 220px; border-radius: 10px; border: 1px solid var(--line-2); object-fit: cover; }
